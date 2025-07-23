@@ -1200,6 +1200,97 @@ function App() {
       .sort((a, b) => b.totalBets - a.totalBets);
   };
 
+  const getTopTeams = () => {
+    const teamStats = new Map();
+
+    // Process all bets to calculate team statistics
+    bets.forEach((bet) => {
+      const teamIncluded = bet.TEAM_INCLUDED;
+      if (!teamIncluded) return;
+
+      // Exclude teams named "Over 1.5" and "Over 0.5"
+      if (teamIncluded === "Over 1.5" || teamIncluded === "Over 0.5") {
+        return;
+      }
+
+      const teamKey = teamIncluded.toLowerCase();
+
+      if (!teamStats.has(teamKey)) {
+        teamStats.set(teamKey, {
+          teamName: teamIncluded,
+          totalBets: 0,
+          wins: 0,
+          losses: 0,
+          recentWins: 0,
+          recentBets: 0,
+          winRate: 0,
+          recentWinRate: 0,
+          lastBetDate: null,
+          countries: new Set(),
+          leagues: new Set(),
+        });
+      }
+
+      const team = teamStats.get(teamKey);
+      team.totalBets++;
+
+      // Track recent performance (last 10 bets)
+      const betDate = new Date(bet.DATE);
+      if (!team.lastBetDate || betDate > team.lastBetDate) {
+        team.lastBetDate = betDate;
+      }
+
+      if (bet.RESULT?.toLowerCase().includes("win")) {
+        team.wins++;
+        team.recentWins++;
+      } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+        team.losses++;
+      }
+
+      team.recentBets++;
+      if (team.recentBets > 10) {
+        // Keep only last 10 bets for recent performance
+        team.recentBets = 10;
+        team.recentWins = Math.min(team.recentWins, 10);
+      }
+
+      // Track countries and leagues
+      if (bet.COUNTRY) team.countries.add(bet.COUNTRY);
+      if (bet.LEAGUE) team.leagues.add(bet.LEAGUE);
+
+      // Calculate win rates
+      const totalBetsWithResult = team.wins + team.losses;
+      team.winRate =
+        totalBetsWithResult > 0 ? (team.wins / totalBetsWithResult) * 100 : 0;
+      team.recentWinRate =
+        team.recentBets > 0 ? (team.recentWins / team.recentBets) * 100 : 0;
+    });
+
+    // Convert to array and calculate composite score
+    const teamsArray = Array.from(teamStats.values())
+      .filter((team) => team.totalBets >= 2) // Only teams with at least 2 bets
+      .map((team) => {
+        // Calculate composite score (win rate 50%, total wins 30%, recent performance 20%)
+        const winRateScore = team.winRate * 0.5;
+        const totalWinsScore = Math.min(team.wins * 2, 100) * 0.3; // Cap at 50 wins
+        const recentPerformanceScore = team.recentWinRate * 0.2;
+
+        const compositeScore =
+          winRateScore + totalWinsScore + recentPerformanceScore;
+
+        return {
+          ...team,
+          compositeScore,
+          countries: Array.from(team.countries),
+          leagues: Array.from(team.leagues),
+        };
+      })
+      .sort((a, b) => b.compositeScore - a.compositeScore)
+      .slice(0, 40); // Top 40 teams
+
+    return teamsArray;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#121212] via-[#1E1E1E] to-[#121212] flex items-center justify-center">
@@ -1523,6 +1614,16 @@ function App() {
             }`}
           >
             ⚔️ Head to Head
+          </button>
+          <button
+            onClick={() => setActiveTab("topTeams")}
+            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "topTeams"
+                ? "bg-blue-500 text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            🏆 Top Teams
           </button>
         </div>
 
@@ -2774,6 +2875,150 @@ function App() {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "topTeams" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">
+              🏆 Top 40 Teams Ranking
+            </h3>
+            <div className="text-gray-300 mb-6">
+              <p>
+                Teams ranked by composite score: Win Rate (50%), Total Wins
+                (30%), Recent Performance (20%)
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-white/20">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Rank
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Team
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Win Rate
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Total Bets
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Wins/Losses
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Recent Performance
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Countries
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Leagues
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Score
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {getTopTeams().map((team, index) => (
+                    <tr key={index} className="hover:bg-white/5">
+                      <td className="px-4 py-2 text-gray-300">
+                        <div className="flex items-center">
+                          <span
+                            className={`text-lg font-bold ${
+                              index === 0
+                                ? "text-yellow-400"
+                                : index === 1
+                                ? "text-gray-300"
+                                : index === 2
+                                ? "text-amber-600"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {index + 1}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        <div className="font-medium text-white">
+                          {team.teamName}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            team.winRate >= 70
+                              ? "bg-green-100 text-green-800"
+                              : team.winRate >= 50
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {team.winRate.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        {team.totalBets}
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        <div className="text-sm">
+                          <span className="text-green-400">{team.wins}W</span>
+                          <span className="text-gray-400"> / </span>
+                          <span className="text-red-400">{team.losses}L</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        <div className="text-sm">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              team.recentWinRate >= 70
+                                ? "bg-green-100 text-green-800"
+                                : team.recentWinRate >= 50
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {team.recentWinRate.toFixed(1)}% ({team.recentBets}{" "}
+                            bets)
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        <div className="text-xs">
+                          {team.countries.slice(0, 3).join(", ")}
+                          {team.countries.length > 3 && (
+                            <span className="text-gray-500">
+                              {" "}
+                              +{team.countries.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        <div className="text-xs">
+                          {team.leagues.slice(0, 3).join(", ")}
+                          {team.leagues.length > 3 && (
+                            <span className="text-gray-500">
+                              {" "}
+                              +{team.leagues.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-gray-300">
+                        <span className="font-medium text-blue-400">
+                          {team.compositeScore.toFixed(1)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
