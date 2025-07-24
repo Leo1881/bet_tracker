@@ -16,7 +16,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', or 'headToHead'
+  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', or 'betSlips'
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [leagueSortConfig, setLeagueSortConfig] = useState({
     key: null,
@@ -34,7 +34,12 @@ function App() {
     key: "winRate",
     direction: "desc",
   });
+  const [slipsSortConfig, setSlipsSortConfig] = useState({
+    key: "date",
+    direction: "desc",
+  });
   const [expandedOddsRanges, setExpandedOddsRanges] = useState(new Set());
+  const [expandedSlips, setExpandedSlips] = useState(new Set());
   const [filters, setFilters] = useState({
     team: "",
     betType: "",
@@ -192,6 +197,14 @@ function App() {
     setOddsSortConfig({ key, direction });
   };
 
+  const handleSlipsSort = (key) => {
+    let direction = "asc";
+    if (slipsSortConfig.key === key && slipsSortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSlipsSortConfig({ key, direction });
+  };
+
   const getSortedData = () => {
     if (!sortConfig.key) return filteredBets;
 
@@ -316,6 +329,45 @@ function App() {
       } else {
         return aValue < bValue ? 1 : -1;
       }
+    });
+  };
+
+  const getSortedSlipsData = () => {
+    const slipsData = getBetSlips();
+
+    if (!slipsSortConfig.key) return slipsData;
+
+    return [...slipsData].sort((a, b) => {
+      const aValue = a[slipsSortConfig.key];
+      const bValue = b[slipsSortConfig.key];
+
+      // Handle date sorting
+      if (slipsSortConfig.key === "date") {
+        const aDate = new Date(aValue);
+        const bDate = new Date(bValue);
+        if (slipsSortConfig.direction === "asc") {
+          return aDate - bDate;
+        }
+        return bDate - aDate;
+      }
+
+      // Handle numeric sorting for totalBets, wins, losses, winRate
+      if (
+        ["totalBets", "wins", "losses", "winRate"].includes(slipsSortConfig.key)
+      ) {
+        const aNum = parseFloat(aValue) || 0;
+        const bNum = parseFloat(bValue) || 0;
+        if (slipsSortConfig.direction === "asc") {
+          return aNum - bNum;
+        }
+        return bNum - aNum;
+      }
+
+      // Default string sorting for betId
+      if (slipsSortConfig.direction === "asc") {
+        return aValue.toString().localeCompare(bValue.toString());
+      }
+      return bValue.toString().localeCompare(aValue.toString());
     });
   };
 
@@ -623,6 +675,16 @@ function App() {
       newExpanded.add(range);
     }
     setExpandedOddsRanges(newExpanded);
+  };
+
+  const toggleSlipExpansion = (betId) => {
+    const newExpanded = new Set(expandedSlips);
+    if (newExpanded.has(betId)) {
+      newExpanded.delete(betId);
+    } else {
+      newExpanded.add(betId);
+    }
+    setExpandedSlips(newExpanded);
   };
 
   const getStatusColor = (status) => {
@@ -1291,6 +1353,91 @@ function App() {
     return teamsArray;
   };
 
+  const getBetSlips = () => {
+    const slipStats = new Map();
+
+    // Group bets by BET_ID
+    bets.forEach((bet) => {
+      const betId = bet.BET_ID?.trim();
+      if (!betId) return; // Skip bets without BET_ID
+
+      if (!slipStats.has(betId)) {
+        slipStats.set(betId, {
+          betId,
+          date: bet.DATE,
+          bets: [],
+          totalBets: 0,
+          wins: 0,
+          losses: 0,
+          pending: 0,
+          winRate: 0,
+        });
+      }
+
+      const slip = slipStats.get(betId);
+      slip.bets.push(bet);
+      slip.totalBets++;
+
+      // Count results
+      const result = bet.RESULT?.toLowerCase() || "";
+      if (result.includes("win")) {
+        slip.wins++;
+      } else if (result.includes("loss")) {
+        slip.losses++;
+      } else if (result.includes("pending")) {
+        slip.pending++;
+      }
+    });
+
+    // Calculate win rates and convert to array
+    const slipsArray = Array.from(slipStats.values())
+      .map((slip) => {
+        const totalWithResult = slip.wins + slip.losses;
+        slip.winRate =
+          totalWithResult > 0 ? (slip.wins / totalWithResult) * 100 : 0;
+        return slip;
+      })
+      .sort((a, b) => {
+        // Sort by date (newest first), then by win rate (highest first)
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        if (dateA > dateB) return -1;
+        if (dateA < dateB) return 1;
+        return b.winRate - a.winRate;
+      });
+
+    return slipsArray;
+  };
+
+  const getBetSlipsSummary = () => {
+    const slips = getBetSlips();
+    if (slips.length === 0) {
+      return {
+        totalSlips: 0,
+        overallSuccessRate: 0,
+        averageBetsPerSlip: 0,
+        bestPerformingSlip: null,
+      };
+    }
+
+    const totalBets = slips.reduce((sum, slip) => sum + slip.totalBets, 0);
+    const totalWins = slips.reduce((sum, slip) => sum + slip.wins, 0);
+    const totalLosses = slips.reduce((sum, slip) => sum + slip.losses, 0);
+    const totalWithResult = totalWins + totalLosses;
+
+    const bestSlip = slips.reduce((best, slip) =>
+      slip.winRate > best.winRate ? slip : best
+    );
+
+    return {
+      totalSlips: slips.length,
+      overallSuccessRate:
+        totalWithResult > 0 ? (totalWins / totalWithResult) * 100 : 0,
+      averageBetsPerSlip: totalBets / slips.length,
+      bestPerformingSlip: bestSlip,
+    };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#121212] via-[#1E1E1E] to-[#121212] flex items-center justify-center">
@@ -1624,6 +1771,16 @@ function App() {
             }`}
           >
             🏆 Top Teams
+          </button>
+          <button
+            onClick={() => setActiveTab("betSlips")}
+            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "betSlips"
+                ? "bg-blue-500 text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            🎫 Bet Slips
           </button>
         </div>
 
@@ -3019,6 +3176,244 @@ function App() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {activeTab === "betSlips" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">
+              🎫 Bet Slips Performance
+            </h3>
+
+            {/* Summary Cards */}
+            {(() => {
+              const summary = getBetSlipsSummary();
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <div className="text-2xl font-bold text-white">
+                      {summary.totalSlips}
+                    </div>
+                    <div className="text-gray-300 text-sm">Total Slips</div>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <div className="text-2xl font-bold text-blue-400">
+                      {summary.overallSuccessRate.toFixed(1)}%
+                    </div>
+                    <div className="text-gray-300 text-sm">
+                      Overall Success Rate
+                    </div>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {summary.averageBetsPerSlip.toFixed(1)}
+                    </div>
+                    <div className="text-gray-300 text-sm">
+                      Avg Bets per Slip
+                    </div>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <div className="text-2xl font-bold text-green-400">
+                      {summary.bestPerformingSlip
+                        ? summary.bestPerformingSlip.winRate.toFixed(1) + "%"
+                        : "N/A"}
+                    </div>
+                    <div className="text-gray-300 text-sm">
+                      Best Slip Success Rate
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Slips Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-white/20">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-white font-semibold w-8"></th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleSlipsSort("betId")}
+                    >
+                      <div className="flex items-center">
+                        Bet Slip ID
+                        {slipsSortConfig.key === "betId" && (
+                          <span className="ml-1">
+                            {slipsSortConfig.direction === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleSlipsSort("date")}
+                    >
+                      <div className="flex items-center">
+                        Date
+                        {slipsSortConfig.key === "date" && (
+                          <span className="ml-1">
+                            {slipsSortConfig.direction === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleSlipsSort("totalBets")}
+                    >
+                      <div className="flex items-center">
+                        Bets
+                        {slipsSortConfig.key === "totalBets" && (
+                          <span className="ml-1">
+                            {slipsSortConfig.direction === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Wins/Losses
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleSlipsSort("winRate")}
+                    >
+                      <div className="flex items-center">
+                        Success Rate
+                        {slipsSortConfig.key === "winRate" && (
+                          <span className="ml-1">
+                            {slipsSortConfig.direction === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {getSortedSlipsData().map((slip, index) => (
+                    <React.Fragment key={index}>
+                      <tr
+                        className="hover:bg-white/5 cursor-pointer"
+                        onClick={() => toggleSlipExpansion(slip.betId)}
+                      >
+                        <td className="px-4 py-2 text-gray-300">
+                          <div className="flex items-center justify-center">
+                            <span
+                              className={`transform transition-transform duration-200 ${
+                                expandedSlips.has(slip.betId) ? "rotate-90" : ""
+                              }`}
+                            >
+                              ▶
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-gray-300">
+                          <div className="font-medium text-white">
+                            {slip.betId}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-gray-300">
+                          {formatDate(slip.date)}
+                        </td>
+                        <td className="px-4 py-2 text-gray-300">
+                          {slip.totalBets}
+                        </td>
+                        <td className="px-4 py-2 text-gray-300">
+                          <div className="text-sm">
+                            <span className="text-green-400">{slip.wins}W</span>
+                            <span className="text-gray-400"> / </span>
+                            <span className="text-red-400">{slip.losses}L</span>
+                            {slip.pending > 0 && (
+                              <>
+                                <span className="text-gray-400"> / </span>
+                                <span className="text-yellow-400">
+                                  {slip.pending}P
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-gray-300">
+                          <span
+                            className={`inline-block w-16 text-center px-2 py-1 rounded-full text-xs font-medium ${
+                              slip.winRate >= 70
+                                ? "bg-green-100 text-green-800"
+                                : slip.winRate >= 50
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {slip.winRate.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                      {expandedSlips.has(slip.betId) && (
+                        <tr className="bg-white/5">
+                          <td colSpan="6" className="px-4 py-3">
+                            <div className="bg-white/10 rounded-lg p-4">
+                              <h4 className="text-white font-semibold mb-3">
+                                Individual Bets:
+                              </h4>
+                              <div className="grid gap-2">
+                                {slip.bets.map((bet, betIndex) => (
+                                  <div
+                                    key={betIndex}
+                                    className="flex items-center justify-between bg-white/5 rounded p-3"
+                                  >
+                                    <div className="flex-1">
+                                      <div className="text-white font-medium">
+                                        {bet.TEAM_INCLUDED}
+                                      </div>
+                                      <div className="text-gray-400 text-sm">
+                                        {bet.COUNTRY} - {bet.LEAGUE}
+                                      </div>
+                                      <div className="text-gray-400 text-sm">
+                                        {bet.BET_TYPE} {bet.BET_SELECTION}
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div
+                                        className={`inline-block w-20 text-center px-2 py-1 rounded-full text-xs font-medium ${
+                                          bet.RESULT?.toLowerCase().includes(
+                                            "win"
+                                          )
+                                            ? "bg-green-100 text-green-800"
+                                            : bet.RESULT?.toLowerCase().includes(
+                                                "loss"
+                                              )
+                                            ? "bg-red-100 text-red-800"
+                                            : "bg-yellow-100 text-yellow-800"
+                                        }`}
+                                      >
+                                        {bet.RESULT || "Pending"}
+                                      </div>
+                                      <div className="text-gray-400 text-xs mt-1">
+                                        {bet.ODDS1 && bet.ODDS2
+                                          ? `Odds: ${bet.ODDS1}/${bet.ODDS2}`
+                                          : ""}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {getBetSlips().length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-gray-400">
+                  No bet slips found. Add BET_ID values to your data to see slip
+                  performance.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
