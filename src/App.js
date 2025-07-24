@@ -49,6 +49,7 @@ function App() {
     result: "",
     minWinRate: "",
     maxWinRate: "",
+    confidenceScore: "",
   });
 
   useEffect(() => {
@@ -143,6 +144,26 @@ function App() {
       });
     }
 
+    if (filters.confidenceScore) {
+      filtered = filtered.filter((bet) => {
+        // Calculate confidence score for this bet
+        const confidenceScore = calculateConfidenceScore({
+          team_included: bet.TEAM_INCLUDED,
+          country: bet.COUNTRY,
+          league: bet.LEAGUE,
+          odds1: bet.ODDS1,
+          bet_type: bet.BET_TYPE,
+          home_team: bet.HOME_TEAM,
+          away_team: bet.AWAY_TEAM,
+        });
+
+        const minConfidence = filters.confidenceScore
+          ? parseFloat(filters.confidenceScore)
+          : 0;
+        return confidenceScore >= minConfidence;
+      });
+    }
+
     console.log("Filtered bets:", filtered.length, "Original:", bets.length);
     setFilteredBets(filtered);
   }, [filters, bets]);
@@ -207,9 +228,28 @@ function App() {
 
   const getSortedData = () => {
     const deduplicatedFilteredBets = getDeduplicatedFilteredBets();
-    if (!sortConfig.key) return deduplicatedFilteredBets;
 
-    return [...deduplicatedFilteredBets].sort((a, b) => {
+    // Add confidence scores to each bet
+    const betsWithConfidence = deduplicatedFilteredBets.map((bet) => {
+      const confidenceScore = calculateConfidenceScore({
+        team_included: bet.TEAM_INCLUDED,
+        country: bet.COUNTRY,
+        league: bet.LEAGUE,
+        odds1: bet.ODDS1,
+        bet_type: bet.BET_TYPE,
+        home_team: bet.HOME_TEAM,
+        away_team: bet.AWAY_TEAM,
+      });
+
+      return {
+        ...bet,
+        CONFIDENCE_SCORE: confidenceScore,
+      };
+    });
+
+    if (!sortConfig.key) return betsWithConfidence;
+
+    return [...betsWithConfidence].sort((a, b) => {
       const aValue = a[sortConfig.key] || "";
       const bValue = b[sortConfig.key] || "";
 
@@ -223,8 +263,11 @@ function App() {
         return bDate - aDate;
       }
 
-      // Handle numeric sorting for odds
-      if (sortConfig.key.includes("ODDS")) {
+      // Handle numeric sorting for odds and confidence score
+      if (
+        sortConfig.key.includes("ODDS") ||
+        sortConfig.key === "CONFIDENCE_SCORE"
+      ) {
         const aNum = parseFloat(aValue) || 0;
         const bNum = parseFloat(bValue) || 0;
         if (sortConfig.direction === "asc") {
@@ -861,6 +904,230 @@ function App() {
     return [...new Set(filteredValues)].sort();
   };
 
+  // Confidence Scoring Functions
+  const calculateTeamConfidence = (teamName, country, league) => {
+    const teamBets = bets.filter(
+      (bet) =>
+        bet.TEAM_INCLUDED === teamName &&
+        bet.COUNTRY === country &&
+        bet.LEAGUE === league &&
+        bet.RESULT !== "" &&
+        bet.RESULT !== "pending"
+    );
+
+    if (teamBets.length === 0) return 0;
+
+    const wins = teamBets.filter((bet) => bet.RESULT === "win").length;
+    const winRate = (wins / teamBets.length) * 100;
+
+    // Recent form (last 5 bets)
+    const recentBets = teamBets.slice(-5);
+    const recentWins = recentBets.filter((bet) => bet.RESULT === "win").length;
+    const recentForm =
+      recentBets.length > 0 ? (recentWins / recentBets.length) * 100 : 0;
+
+    // Calculate confidence based on win rate, recent form, and sample size
+    let confidence = 0;
+
+    // Base confidence from win rate (40% weight)
+    if (winRate >= 80) confidence += 4;
+    else if (winRate >= 70) confidence += 3.5;
+    else if (winRate >= 60) confidence += 3;
+    else if (winRate >= 50) confidence += 2.5;
+    else if (winRate >= 40) confidence += 2;
+    else confidence += 1;
+
+    // Recent form bonus (20% weight)
+    if (recentForm >= 80) confidence += 2;
+    else if (recentForm >= 70) confidence += 1.5;
+    else if (recentForm >= 60) confidence += 1;
+    else if (recentForm >= 50) confidence += 0.5;
+
+    // Sample size bonus (40% weight)
+    if (teamBets.length >= 10) confidence += 4;
+    else if (teamBets.length >= 7) confidence += 3.5;
+    else if (teamBets.length >= 5) confidence += 3;
+    else if (teamBets.length >= 3) confidence += 2.5;
+    else if (teamBets.length >= 2) confidence += 2;
+    else confidence += 1;
+
+    return Math.min(10, Math.max(1, confidence));
+  };
+
+  const calculateLeagueConfidence = (country, league) => {
+    const leagueBets = bets.filter(
+      (bet) =>
+        bet.COUNTRY === country &&
+        bet.LEAGUE === league &&
+        bet.RESULT !== "" &&
+        bet.RESULT !== "pending"
+    );
+
+    if (leagueBets.length === 0) return 0;
+
+    const wins = leagueBets.filter((bet) => bet.RESULT === "win").length;
+    const winRate = (wins / leagueBets.length) * 100;
+
+    // Calculate confidence based on win rate and sample size
+    let confidence = 0;
+
+    if (winRate >= 75) confidence += 7;
+    else if (winRate >= 65) confidence += 6;
+    else if (winRate >= 55) confidence += 5;
+    else if (winRate >= 45) confidence += 4;
+    else if (winRate >= 35) confidence += 3;
+    else confidence += 2;
+
+    // Sample size bonus
+    if (leagueBets.length >= 15) confidence += 3;
+    else if (leagueBets.length >= 10) confidence += 2.5;
+    else if (leagueBets.length >= 5) confidence += 2;
+    else if (leagueBets.length >= 3) confidence += 1.5;
+    else confidence += 1;
+
+    return Math.min(10, Math.max(1, confidence));
+  };
+
+  const calculateOddsConfidence = (odds, betType, teamIncluded) => {
+    // Filter bets with similar odds and bet type
+    const similarBets = bets.filter(
+      (bet) =>
+        bet.BET_TYPE === betType &&
+        bet.RESULT !== "" &&
+        bet.RESULT !== "pending" &&
+        (Math.abs(bet.ODDS1 - odds) <= 0.5 || Math.abs(bet.ODDS2 - odds) <= 0.5)
+    );
+
+    if (similarBets.length === 0) return 5; // Neutral if no data
+
+    const wins = similarBets.filter((bet) => bet.RESULT === "win").length;
+    const winRate = (wins / similarBets.length) * 100;
+
+    // Calculate confidence based on win rate
+    if (winRate >= 70) return 8;
+    else if (winRate >= 60) return 7;
+    else if (winRate >= 50) return 6;
+    else if (winRate >= 40) return 5;
+    else if (winRate >= 30) return 4;
+    else return 3;
+  };
+
+  const calculateMatchupConfidence = (homeTeam, awayTeam, country, league) => {
+    const matchups = bets.filter(
+      (bet) =>
+        ((bet.HOME_TEAM === homeTeam && bet.AWAY_TEAM === awayTeam) ||
+          (bet.HOME_TEAM === awayTeam && bet.AWAY_TEAM === homeTeam)) &&
+        bet.COUNTRY === country &&
+        bet.LEAGUE === league &&
+        bet.RESULT !== "" &&
+        bet.RESULT !== "pending"
+    );
+
+    if (matchups.length === 0) return 5; // Neutral if no previous matchups
+
+    const wins = matchups.filter((bet) => bet.RESULT === "win").length;
+    const winRate = (wins / matchups.length) * 100;
+
+    // Calculate confidence based on win rate and sample size
+    let confidence = 5; // Start neutral
+
+    if (winRate >= 80) confidence += 3;
+    else if (winRate >= 70) confidence += 2;
+    else if (winRate >= 60) confidence += 1;
+    else if (winRate >= 50) confidence += 0;
+    else if (winRate >= 40) confidence -= 1;
+    else if (winRate >= 30) confidence -= 2;
+    else confidence -= 3;
+
+    // Sample size adjustment
+    if (matchups.length >= 5) confidence += 1;
+    else if (matchups.length >= 3) confidence += 0.5;
+
+    return Math.min(10, Math.max(1, confidence));
+  };
+
+  const calculateConfidenceScore = (bet) => {
+    const teamConfidence = calculateTeamConfidence(
+      bet.team_included,
+      bet.country,
+      bet.league
+    );
+    const leagueConfidence = calculateLeagueConfidence(bet.country, bet.league);
+    const oddsConfidence = calculateOddsConfidence(
+      bet.odds1,
+      bet.bet_type,
+      bet.team_included
+    );
+    const matchupConfidence = calculateMatchupConfidence(
+      bet.home_team,
+      bet.away_team,
+      bet.country,
+      bet.league
+    );
+
+    // Weighted average: Team (40%), League (25%), Odds (20%), Matchup (15%)
+    const weightedScore =
+      teamConfidence * 0.4 +
+      leagueConfidence * 0.25 +
+      oddsConfidence * 0.2 +
+      matchupConfidence * 0.15;
+
+    return Math.round(weightedScore * 10) / 10; // Round to 1 decimal place
+  };
+
+  const getConfidenceBreakdown = (bet) => {
+    const teamConfidence = calculateTeamConfidence(
+      bet.team_included,
+      bet.country,
+      bet.league
+    );
+    const leagueConfidence = calculateLeagueConfidence(bet.country, bet.league);
+    const oddsConfidence = calculateOddsConfidence(
+      bet.odds1,
+      bet.bet_type,
+      bet.team_included
+    );
+    const matchupConfidence = calculateMatchupConfidence(
+      bet.home_team,
+      bet.away_team,
+      bet.country,
+      bet.league
+    );
+
+    return {
+      team: Math.round(teamConfidence * 10) / 10,
+      league: Math.round(leagueConfidence * 10) / 10,
+      odds: Math.round(oddsConfidence * 10) / 10,
+      matchup: Math.round(matchupConfidence * 10) / 10,
+    };
+  };
+
+  const getConfidenceLabel = (score) => {
+    if (score >= 8)
+      return {
+        label: "Very High Confidence",
+        color: "bg-green-100 text-green-800",
+        emoji: "🟢",
+      };
+    if (score >= 6)
+      return {
+        label: "High Confidence",
+        color: "bg-yellow-100 text-yellow-800",
+        emoji: "🟡",
+      };
+    if (score >= 4)
+      return {
+        label: "Moderate Confidence",
+        color: "bg-orange-100 text-orange-800",
+        emoji: "🟠",
+      };
+    return {
+      label: "Low Confidence",
+      color: "bg-red-100 text-red-800",
+      emoji: "🔴",
+    };
+  };
+
   const getTeamAnalytics = () => {
     const teams = {};
     const deduplicatedBets = getDeduplicatedBets();
@@ -1163,17 +1430,19 @@ function App() {
         const winRate =
           total > 0 ? ((wins.length / total) * 100).toFixed(1) : 0;
 
-        // Create detailed history strings
+        // Create detailed history strings with competition context
         const winDetails = wins.map((bet) => {
           const betType = bet.BET_TYPE || "Unknown";
           const betSelection = bet.BET_SELECTION || "Unknown";
-          return `${betType}: ${betSelection}`;
+          const competition = `${bet.COUNTRY} ${bet.LEAGUE}`;
+          return `${betType}: ${betSelection} (${competition})`;
         });
 
         const lossDetails = losses.map((bet) => {
           const betType = bet.BET_TYPE || "Unknown";
           const betSelection = bet.BET_SELECTION || "Unknown";
-          return `${betType}: ${betSelection}`;
+          const competition = `${bet.COUNTRY} ${bet.LEAGUE}`;
+          return `${betType}: ${betSelection} (${competition})`;
         });
 
         // Determine which odds to use based on the team you bet on
@@ -1202,23 +1471,54 @@ function App() {
           newBet.league
         );
 
-        // Determine recommendation
+        // Calculate confidence score
+        const confidenceScore = calculateConfidenceScore({
+          team_included: teamName,
+          country: country,
+          league: league,
+          odds1: newBet.odds1,
+          bet_type: newBet.bet_type,
+          home_team: newBet.home_team,
+          away_team: newBet.away_team,
+        });
+
+        const confidenceBreakdown = getConfidenceBreakdown({
+          team_included: teamName,
+          country: country,
+          league: league,
+          odds1: newBet.odds1,
+          bet_type: newBet.bet_type,
+          home_team: newBet.home_team,
+          away_team: newBet.away_team,
+        });
+
+        const confidenceLabel = getConfidenceLabel(confidenceScore);
+
+        // Determine recommendation based on confidence score
         let recommendation = "BET";
         let recommendationColor = "text-green-400";
 
         if (isBlacklisted) {
           recommendation = "AVOID (Blacklisted)";
           recommendationColor = "text-red-400";
-        } else if (total >= 3 && parseFloat(winRate) < 30) {
-          recommendation = "AVOID (Poor History)";
-          recommendationColor = "text-red-400";
-        } else if (total >= 3 && parseFloat(winRate) < 50) {
-          recommendation = "CAUTION (Mixed History)";
-          recommendationColor = "text-yellow-400";
-        } else if (total >= 3 && parseFloat(winRate) >= 70) {
-          recommendation = "STRONG BET (Good History)";
+        } else if (confidenceScore >= 8) {
+          recommendation = "HIGH CONFIDENCE BET";
           recommendationColor = "text-green-400";
+        } else if (confidenceScore >= 6) {
+          recommendation = "GOOD CONFIDENCE BET";
+          recommendationColor = "text-green-400";
+        } else if (confidenceScore >= 4) {
+          recommendation = "MODERATE CONFIDENCE - CAUTION";
+          recommendationColor = "text-yellow-400";
+        } else if (confidenceScore <= 3) {
+          recommendation = "LOW CONFIDENCE - AVOID";
+          recommendationColor = "text-red-400";
         }
+
+        // Debug logging
+        console.log(
+          `Bet: ${teamName} - Confidence: ${confidenceScore} - Recommendation: ${recommendation}`
+        );
 
         // Get unique competitions where this team has history
         const competitions = [
@@ -1240,6 +1540,9 @@ function App() {
           previousMatchups,
           hasHistory: total > 0,
           competitions: competitions,
+          confidenceScore,
+          confidenceBreakdown,
+          confidenceLabel,
         };
       });
 
@@ -1764,6 +2067,24 @@ function App() {
 
               <div>
                 <label className="block text-gray-300 text-sm mb-2">
+                  🎯 Min Confidence Score
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="0.1"
+                  value={filters.confidenceScore}
+                  onChange={(e) =>
+                    setFilters({ ...filters, confidenceScore: e.target.value })
+                  }
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  placeholder="1.0"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">
                   Clear Filters
                 </label>
                 <button
@@ -1777,6 +2098,7 @@ function App() {
                       result: "",
                       minWinRate: "",
                       maxWinRate: "",
+                      confidenceScore: "",
                     })
                   }
                   className="w-full bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors"
@@ -1934,6 +2256,16 @@ function App() {
                             <span className="font-mono text-yellow-400 whitespace-nowrap">
                               {value || "-"}
                             </span>
+                          ) : key === "CONFIDENCE_SCORE" ? (
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  getConfidenceLabel(value).color
+                                }`}
+                              >
+                                {getConfidenceLabel(value).emoji} {value}/10
+                              </span>
+                            </div>
                           ) : key === "BET_TYPE" ||
                             key === "BET_SELECTION" ||
                             key === "TEAM_BET" ? (
@@ -2741,6 +3073,9 @@ function App() {
                           Odds
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold">
+                          🎯 Confidence
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
                           Blacklist
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold">
@@ -2775,6 +3110,39 @@ function App() {
                           </td>
                           <td className="px-4 py-2 text-yellow-400 font-mono">
                             {result.betOdds}
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="text-sm">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${result.confidenceLabel.color}`}
+                                >
+                                  {result.confidenceLabel.emoji}{" "}
+                                  {result.confidenceScore}/10
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {result.confidenceLabel.label}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                <div>
+                                  🏆 Team Performance:{" "}
+                                  {result.confidenceBreakdown.team}/10
+                                </div>
+                                <div>
+                                  🏛️ League Experience:{" "}
+                                  {result.confidenceBreakdown.league}/10
+                                </div>
+                                <div>
+                                  💰 Odds Value:{" "}
+                                  {result.confidenceBreakdown.odds}/10
+                                </div>
+                                <div>
+                                  ⚔️ Head-to-Head:{" "}
+                                  {result.confidenceBreakdown.matchup}/10
+                                </div>
+                              </div>
+                            </div>
                           </td>
                           <td className="px-4 py-2">
                             {result.isBlacklisted ? (
@@ -2916,7 +3284,8 @@ function App() {
                 {/* Summary Stats */}
                 <div className="mt-6 p-4 bg-white/5 rounded-lg">
                   <h5 className="text-white font-semibold mb-3">📊 Summary</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                     <div>
                       <div className="text-gray-400">Total Bets</div>
                       <div className="text-white font-medium">
@@ -2930,11 +3299,28 @@ function App() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Recommended</div>
+                      <div className="text-gray-400">High Confidence</div>
                       <div className="text-green-400 font-medium">
                         {
+                          analysisResults.filter(
+                            (r) =>
+                              r.recommendation.includes(
+                                "HIGH CONFIDENCE BET"
+                              ) ||
+                              r.recommendation.includes(
+                                "GOOD CONFIDENCE BET"
+                              ) ||
+                              r.recommendation === "BET"
+                          ).length
+                        }
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Caution</div>
+                      <div className="text-yellow-400 font-medium">
+                        {
                           analysisResults.filter((r) =>
-                            r.recommendation.includes("BET")
+                            r.recommendation.includes("CAUTION")
                           ).length
                         }
                       </div>
@@ -3101,7 +3487,7 @@ function App() {
                                     {wins}W - {losses}L
                                   </div>
                                   <span
-                                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    className={`px-2 py-1 rounded-full text-xs font-medium mt-1 inline-block ${
                                       parseFloat(winRate) >= 70
                                         ? "bg-green-100 text-green-800"
                                         : parseFloat(winRate) >= 50
