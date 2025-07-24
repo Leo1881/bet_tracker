@@ -206,9 +206,10 @@ function App() {
   };
 
   const getSortedData = () => {
-    if (!sortConfig.key) return filteredBets;
+    const deduplicatedFilteredBets = getDeduplicatedFilteredBets();
+    if (!sortConfig.key) return deduplicatedFilteredBets;
 
-    return [...filteredBets].sort((a, b) => {
+    return [...deduplicatedFilteredBets].sort((a, b) => {
       const aValue = a[sortConfig.key] || "";
       const bValue = b[sortConfig.key] || "";
 
@@ -380,10 +381,11 @@ function App() {
       "5.0+": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
     };
 
-    console.log("Total bets to analyze:", bets.length);
+    const deduplicatedBets = getDeduplicatedBets();
+    console.log("Total deduplicated bets to analyze:", deduplicatedBets.length);
 
     // Look specifically for Algeria record
-    const algeriaBet = bets.find(
+    const algeriaBet = deduplicatedBets.find(
       (bet) =>
         bet.HOME_TEAM?.includes("Algeria") ||
         bet.AWAY_TEAM?.includes("Algeria") ||
@@ -409,7 +411,7 @@ function App() {
       console.log("Algeria max odds:", Math.max(algeriaOdds1, algeriaOdds2));
     }
 
-    bets.forEach((bet, index) => {
+    deduplicatedBets.forEach((bet, index) => {
       const odds1 = parseFloat(bet.ODDS1) || 0;
       const odds2 = parseFloat(bet.ODDS2) || 0;
 
@@ -604,7 +606,8 @@ function App() {
   };
 
   const getBetsForOddsRange = (range) => {
-    return bets.filter((bet) => {
+    const deduplicatedBets = getDeduplicatedBets();
+    return deduplicatedBets.filter((bet) => {
       // Filter out specific bet types for odds analytics only
       const betType = bet.BET_TYPE?.toLowerCase() || "";
       const betSelection = bet.BET_SELECTION?.toLowerCase() || "";
@@ -719,6 +722,96 @@ function App() {
     return ((wins / total) * 100).toFixed(1);
   };
 
+  // Get deduplicated bets for team performance analytics
+  const getDeduplicatedBets = () => {
+    const uniqueBets = new Map();
+
+    bets.forEach((bet) => {
+      // Create a unique key for each bet: DATE + HOME_TEAM + AWAY_TEAM + LEAGUE + BET_TYPE + TEAM_INCLUDED
+      const uniqueKey = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.LEAGUE}_${bet.BET_TYPE}_${bet.TEAM_INCLUDED}`;
+
+      // Only add if this unique combination doesn't exist yet
+      if (!uniqueBets.has(uniqueKey)) {
+        uniqueBets.set(uniqueKey, bet);
+      }
+    });
+
+    return Array.from(uniqueBets.values());
+  };
+
+  // Get deduplicated filtered bets for stats cards
+  const getDeduplicatedFilteredBets = () => {
+    const deduplicatedBets = getDeduplicatedBets();
+
+    // Apply the same filters as the main filteredBets
+    let filtered = [...deduplicatedBets];
+
+    if (filters.team) {
+      filtered = filtered.filter(
+        (bet) =>
+          bet.HOME_TEAM?.toLowerCase().includes(filters.team.toLowerCase()) ||
+          bet.AWAY_TEAM?.toLowerCase().includes(filters.team.toLowerCase()) ||
+          bet.TEAM_INCLUDED?.toLowerCase().includes(filters.team.toLowerCase())
+      );
+    }
+
+    if (filters.betType) {
+      filtered = filtered.filter((bet) =>
+        bet.BET_TYPE?.toLowerCase().includes(filters.betType.toLowerCase())
+      );
+    }
+
+    if (filters.betSelection) {
+      filtered = filtered.filter((bet) =>
+        bet.BET_SELECTION?.toLowerCase().includes(
+          filters.betSelection.toLowerCase()
+        )
+      );
+    }
+
+    if (filters.country) {
+      filtered = filtered.filter((bet) =>
+        bet.COUNTRY?.toLowerCase().includes(filters.country.toLowerCase())
+      );
+    }
+
+    if (filters.league) {
+      filtered = filtered.filter((bet) =>
+        bet.LEAGUE?.toLowerCase().includes(filters.league.toLowerCase())
+      );
+    }
+
+    if (filters.result) {
+      filtered = filtered.filter((bet) =>
+        bet.RESULT?.toLowerCase().includes(filters.result.toLowerCase())
+      );
+    }
+
+    if (filters.minWinRate || filters.maxWinRate) {
+      const teamStats = getTeamAnalytics();
+      const teamWinRates = {};
+
+      teamStats.forEach((team) => {
+        teamWinRates[team.team] = parseFloat(team.winRate);
+      });
+
+      filtered = filtered.filter((bet) => {
+        const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
+        const winRate = teamWinRates[teamName] || 0;
+
+        if (filters.minWinRate && winRate < parseFloat(filters.minWinRate)) {
+          return false;
+        }
+        if (filters.maxWinRate && winRate > parseFloat(filters.maxWinRate)) {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    return filtered;
+  };
+
   const isTeamBlacklisted = (teamName) => {
     if (!teamName || !blacklistedTeams.length) return false;
     const normalizedTeamName = teamName.toLowerCase().trim();
@@ -730,7 +823,8 @@ function App() {
   };
 
   const getUniqueValues = (field) => {
-    const values = bets.map((bet) => bet[field]).filter(Boolean);
+    const deduplicatedBets = getDeduplicatedBets();
+    const values = deduplicatedBets.map((bet) => bet[field]).filter(Boolean);
 
     console.log(`Getting unique values for field: ${field}`);
     console.log(`Raw values:`, values);
@@ -769,7 +863,8 @@ function App() {
 
   const getTeamAnalytics = () => {
     const teams = {};
-    bets.forEach((bet) => {
+    const deduplicatedBets = getDeduplicatedBets();
+    deduplicatedBets.forEach((bet) => {
       const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
       if (!teamName) return;
 
@@ -820,7 +915,8 @@ function App() {
 
   const getLeagueAnalytics = () => {
     const leagues = {};
-    bets.forEach((bet) => {
+    const deduplicatedBets = getDeduplicatedBets();
+    deduplicatedBets.forEach((bet) => {
       const leagueName = bet.LEAGUE;
       const countryName = bet.COUNTRY;
       if (!leagueName) return;
@@ -882,7 +978,8 @@ function App() {
 
   const getCountryAnalytics = () => {
     const countries = {};
-    bets.forEach((bet) => {
+    const deduplicatedBets = getDeduplicatedBets();
+    deduplicatedBets.forEach((bet) => {
       const countryName = bet.COUNTRY;
       if (!countryName) return;
 
@@ -1265,8 +1362,9 @@ function App() {
   const getTopTeams = () => {
     const teamStats = new Map();
 
-    // Process all bets to calculate team statistics
-    bets.forEach((bet) => {
+    // Process deduplicated bets to calculate team statistics
+    const deduplicatedBets = getDeduplicatedBets();
+    deduplicatedBets.forEach((bet) => {
       const teamIncluded = bet.TEAM_INCLUDED;
       if (!teamIncluded) return;
 
@@ -1476,14 +1574,14 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
             <div className="text-2xl font-bold text-white">
-              {filteredBets.length}
+              {getDeduplicatedFilteredBets().length}
             </div>
             <div className="text-gray-300">Filtered Bets</div>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
             <div className="text-2xl font-bold text-green-400">
               {
-                filteredBets.filter((bet) =>
+                getDeduplicatedFilteredBets().filter((bet) =>
                   bet.RESULT?.toLowerCase().includes("win")
                 ).length
               }
@@ -1493,7 +1591,7 @@ function App() {
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
             <div className="text-2xl font-bold text-red-400">
               {
-                filteredBets.filter((bet) =>
+                getDeduplicatedFilteredBets().filter((bet) =>
                   bet.RESULT?.toLowerCase().includes("loss")
                 ).length
               }
@@ -1503,7 +1601,7 @@ function App() {
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
             <div className="text-2xl font-bold text-yellow-400">
               {
-                filteredBets.filter((bet) =>
+                getDeduplicatedFilteredBets().filter((bet) =>
                   bet.RESULT?.toLowerCase().includes("pending")
                 ).length
               }
@@ -1512,7 +1610,7 @@ function App() {
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
             <div className="text-2xl font-bold text-blue-400">
-              {calculateWinPercentage(filteredBets)}%
+              {calculateWinPercentage(getDeduplicatedFilteredBets())}%
             </div>
             <div className="text-gray-300">Win Rate</div>
           </div>
@@ -1791,23 +1889,25 @@ function App() {
               <table className="w-full min-w-full">
                 <thead className="bg-white/20">
                   <tr>
-                    {filteredBets[0] &&
-                      Object.keys(filteredBets[0]).map((key) => (
-                        <th
-                          key={key}
-                          className="px-3 py-4 text-left text-white font-semibold text-sm whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors"
-                          onClick={() => handleSort(key)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>{key}</span>
-                            {sortConfig.key === key && (
-                              <span className="ml-2">
-                                {sortConfig.direction === "asc" ? "↑" : "↓"}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                      ))}
+                    {getDeduplicatedFilteredBets()[0] &&
+                      Object.keys(getDeduplicatedFilteredBets()[0]).map(
+                        (key) => (
+                          <th
+                            key={key}
+                            className="px-3 py-4 text-left text-white font-semibold text-sm whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors"
+                            onClick={() => handleSort(key)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>{key}</span>
+                              {sortConfig.key === key && (
+                                <span className="ml-2">
+                                  {sortConfig.direction === "asc" ? "↑" : "↓"}
+                                </span>
+                              )}
+                            </div>
+                          </th>
+                        )
+                      )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
