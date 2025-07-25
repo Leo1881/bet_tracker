@@ -49,7 +49,6 @@ function App() {
     result: "",
     minWinRate: "",
     maxWinRate: "",
-    confidenceScore: "",
   });
 
   useEffect(() => {
@@ -141,26 +140,6 @@ function App() {
           : 100;
 
         return winRate >= minRate && winRate <= maxRate;
-      });
-    }
-
-    if (filters.confidenceScore) {
-      filtered = filtered.filter((bet) => {
-        // Calculate confidence score for this bet
-        const confidenceScore = calculateConfidenceScore({
-          team_included: bet.TEAM_INCLUDED,
-          country: bet.COUNTRY,
-          league: bet.LEAGUE,
-          odds1: bet.ODDS1,
-          bet_type: bet.BET_TYPE,
-          home_team: bet.HOME_TEAM,
-          away_team: bet.AWAY_TEAM,
-        });
-
-        const minConfidence = filters.confidenceScore
-          ? parseFloat(filters.confidenceScore)
-          : 0;
-        return confidenceScore >= minConfidence;
       });
     }
 
@@ -650,7 +629,11 @@ function App() {
 
   const getBetsForOddsRange = (range) => {
     const deduplicatedBets = getDeduplicatedBets();
-    return deduplicatedBets.filter((bet) => {
+    console.log(
+      `Getting bets for range ${range}, total deduplicated bets: ${deduplicatedBets.length}`
+    );
+
+    const filteredBets = deduplicatedBets.filter((bet) => {
       // Filter out specific bet types for odds analytics only
       const betType = bet.BET_TYPE?.toLowerCase() || "";
       const betSelection = bet.BET_SELECTION?.toLowerCase() || "";
@@ -711,6 +694,25 @@ function App() {
 
       return betRange === range;
     });
+
+    console.log(`Bets found for range ${range}:`, filteredBets.length);
+    console.log("Sample bets for debugging:", filteredBets.slice(0, 3));
+
+    // Additional deduplication step for the expanded view
+    const uniqueBets = new Map();
+    filteredBets.forEach((bet) => {
+      const uniqueKey = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.LEAGUE}_${bet.BET_TYPE}_${bet.TEAM_INCLUDED}`;
+      if (!uniqueBets.has(uniqueKey)) {
+        uniqueBets.set(uniqueKey, bet);
+      }
+    });
+
+    const finalBets = Array.from(uniqueBets.values());
+    console.log(
+      `After additional deduplication: ${filteredBets.length} -> ${finalBets.length} bets`
+    );
+
+    return finalBets;
   };
 
   const toggleOddsRangeExpansion = (range) => {
@@ -770,16 +772,41 @@ function App() {
     const uniqueBets = new Map();
 
     bets.forEach((bet) => {
-      // Create a unique key for each bet: DATE + HOME_TEAM + AWAY_TEAM + LEAGUE + BET_TYPE + TEAM_INCLUDED
-      const uniqueKey = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.LEAGUE}_${bet.BET_TYPE}_${bet.TEAM_INCLUDED}`;
+      // Create a unique key for each bet: DATE + HOME_TEAM + AWAY_TEAM + LEAGUE + BET_TYPE + TEAM_INCLUDED + BET_ID
+      const uniqueKey = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${
+        bet.LEAGUE
+      }_${bet.BET_TYPE}_${bet.TEAM_INCLUDED}_${bet.BET_ID || "NO_ID"}`;
 
       // Only add if this unique combination doesn't exist yet
       if (!uniqueBets.has(uniqueKey)) {
         uniqueBets.set(uniqueKey, bet);
+      } else {
+        console.log("Duplicate found with key:", uniqueKey);
+        const originalBet = uniqueBets.get(uniqueKey);
+        console.log("Original bet fields:", {
+          DATE: originalBet.DATE,
+          HOME_TEAM: originalBet.HOME_TEAM,
+          AWAY_TEAM: originalBet.AWAY_TEAM,
+          LEAGUE: originalBet.LEAGUE,
+          BET_TYPE: originalBet.BET_TYPE,
+          TEAM_INCLUDED: originalBet.TEAM_INCLUDED,
+        });
+        console.log("Duplicate bet fields:", {
+          DATE: bet.DATE,
+          HOME_TEAM: bet.HOME_TEAM,
+          AWAY_TEAM: bet.AWAY_TEAM,
+          LEAGUE: bet.LEAGUE,
+          BET_TYPE: bet.BET_TYPE,
+          TEAM_INCLUDED: bet.TEAM_INCLUDED,
+        });
       }
     });
 
-    return Array.from(uniqueBets.values());
+    const result = Array.from(uniqueBets.values());
+    console.log(
+      `Deduplication: ${bets.length} original bets -> ${result.length} unique bets`
+    );
+    return result;
   };
 
   // Get deduplicated filtered bets for stats cards
@@ -1344,7 +1371,20 @@ function App() {
       leagueAnalytics[0] ||
       {};
 
-    const worstLeague = leagueAnalytics[leagueAnalytics.length - 1] || {};
+    // Find worst league - prioritize leagues with poor performance and enough bets
+    const worstLeague =
+      leagueAnalytics
+        .filter((league) => league.total >= 3) // Minimum 3 bets for "worst" consideration
+        .sort((a, b) => {
+          // Sort by win rate (ascending - lowest first)
+          const winRateDiff = parseFloat(a.winRate) - parseFloat(b.winRate);
+          if (Math.abs(winRateDiff) > 5) return winRateDiff;
+
+          // If win rates are close, prefer leagues with more bets (more significant)
+          return b.total - a.total;
+        })[0] ||
+      leagueAnalytics[leagueAnalytics.length - 1] ||
+      {};
 
     // Find best country - prioritize countries with consistent performance across multiple leagues
     const bestCountry =
@@ -2015,6 +2055,26 @@ function App() {
 
               <div>
                 <label className="block text-gray-300 text-sm mb-2">
+                  League
+                </label>
+                <select
+                  value={filters.league}
+                  onChange={(e) =>
+                    setFilters({ ...filters, league: e.target.value })
+                  }
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                >
+                  <option value="">All Leagues</option>
+                  {getUniqueValues("LEAGUE").map((league) => (
+                    <option key={league} value={league}>
+                      {league}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">
                   Result
                 </label>
                 <select
@@ -2067,24 +2127,6 @@ function App() {
 
               <div>
                 <label className="block text-gray-300 text-sm mb-2">
-                  🎯 Min Confidence Score
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  step="0.1"
-                  value={filters.confidenceScore}
-                  onChange={(e) =>
-                    setFilters({ ...filters, confidenceScore: e.target.value })
-                  }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
-                  placeholder="1.0"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-300 text-sm mb-2">
                   Clear Filters
                 </label>
                 <button
@@ -2098,7 +2140,6 @@ function App() {
                       result: "",
                       minWinRate: "",
                       maxWinRate: "",
-                      confidenceScore: "",
                     })
                   }
                   className="w-full bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors"
@@ -2347,7 +2388,7 @@ function App() {
         {activeTab === "performance" && (
           <div className="space-y-6">
             {/* Best Performers Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
               {(() => {
                 const performers = getBestPerformers();
                 return (
@@ -2387,6 +2428,19 @@ function App() {
                       </div>
                       <div className="text-gray-300">
                         {performers.mostBetsLeague.total || 0} Bets
+                      </div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                      <div className="text-lg font-bold text-red-400 mb-2">
+                        ⚠️ Worst League
+                      </div>
+                      <div className="text-2xl font-bold text-white">
+                        {performers.worstLeague.leagueDisplay ||
+                          performers.worstLeague.league ||
+                          "N/A"}
+                      </div>
+                      <div className="text-gray-300">
+                        {performers.worstLeague.winRate || 0}% Win Rate
                       </div>
                     </div>
                   </>
@@ -3060,42 +3114,47 @@ function App() {
                   <table className="w-full">
                     <thead className="bg-white/20">
                       <tr>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-20">
                           Date
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Match
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-24">
                           Bet On
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-16">
                           Odds
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-80">
                           🎯 Confidence
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-20">
                           Blacklist
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-80">
                           History
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Previous Matchups
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Recommendation
                         </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {analysisResults.map((result, index) => (
-                        <tr key={index} className="hover:bg-white/5">
-                          <td className="px-4 py-2 text-gray-300">
+                        <tr
+                          key={index}
+                          className={`${
+                            index % 2 === 0 ? "bg-white/5" : "bg-white/10"
+                          }`}
+                        >
+                          <td className="px-4 py-6 text-gray-300">
                             {formatDate(result.date)}
                           </td>
-                          <td className="px-4 py-2 text-gray-300">
+                          <td className="px-4 py-6 text-gray-300">
                             <div className="text-sm">
                               <div>
                                 {result.home_team} vs {result.away_team}
@@ -3105,46 +3164,46 @@ function App() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-2 text-purple-300 font-medium">
+                          <td className="px-4 py-6 text-purple-300 font-medium">
                             {result.team_included}
                           </td>
-                          <td className="px-4 py-2 text-yellow-400 font-mono">
+                          <td className="px-4 py-6 text-yellow-400 font-mono">
                             {result.betOdds}
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-6">
                             <div className="text-sm">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="mb-1">
                                 <span
-                                  className={`px-2 py-1 rounded-full text-xs font-medium ${result.confidenceLabel.color}`}
+                                  className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${result.confidenceLabel.color}`}
                                 >
                                   {result.confidenceLabel.emoji}{" "}
                                   {result.confidenceScore}/10
                                 </span>
-                                <span className="text-xs text-gray-400">
+                                <div className="text-xs text-gray-400 mt-2">
                                   {result.confidenceLabel.label}
-                                </span>
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-400">
-                                <div>
+                              <div className="text-xs text-gray-400 mt-2 mb-2">
+                                <div className="mb-1">
                                   🏆 Team Performance:{" "}
                                   {result.confidenceBreakdown.team}/10
                                 </div>
-                                <div>
+                                <div className="mb-1">
                                   🏛️ League Experience:{" "}
                                   {result.confidenceBreakdown.league}/10
                                 </div>
-                                <div>
+                                <div className="mb-1">
                                   💰 Odds Value:{" "}
                                   {result.confidenceBreakdown.odds}/10
                                 </div>
-                                <div>
+                                <div className="mb-1">
                                   ⚔️ Head-to-Head:{" "}
                                   {result.confidenceBreakdown.matchup}/10
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-6">
                             {result.isBlacklisted ? (
                               <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                 🚫 Blacklisted
@@ -3155,14 +3214,14 @@ function App() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-gray-300">
+                          <td className="px-4 py-6 text-gray-300">
                             {result.hasHistory ? (
                               <div className="text-sm">
                                 <div>
                                   {result.historicalWins}W -{" "}
                                   {result.historicalLosses}L
                                 </div>
-                                <div className="text-xs">
+                                <div className="text-xs mt-2">
                                   {result.winRate}% win rate
                                 </div>
                                 {result.competitions.length > 0 && (
@@ -3217,7 +3276,7 @@ function App() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-gray-300">
+                          <td className="px-4 py-6 text-gray-300">
                             {result.previousMatchups.length > 0 ? (
                               <div className="text-sm">
                                 <div className="text-blue-400 font-medium mb-1">
@@ -3248,7 +3307,7 @@ function App() {
                                         {wins}W - {losses}L
                                       </div>
                                       <span
-                                        className={`px-1 py-0.5 rounded text-xs font-medium ${
+                                        className={`px-1 py-0.5 rounded text-xs font-medium mt-2 ${
                                           parseFloat(winRate) >= 70
                                             ? "bg-green-100 text-green-800"
                                             : parseFloat(winRate) >= 50
@@ -3268,7 +3327,7 @@ function App() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-6">
                             <span
                               className={`px-2 py-1 rounded-full text-xs font-medium ${result.recommendationColor}`}
                             >
