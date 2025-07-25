@@ -3,6 +3,7 @@ import {
   fetchSheetData,
   fetchBlacklistedTeams,
   fetchNewBets,
+  fetchTeamNotes,
 } from "./utils/fetchSheetData";
 import "./App.css";
 
@@ -16,7 +17,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', or 'betSlips'
+  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', or 'teamNotes'
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [leagueSortConfig, setLeagueSortConfig] = useState({
     key: null,
@@ -38,8 +39,13 @@ function App() {
     key: "date",
     direction: "desc",
   });
+  const [teamNotesSortConfig, setTeamNotesSortConfig] = useState({
+    key: "team_name",
+    direction: "asc",
+  });
   const [expandedOddsRanges, setExpandedOddsRanges] = useState(new Set());
   const [expandedSlips, setExpandedSlips] = useState(new Set());
+  const [teamNotes, setTeamNotes] = useState([]);
   const [filters, setFilters] = useState({
     team: "",
     betType: "",
@@ -55,15 +61,18 @@ function App() {
     const getData = async () => {
       try {
         setLoading(true);
-        const [data, blacklist] = await Promise.all([
+        const [data, blacklist, notes] = await Promise.all([
           fetchSheetData(),
           fetchBlacklistedTeams(),
+          fetchTeamNotes(),
         ]);
         console.log("Fetched data:", data);
         console.log("Fetched blacklist:", blacklist);
+        console.log("Fetched team notes:", notes);
         setBets(data);
         setFilteredBets(data);
         setBlacklistedTeams(blacklist);
+        setTeamNotes(notes);
       } catch (err) {
         setError("Failed to load bet data");
       } finally {
@@ -203,6 +212,17 @@ function App() {
       direction = "desc";
     }
     setSlipsSortConfig({ key, direction });
+  };
+
+  const handleTeamNotesSort = (key) => {
+    let direction = "asc";
+    if (
+      teamNotesSortConfig.key === key &&
+      teamNotesSortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setTeamNotesSortConfig({ key, direction });
   };
 
   const getSortedData = () => {
@@ -388,6 +408,31 @@ function App() {
 
       // Default string sorting for betId
       if (slipsSortConfig.direction === "asc") {
+        return aValue.toString().localeCompare(bValue.toString());
+      }
+      return bValue.toString().localeCompare(aValue.toString());
+    });
+  };
+
+  const getSortedTeamNotesData = () => {
+    if (!teamNotesSortConfig.key) return teamNotes;
+
+    return [...teamNotes].sort((a, b) => {
+      const aValue = a[teamNotesSortConfig.key];
+      const bValue = b[teamNotesSortConfig.key];
+
+      // Handle date sorting
+      if (teamNotesSortConfig.key === "date_added") {
+        const aDate = new Date(aValue);
+        const bDate = new Date(bValue);
+        if (teamNotesSortConfig.direction === "asc") {
+          return aDate - bDate;
+        }
+        return bDate - aDate;
+      }
+
+      // Default string sorting
+      if (teamNotesSortConfig.direction === "asc") {
         return aValue.toString().localeCompare(bValue.toString());
       }
       return bValue.toString().localeCompare(aValue.toString());
@@ -1439,8 +1484,14 @@ function App() {
         return;
       }
 
-      // Analyze each new bet
-      const results = fetchedNewBets.map((newBet) => {
+      // Deduplicate new bets to avoid counting multiple tickets for the same game
+      const deduplicatedNewBets = getDeduplicatedNewBets(fetchedNewBets);
+      console.log(
+        `Original new bets: ${fetchedNewBets.length}, Deduplicated: ${deduplicatedNewBets.length}`
+      );
+
+      // Analyze each deduplicated new bet
+      const results = deduplicatedNewBets.map((newBet) => {
         const teamName = newBet.team_included;
         const country = newBet.country;
         const league = newBet.league;
@@ -1452,7 +1503,9 @@ function App() {
         );
 
         // Get historical performance for this team (ALL competitions for Bet Analysis)
-        const teamHistory = bets.filter((bet) => {
+        // Use deduplicated bets to avoid counting multiple tickets for the same game
+        const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+        const teamHistory = deduplicatedBets.filter((bet) => {
           const betTeamIncluded = bet.TEAM_INCLUDED?.toLowerCase() || "";
 
           // Match by exact team name (the team you bet on) - regardless of country/league
@@ -1471,19 +1524,27 @@ function App() {
           total > 0 ? ((wins.length / total) * 100).toFixed(1) : 0;
 
         // Create detailed history strings with competition context
-        const winDetails = wins.map((bet) => {
+        // Deduplicate win/loss details to avoid showing multiple tickets for the same bet type
+        const uniqueWinDetails = new Set();
+        wins.forEach((bet) => {
           const betType = bet.BET_TYPE || "Unknown";
           const betSelection = bet.BET_SELECTION || "Unknown";
           const competition = `${bet.COUNTRY} ${bet.LEAGUE}`;
-          return `${betType}: ${betSelection} (${competition})`;
+          const detail = `${betType}: ${betSelection} (${competition})`;
+          uniqueWinDetails.add(detail);
         });
 
-        const lossDetails = losses.map((bet) => {
+        const uniqueLossDetails = new Set();
+        losses.forEach((bet) => {
           const betType = bet.BET_TYPE || "Unknown";
           const betSelection = bet.BET_SELECTION || "Unknown";
           const competition = `${bet.COUNTRY} ${bet.LEAGUE}`;
-          return `${betType}: ${betSelection} (${competition})`;
+          const detail = `${betType}: ${betSelection} (${competition})`;
+          uniqueLossDetails.add(detail);
         });
+
+        const winDetails = Array.from(uniqueWinDetails);
+        const lossDetails = Array.from(uniqueLossDetails);
 
         // Determine which odds to use based on the team you bet on
         let betOdds = 0;
@@ -1602,7 +1663,9 @@ function App() {
     const matchupKey = `${sortedTeams[0]}-${sortedTeams[1]}`;
 
     // Find all bets involving these two teams in the same country and league
-    const matchups = bets.filter((bet) => {
+    // Use deduplicated bets to avoid counting multiple tickets for the same game
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+    const matchups = deduplicatedBets.filter((bet) => {
       const betCountry = bet.COUNTRY?.toLowerCase() || "";
       const betLeague = bet.LEAGUE?.toLowerCase() || "";
       const betHomeTeam = bet.HOME_TEAM?.toLowerCase() || "";
@@ -1644,7 +1707,9 @@ function App() {
     const headToHeadMap = new Map();
 
     // Process all bets to find matchups
-    bets.forEach((bet) => {
+    // Use deduplicated bets to avoid counting multiple tickets for the same game
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+    deduplicatedBets.forEach((bet) => {
       const country = bet.COUNTRY?.toLowerCase() || "";
       const league = bet.LEAGUE?.toLowerCase() || "";
       const homeTeam = bet.HOME_TEAM?.toLowerCase() || "";
@@ -1877,6 +1942,50 @@ function App() {
       averageBetsPerSlip: totalBets / slips.length,
       bestPerformingSlip: bestSlip,
     };
+  };
+
+  const getTeamNotesForTeam = (teamName, country, league) => {
+    return teamNotes.filter(
+      (note) =>
+        note.team_name === teamName &&
+        note.country === country &&
+        note.league === league
+    );
+  };
+
+  const getDeduplicatedNewBets = (newBets) => {
+    const uniqueBets = new Map();
+
+    newBets.forEach((bet) => {
+      // Create a unique key based on the game details (excluding BET_ID)
+      const key = `${bet.date}_${bet.home_team}_${bet.away_team}_${bet.country}_${bet.league}_${bet.bet_type}_${bet.bet_selection}_${bet.team_included}`;
+
+      if (!uniqueBets.has(key)) {
+        uniqueBets.set(key, bet);
+      }
+    });
+
+    return Array.from(uniqueBets.values());
+  };
+
+  const getDeduplicatedBetsForAnalysis = () => {
+    const uniqueBets = new Map();
+
+    bets.forEach((bet) => {
+      // Create a unique key for analysis: DATE + HOME_TEAM + AWAY_TEAM + LEAGUE + BET_TYPE + TEAM_INCLUDED (excluding BET_ID)
+      const uniqueKey = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.LEAGUE}_${bet.BET_TYPE}_${bet.TEAM_INCLUDED}`;
+
+      // Only add if this unique combination doesn't exist yet
+      if (!uniqueBets.has(uniqueKey)) {
+        uniqueBets.set(uniqueKey, bet);
+      }
+    });
+
+    const result = Array.from(uniqueBets.values());
+    console.log(
+      `Analysis Deduplication: ${bets.length} original bets -> ${result.length} unique bets`
+    );
+    return result;
   };
 
   if (loading) {
@@ -2242,6 +2351,16 @@ function App() {
             }`}
           >
             🎫 Bet Slips
+          </button>
+          <button
+            onClick={() => setActiveTab("teamNotes")}
+            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "teamNotes"
+                ? "bg-blue-500 text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            📝 Team Notes
           </button>
         </div>
 
@@ -3201,6 +3320,62 @@ function App() {
                                   {result.confidenceBreakdown.matchup}/10
                                 </div>
                               </div>
+
+                              {/* Team Notes Display */}
+                              {(() => {
+                                const homeTeamNotes = getTeamNotesForTeam(
+                                  result.home_team,
+                                  result.country,
+                                  result.league
+                                );
+                                const awayTeamNotes = getTeamNotesForTeam(
+                                  result.away_team,
+                                  result.country,
+                                  result.league
+                                );
+
+                                if (
+                                  homeTeamNotes.length > 0 ||
+                                  awayTeamNotes.length > 0
+                                ) {
+                                  return (
+                                    <div className="mt-3 pt-3 border-t border-white/10">
+                                      <div className="text-xs text-orange-400 font-medium mb-2">
+                                        📝 Team Notes:
+                                      </div>
+                                      {homeTeamNotes.map((note, idx) => (
+                                        <div
+                                          key={`home-${idx}`}
+                                          className="text-xs text-orange-300 mb-1"
+                                        >
+                                          <span className="font-medium">
+                                            {result.home_team}:
+                                          </span>{" "}
+                                          {note.note}
+                                          <span className="text-gray-400 ml-1">
+                                            ({note.date_added})
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {awayTeamNotes.map((note, idx) => (
+                                        <div
+                                          key={`away-${idx}`}
+                                          className="text-xs text-orange-300 mb-1"
+                                        >
+                                          <span className="font-medium">
+                                            {result.away_team}:
+                                          </span>{" "}
+                                          {note.note}
+                                          <span className="text-gray-400 ml-1">
+                                            ({note.date_added})
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                           </td>
                           <td className="px-4 py-6">
@@ -3956,6 +4131,125 @@ function App() {
                 <p className="text-gray-400">
                   No bet slips found. Add BET_ID values to your data to see slip
                   performance.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "teamNotes" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">📝 Team Notes</h3>
+            <div className="text-gray-300 mb-6">
+              <p>
+                Team notes are managed in your Google Spreadsheet (Sheet4).
+                Notes will appear in the Bet Analysis tab when analyzing bets.
+              </p>
+            </div>
+
+            {/* Team Notes Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-white/20">
+                  <tr>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleTeamNotesSort("country")}
+                    >
+                      <div className="flex items-center">
+                        Country
+                        {teamNotesSortConfig.key === "country" && (
+                          <span className="ml-1">
+                            {teamNotesSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleTeamNotesSort("league")}
+                    >
+                      <div className="flex items-center">
+                        League
+                        {teamNotesSortConfig.key === "league" && (
+                          <span className="ml-1">
+                            {teamNotesSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleTeamNotesSort("team_name")}
+                    >
+                      <div className="flex items-center">
+                        Team Name
+                        {teamNotesSortConfig.key === "team_name" && (
+                          <span className="ml-1">
+                            {teamNotesSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-4 py-2 text-left text-white font-semibold">
+                      Note
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleTeamNotesSort("date_added")}
+                    >
+                      <div className="flex items-center">
+                        Date Added
+                        {teamNotesSortConfig.key === "date_added" && (
+                          <span className="ml-1">
+                            {teamNotesSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {getSortedTeamNotesData().map((note, index) => (
+                    <tr
+                      key={index}
+                      className={`${
+                        index % 2 === 0 ? "bg-white/5" : "bg-white/10"
+                      }`}
+                    >
+                      <td className="px-4 py-4 text-gray-300">
+                        {note.country}
+                      </td>
+                      <td className="px-4 py-4 text-gray-300">{note.league}</td>
+                      <td className="px-4 py-4 text-purple-300 font-medium">
+                        {note.team_name}
+                      </td>
+                      <td className="px-4 py-4 text-orange-300">{note.note}</td>
+                      <td className="px-4 py-4 text-gray-400 text-sm">
+                        {note.date_added}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {teamNotes.length === 0 && (
+              <div className="text-center py-8">
+                <div className="text-gray-400 text-lg mb-4">
+                  📝 No Team Notes Found
+                </div>
+                <p className="text-gray-500">
+                  Add team notes to Sheet4 in your Google Spreadsheet to see
+                  them here.
                 </p>
               </div>
             )}

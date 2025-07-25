@@ -7,6 +7,9 @@ const BLACKLIST_URL =
 const NEW_BETS_URL =
   "https://sheets.googleapis.com/v4/spreadsheets/1uairlmwCyYh_OwCFJZtEOHr8svQ2l8C_I8VnLsHHiXQ/values/Sheet3?key=AIzaSyC7NbH0E89eEVZOkGOBdfrwBT42P-bxHEk";
 
+const TEAM_NOTES_URL =
+  "https://sheets.googleapis.com/v4/spreadsheets/1uairlmwCyYh_OwCFJZtEOHr8svQ2l8C_I8VnLsHHiXQ/values/Sheet4?key=AIzaSyC7NbH0E89eEVZOkGOBdfrwBT42P-bxHEk";
+
 export const fetchSheetData = async () => {
   try {
     const response = await fetch(SHEET_URL);
@@ -279,6 +282,96 @@ export const fetchNewBets = async () => {
     return newBets;
   } catch (error) {
     console.error("Error fetching new bets data:", error);
+    return [];
+  }
+};
+
+export const fetchTeamNotes = async () => {
+  try {
+    const response = await fetch(TEAM_NOTES_URL);
+    const data = await response.json();
+
+    console.log("Raw team notes data:", data.values);
+
+    // Check if we have data
+    if (!data.values || data.values.length === 0) {
+      console.log("No team notes data found in Sheet4");
+      return [];
+    }
+
+    // Look for the row that contains our expected headers
+    const expectedHeaders = [
+      "country",
+      "league",
+      "team_name",
+      "note",
+      "date_added",
+    ];
+
+    let headerRowIndex = -1;
+    let headers = [];
+
+    // Find the row that contains our headers
+    for (let i = 0; i < data.values.length; i++) {
+      const row = data.values[i];
+      const hasHeaders = expectedHeaders.every((header) =>
+        row.some(
+          (cell) => cell && cell.toString().toLowerCase().includes(header)
+        )
+      );
+
+      if (hasHeaders) {
+        headerRowIndex = i;
+        headers = row;
+        console.log("Found team notes headers at row:", i, headers);
+        break;
+      }
+    }
+
+    if (headerRowIndex === -1) {
+      console.log("Could not find team notes headers, using first row");
+      headers = data.values[0] || [];
+      headerRowIndex = 0;
+    }
+
+    // Get data rows (everything after the header row)
+    const dataRows = data.values.slice(headerRowIndex + 1);
+
+    // Find column indices
+    const countryIndex = headers.findIndex(
+      (header) => header && header.toString().toLowerCase().includes("country")
+    );
+    const leagueIndex = headers.findIndex(
+      (header) => header && header.toString().toLowerCase().includes("league")
+    );
+    const teamNameIndex = headers.findIndex(
+      (header) =>
+        header && header.toString().toLowerCase().includes("team_name")
+    );
+    const noteIndex = headers.findIndex(
+      (header) => header && header.toString().toLowerCase().includes("note")
+    );
+    const dateAddedIndex = headers.findIndex(
+      (header) =>
+        header && header.toString().toLowerCase().includes("date_added")
+    );
+
+    const teamNotes = dataRows
+      .map((row) => ({
+        country: countryIndex !== -1 ? (row[countryIndex] || "").trim() : "",
+        league: leagueIndex !== -1 ? (row[leagueIndex] || "").trim() : "",
+        team_name:
+          teamNameIndex !== -1 ? (row[teamNameIndex] || "").trim() : "",
+        note: noteIndex !== -1 ? (row[noteIndex] || "").trim() : "",
+        date_added:
+          dateAddedIndex !== -1 ? (row[dateAddedIndex] || "").trim() : "",
+      }))
+      .filter((note) => note.team_name !== "" && note.note !== ""); // Remove empty entries
+
+    console.log("Team notes:", teamNotes);
+    return teamNotes;
+  } catch (error) {
+    console.error("Error fetching team notes data:", error);
     return [];
   }
 };
