@@ -2540,7 +2540,7 @@ function App() {
             {/* League Performance Table */}
             <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
               <h3 className="text-lg font-bold text-white mb-4">
-                🏆 League Performance Analytics
+                League Performance Analytics
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -2780,7 +2780,7 @@ function App() {
         {activeTab === "blacklist" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
             <h3 className="text-lg font-bold text-white mb-4">
-              🚫 Blacklisted Teams
+              Blacklisted Teams
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -2884,7 +2884,7 @@ function App() {
         {activeTab === "odds" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
             <h3 className="text-lg font-bold text-white mb-4">
-              📈 Odds Range Performance Analytics
+              Odds Range Performance Analytics
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -3164,9 +3164,7 @@ function App() {
 
         {activeTab === "betAnalysis" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-            <h3 className="text-lg font-bold text-white mb-4">
-              🔍 Bet Analysis
-            </h3>
+            <h3 className="text-lg font-bold text-white mb-4">Bet Analysis</h3>
             <div className="text-gray-300 mb-6">
               <p>
                 Add your new bets to Sheet3 in your Google Spreadsheet, then
@@ -3186,9 +3184,7 @@ function App() {
                     : "bg-blue-500 text-white hover:bg-blue-600"
                 }`}
               >
-                {isAnalyzing
-                  ? "🔄 Analyzing..."
-                  : "📊 Fetch & Analyze New Bets"}
+                {isAnalyzing ? "🔄 Analyzing..." : "Fetch & Analyze New Bets"}
               </button>
             </div>
 
@@ -3547,7 +3543,7 @@ function App() {
             {analysisResults.length === 0 && !isAnalyzing && (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-lg mb-4">
-                  📝 No Analysis Results
+                  No Analysis Results
                 </div>
                 <p className="text-gray-500">
                   Click the button above to fetch and analyze new bets from
@@ -3561,7 +3557,7 @@ function App() {
         {activeTab === "headToHead" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
             <h3 className="text-lg font-bold text-white mb-4">
-              ⚔️ Head to Head Analysis
+              Head to Head Analysis
             </h3>
             <div className="text-gray-300 mb-6">
               <p>
@@ -3713,7 +3709,7 @@ function App() {
             ) : (
               <div className="text-center py-8">
                 <div className="text-gray-400 text-lg mb-4">
-                  📝 No Matchups Found
+                  No Matchups Found
                 </div>
                 <p className="text-gray-500">
                   No previous matchups found in your new bets. Click "Fetch &
@@ -3728,7 +3724,7 @@ function App() {
         {activeTab === "topTeams" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
             <h3 className="text-lg font-bold text-white mb-4">
-              🏆 Top 40 Teams Ranking
+              Top 40 Teams Ranking
             </h3>
             <div className="text-gray-300 mb-6">
               <p>
@@ -3872,7 +3868,7 @@ function App() {
         {activeTab === "betSlips" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
             <h3 className="text-lg font-bold text-white mb-4">
-              🎫 Bet Slips Performance
+              Bet Slips Performance
             </h3>
 
             {/* Summary Cards */}
@@ -4109,13 +4105,7 @@ function App() {
 
         {activeTab === "teamNotes" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-            <h3 className="text-lg font-bold text-white mb-4">📝 Team Notes</h3>
-            <div className="text-gray-300 mb-6">
-              <p>
-                Team notes are managed in your Google Spreadsheet (Sheet4).
-                Notes will appear in the Bet Analysis tab when analyzing bets.
-              </p>
-            </div>
+            <h3 className="text-lg font-bold text-white mb-4">Team Notes</h3>
 
             {/* Team Notes Table */}
             <div className="overflow-x-auto">
@@ -4225,11 +4215,6 @@ function App() {
             )}
           </div>
         )}
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-gray-400">
-          <p>Built with React & Tailwind CSS</p>
-        </div>
       </div>
     </div>
   );
