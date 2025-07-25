@@ -228,27 +228,9 @@ function App() {
   const getSortedData = () => {
     const deduplicatedFilteredBets = getDeduplicatedFilteredBets();
 
-    // Add confidence scores to each bet
-    const betsWithConfidence = deduplicatedFilteredBets.map((bet) => {
-      const confidenceScore = calculateConfidenceScore({
-        team_included: bet.TEAM_INCLUDED,
-        country: bet.COUNTRY,
-        league: bet.LEAGUE,
-        odds1: bet.ODDS1,
-        bet_type: bet.BET_TYPE,
-        home_team: bet.HOME_TEAM,
-        away_team: bet.AWAY_TEAM,
-      });
+    if (!sortConfig.key) return deduplicatedFilteredBets;
 
-      return {
-        ...bet,
-        CONFIDENCE_SCORE: confidenceScore,
-      };
-    });
-
-    if (!sortConfig.key) return betsWithConfidence;
-
-    return [...betsWithConfidence].sort((a, b) => {
+    return [...deduplicatedFilteredBets].sort((a, b) => {
       const aValue = a[sortConfig.key] || "";
       const bValue = b[sortConfig.key] || "";
 
@@ -262,11 +244,8 @@ function App() {
         return bDate - aDate;
       }
 
-      // Handle numeric sorting for odds and confidence score
-      if (
-        sortConfig.key.includes("ODDS") ||
-        sortConfig.key === "CONFIDENCE_SCORE"
-      ) {
+      // Handle numeric sorting for odds
+      if (sortConfig.key.includes("ODDS")) {
         const aNum = parseFloat(aValue) || 0;
         const bNum = parseFloat(bValue) || 0;
         if (sortConfig.direction === "asc") {
@@ -2014,12 +1993,9 @@ function App() {
       {/* Header */}
       <div className="w-full px-4 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
-            ⚽️ Bet Tracker
+          <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">
+            <span className="text-2xl md:text-[44px]">⚽️</span> BET TRACKER
           </h1>
-          <p className="text-gray-300 text-lg">
-            Track your betting performance and analyze your results
-          </p>
         </div>
 
         {/* Stats Cards */}
@@ -2070,13 +2046,17 @@ function App() {
 
         {/* Filter Controls */}
         <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className={`flex items-center justify-between ${
+              showFilters ? "mb-4" : ""
+            }`}
+          >
             <h2 className="text-xl font-bold text-white">
               Filters & Analytics
             </h2>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+              className="bg-[#3982db] hover:bg-[#2d6bb8] text-white px-4 py-2 rounded-lg transition-colors"
             >
               {showFilters ? "Hide Filters" : "Show Filters"}
             </button>
@@ -2091,7 +2071,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, team: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Teams</option>
                   {getUniqueValues("TEAM_INCLUDED").map((team) => (
@@ -2111,7 +2091,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, betType: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Bet Types</option>
                   {getUniqueValues("BET_TYPE").map((type) => (
@@ -2131,7 +2111,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, betSelection: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Bet Selections</option>
                   {getUniqueValues("BET_SELECTION").map((selection) => (
@@ -2151,7 +2131,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, country: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Countries</option>
                   {getUniqueValues("COUNTRY").map((country) => (
@@ -2171,7 +2151,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, league: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Leagues</option>
                   {getUniqueValues("LEAGUE").map((league) => (
@@ -2191,7 +2171,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, result: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Results</option>
                   <option value="win">Win</option>
@@ -2212,7 +2192,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, minWinRate: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                   placeholder="0"
                 />
               </div>
@@ -2229,7 +2209,7 @@ function App() {
                   onChange={(e) =>
                     setFilters({ ...filters, maxWinRate: e.target.value })
                   }
-                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                  className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                   placeholder="100"
                 />
               </div>
@@ -2260,107 +2240,168 @@ function App() {
           )}
         </div>
 
+        {/* Best Performers Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          {(() => {
+            const performers = getBestPerformers();
+            return (
+              <>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                  <div className="text-lg font-bold text-green-400 mb-2">
+                    Best League
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {performers.bestLeague.leagueDisplay ||
+                      performers.bestLeague.league ||
+                      "N/A"}
+                  </div>
+                  <div className="text-gray-300">
+                    {performers.bestLeague.winRate || 0}% Win Rate
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                  <div className="text-lg font-bold text-green-400 mb-2">
+                    Best Country
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {performers.bestCountry.country || "N/A"}
+                  </div>
+                  <div className="text-gray-300">
+                    {performers.bestCountry.winRate || 0}% Win Rate
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                  <div className="text-lg font-bold text-blue-400 mb-2">
+                    Most Bets
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {performers.mostBetsLeague.leagueDisplay ||
+                      performers.mostBetsLeague.league ||
+                      "N/A"}
+                  </div>
+                  <div className="text-gray-300">
+                    {performers.mostBetsLeague.total || 0} Bets
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                  <div className="text-lg font-bold text-red-400 mb-2">
+                    Worst League
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {performers.worstLeague.leagueDisplay ||
+                      performers.worstLeague.league ||
+                      "N/A"}
+                  </div>
+                  <div className="text-gray-300">
+                    {performers.worstLeague.winRate || 0}% Win Rate
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+
         {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-6">
+        <div className="flex space-x-1 mb-6 w-full">
           <button
             onClick={() => setActiveTab("data")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "data"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            📊 Data View
+            Data View
           </button>
           <button
             onClick={() => setActiveTab("analytics")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "analytics"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            📈 Analytics View
+            Analytics
           </button>
           <button
             onClick={() => setActiveTab("performance")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "performance"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            🌍 Performance Analytics
+            Performance
           </button>
           <button
             onClick={() => setActiveTab("blacklist")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "blacklist"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            🚫 Blacklist
+            Blacklist
           </button>
           <button
             onClick={() => setActiveTab("odds")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "odds"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            📈 Odds Analytics
+            Odds
           </button>
           <button
             onClick={() => setActiveTab("betAnalysis")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "betAnalysis"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            🔍 Bet Analysis
+            Bet Analysis
           </button>
           <button
             onClick={() => setActiveTab("headToHead")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "headToHead"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            ⚔️ Head to Head
+            Head to Head
           </button>
           <button
             onClick={() => setActiveTab("topTeams")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "topTeams"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            🏆 Top Teams
+            Top Teams
           </button>
           <button
             onClick={() => setActiveTab("betSlips")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "betSlips"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            🎫 Bet Slips
+            Bet Slips
           </button>
           <button
             onClick={() => setActiveTab("teamNotes")}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "teamNotes"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            📝 Team Notes
+            Team Notes
           </button>
         </div>
 
@@ -2416,16 +2457,6 @@ function App() {
                             <span className="font-mono text-yellow-400 whitespace-nowrap">
                               {value || "-"}
                             </span>
-                          ) : key === "CONFIDENCE_SCORE" ? (
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  getConfidenceLabel(value).color
-                                }`}
-                              >
-                                {getConfidenceLabel(value).emoji} {value}/10
-                              </span>
-                            </div>
                           ) : key === "BET_TYPE" ||
                             key === "BET_SELECTION" ||
                             key === "TEAM_BET" ? (
@@ -2506,67 +2537,6 @@ function App() {
 
         {activeTab === "performance" && (
           <div className="space-y-6">
-            {/* Best Performers Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-              {(() => {
-                const performers = getBestPerformers();
-                return (
-                  <>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-lg font-bold text-green-400 mb-2">
-                        🏆 Best League
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {performers.bestLeague.leagueDisplay ||
-                          performers.bestLeague.league ||
-                          "N/A"}
-                      </div>
-                      <div className="text-gray-300">
-                        {performers.bestLeague.winRate || 0}% Win Rate
-                      </div>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-lg font-bold text-green-400 mb-2">
-                        🌍 Best Country
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {performers.bestCountry.country || "N/A"}
-                      </div>
-                      <div className="text-gray-300">
-                        {performers.bestCountry.winRate || 0}% Win Rate
-                      </div>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-lg font-bold text-blue-400 mb-2">
-                        📊 Most Bets
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {performers.mostBetsLeague.leagueDisplay ||
-                          performers.mostBetsLeague.league ||
-                          "N/A"}
-                      </div>
-                      <div className="text-gray-300">
-                        {performers.mostBetsLeague.total || 0} Bets
-                      </div>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-lg font-bold text-red-400 mb-2">
-                        ⚠️ Worst League
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {performers.worstLeague.leagueDisplay ||
-                          performers.worstLeague.league ||
-                          "N/A"}
-                      </div>
-                      <div className="text-gray-300">
-                        {performers.worstLeague.winRate || 0}% Win Rate
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-
             {/* League Performance Table */}
             <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
               <h3 className="text-lg font-bold text-white mb-4">
