@@ -427,7 +427,7 @@ function App() {
       "5.0+": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
     };
 
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     console.log("Total deduplicated bets to analyze:", deduplicatedBets.length);
 
     // Look specifically for Algeria record
@@ -652,7 +652,7 @@ function App() {
   };
 
   const getBetsForOddsRange = (range) => {
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     console.log(
       `Getting bets for range ${range}, total deduplicated bets: ${deduplicatedBets.length}`
     );
@@ -835,7 +835,7 @@ function App() {
 
   // Get deduplicated filtered bets for stats cards
   const getDeduplicatedFilteredBets = () => {
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
 
     // Apply the same filters as the main filteredBets
     let filtered = [...deduplicatedBets];
@@ -917,7 +917,7 @@ function App() {
   };
 
   const getUniqueValues = (field) => {
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     const values = deduplicatedBets.map((bet) => bet[field]).filter(Boolean);
 
     console.log(`Getting unique values for field: ${field}`);
@@ -1181,7 +1181,7 @@ function App() {
 
   const getTeamAnalytics = () => {
     const teams = {};
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     deduplicatedBets.forEach((bet) => {
       const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
       if (!teamName) return;
@@ -1233,7 +1233,7 @@ function App() {
 
   const getLeagueAnalytics = () => {
     const leagues = {};
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     deduplicatedBets.forEach((bet) => {
       const leagueName = bet.LEAGUE;
       const countryName = bet.COUNTRY;
@@ -1296,7 +1296,7 @@ function App() {
 
   const getCountryAnalytics = () => {
     const countries = {};
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     deduplicatedBets.forEach((bet) => {
       const countryName = bet.COUNTRY;
       if (!countryName) return;
@@ -1750,7 +1750,7 @@ function App() {
     const teamStats = new Map();
 
     // Process deduplicated bets to calculate team statistics
-    const deduplicatedBets = getDeduplicatedBets();
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     deduplicatedBets.forEach((bet) => {
       const teamIncluded = bet.TEAM_INCLUDED;
       if (!teamIncluded) return;
@@ -2343,16 +2343,7 @@ function App() {
           >
             Blacklist
           </button>
-          <button
-            onClick={() => setActiveTab("odds")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "odds"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Odds
-          </button>
+
           <button
             onClick={() => setActiveTab("betAnalysis")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
