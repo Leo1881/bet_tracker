@@ -957,7 +957,8 @@ function App() {
 
   // Confidence Scoring Functions
   const calculateTeamConfidence = (teamName, country, league) => {
-    const teamBets = bets.filter(
+    // First try exact match (country + league)
+    let teamBets = bets.filter(
       (bet) =>
         bet.TEAM_INCLUDED === teamName &&
         bet.COUNTRY === country &&
@@ -965,6 +966,16 @@ function App() {
         bet.RESULT !== "" &&
         bet.RESULT !== "pending"
     );
+
+    // If no exact matches, look for the team in any competition
+    if (teamBets.length === 0) {
+      teamBets = bets.filter(
+        (bet) =>
+          bet.TEAM_INCLUDED === teamName &&
+          bet.RESULT !== "" &&
+          bet.RESULT !== "pending"
+      );
+    }
 
     if (teamBets.length === 0) return 0;
 
