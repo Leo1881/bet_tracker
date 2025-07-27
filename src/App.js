@@ -17,7 +17,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', or 'teamNotes'
+  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', 'teamNotes', or 'betTypeAnalytics'
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [leagueSortConfig, setLeagueSortConfig] = useState({
     key: null,
@@ -45,6 +45,7 @@ function App() {
   });
   const [expandedOddsRanges, setExpandedOddsRanges] = useState(new Set());
   const [expandedSlips, setExpandedSlips] = useState(new Set());
+  const [expandedBetTypes, setExpandedBetTypes] = useState(new Set());
   const [teamNotes, setTeamNotes] = useState([]);
   const [filters, setFilters] = useState({
     team: "",
@@ -757,6 +758,16 @@ function App() {
       newExpanded.add(betId);
     }
     setExpandedSlips(newExpanded);
+  };
+
+  const toggleTeamExpansion = (team) => {
+    const newExpanded = new Set(expandedBetTypes);
+    if (newExpanded.has(team)) {
+      newExpanded.delete(team);
+    } else {
+      newExpanded.add(team);
+    }
+    setExpandedBetTypes(newExpanded);
   };
 
   const getStatusColor = (status) => {
@@ -1993,6 +2004,148 @@ function App() {
     return result;
   };
 
+  const getTeamBetTypeAnalytics = () => {
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+
+    // Group bets by team
+    const teamGroups = {};
+
+    deduplicatedBets.forEach((bet) => {
+      const teamIncluded = bet.TEAM_INCLUDED;
+      const betType = bet.BET_TYPE || "Unknown";
+      const result = bet.RESULT?.toLowerCase() || "";
+      const isWin = result.includes("win");
+      const isLoss = result.includes("loss");
+      const odds = parseFloat(bet.ODDS1) || 0;
+      const league = `${bet.COUNTRY} ${bet.LEAGUE}`;
+
+      if (!teamIncluded) return; // Skip bets without team_included
+
+      if (!teamGroups[teamIncluded]) {
+        teamGroups[teamIncluded] = {
+          team: teamIncluded,
+          total: 0,
+          wins: 0,
+          losses: 0,
+          totalOdds: 0,
+          betTypes: {},
+          leagues: {},
+          recentBets: [],
+        };
+      }
+
+      const group = teamGroups[teamIncluded];
+      group.total++;
+      group.totalOdds += odds;
+
+      if (isWin) group.wins++;
+      if (isLoss) group.losses++;
+
+      // Track bet types
+      if (!group.betTypes[betType]) {
+        group.betTypes[betType] = {
+          wins: 0,
+          losses: 0,
+          total: 0,
+          totalOdds: 0,
+        };
+      }
+      group.betTypes[betType].total++;
+      group.betTypes[betType].totalOdds += odds;
+      if (isWin) group.betTypes[betType].wins++;
+      if (isLoss) group.betTypes[betType].losses++;
+
+      // Track leagues
+      if (league) {
+        if (!group.leagues[league]) {
+          group.leagues[league] = { wins: 0, losses: 0, total: 0 };
+        }
+        group.leagues[league].total++;
+        if (isWin) group.leagues[league].wins++;
+        if (isLoss) group.leagues[league].losses++;
+      }
+
+      // Track recent bets (last 20)
+      if (group.recentBets.length < 20) {
+        group.recentBets.push({
+          date: bet.DATE,
+          result: isWin ? "W" : isLoss ? "L" : "P",
+          betType: betType,
+          odds: odds,
+          league: league,
+        });
+      }
+    });
+
+    // Calculate win rates and process data
+    const analytics = Object.values(teamGroups)
+      .filter((team) => team.total >= 5) // Only include teams with 5+ bets
+      .map((group) => {
+        const winRate =
+          group.total > 0 ? ((group.wins / group.total) * 100).toFixed(1) : 0;
+        const avgOdds =
+          group.total > 0 ? (group.totalOdds / group.total).toFixed(2) : 0;
+
+        // Get bet type breakdown
+        const betTypeBreakdown = Object.entries(group.betTypes)
+          .map(([betType, stats]) => ({
+            betType,
+            wins: stats.wins,
+            losses: stats.losses,
+            total: stats.total,
+            winRate:
+              stats.total > 0
+                ? ((stats.wins / stats.total) * 100).toFixed(1)
+                : 0,
+            avgOdds:
+              stats.total > 0 ? (stats.totalOdds / stats.total).toFixed(2) : 0,
+          }))
+          .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
+
+        // Get league breakdown
+        const leagueBreakdown = Object.entries(group.leagues)
+          .map(([league, stats]) => ({
+            league,
+            wins: stats.wins,
+            losses: stats.losses,
+            total: stats.total,
+            winRate:
+              stats.total > 0
+                ? ((stats.wins / stats.total) * 100).toFixed(1)
+                : 0,
+          }))
+          .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
+
+        // Calculate recent performance
+        const recentWins = group.recentBets.filter(
+          (bet) => bet.result === "W"
+        ).length;
+        const recentLosses = group.recentBets.filter(
+          (bet) => bet.result === "L"
+        ).length;
+        const recentTotal = recentWins + recentLosses;
+        const recentWinRate =
+          recentTotal > 0 ? ((recentWins / recentTotal) * 100).toFixed(1) : 0;
+
+        return {
+          ...group,
+          winRate,
+          avgOdds,
+          betTypeBreakdown,
+          leagueBreakdown,
+          recentWinRate,
+          recentWins,
+          recentLosses,
+          recentTotal,
+        };
+      });
+
+    // Sort by win rate descending
+    return analytics.sort(
+      (a, b) => parseFloat(b.winRate) - parseFloat(a.winRate)
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#121212] via-[#1E1E1E] to-[#121212] flex items-center justify-center">
@@ -2419,6 +2572,16 @@ function App() {
             }`}
           >
             Team Notes
+          </button>
+          <button
+            onClick={() => setActiveTab("betTypeAnalytics")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "betTypeAnalytics"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Team Analytics
           </button>
         </div>
 
@@ -3184,9 +3347,15 @@ function App() {
             <h3 className="text-lg font-bold text-white mb-4">Bet Analysis</h3>
             <div className="text-gray-300 mb-6">
               <p>
-                Add your new bets to Sheet3 in your Google Spreadsheet, then
-                click the button below to analyze them against your historical
-                data and blacklist.
+                Confidence Score (0-10):
+                <br />
+                🏆 Team Performance: Historical win rate and betting experience
+                <br />
+                🏛️ League Experience: Your success rate in this league/country
+                <br />
+                💰 Odds Value: Risk assessment based on betting odds
+                <br />
+                ⚔️ Head-to-Head: Previous results when these teams met
               </p>
             </div>
 
@@ -3231,7 +3400,7 @@ function App() {
                         <th className="px-4 py-2 text-left text-white font-semibold w-80">
                           🎯 Confidence
                         </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-20">
+                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Blacklist
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-80">
@@ -4236,6 +4405,111 @@ function App() {
                   Add team notes to Sheet4 in your Google Spreadsheet to see
                   them here.
                 </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "betTypeAnalytics" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">
+              Team Analytics
+            </h3>
+
+            {getTeamBetTypeAnalytics().length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-gray-400 text-lg mb-4">
+                  📊 No Team Data Found
+                </div>
+                <p className="text-gray-500">
+                  Add some bets to see your performance by team.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {getTeamBetTypeAnalytics().map((team) => (
+                  <div key={team.team} className="bg-white/5 rounded-lg p-4">
+                    <button
+                      onClick={() => toggleTeamExpansion(team.team)}
+                      className="w-full text-left flex items-center justify-between hover:bg-white/5 p-2 rounded transition-colors"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <span className="text-lg font-semibold text-white">
+                          {team.team}
+                        </span>
+                        <span className="text-green-400 font-medium">
+                          {team.winRate}% ({team.wins}W, {team.losses}L)
+                        </span>
+                        <span className="text-yellow-400 text-sm">
+                          Avg Odds: {team.avgOdds}
+                        </span>
+                      </div>
+                      <span className="text-gray-400">
+                        {expandedBetTypes.has(team.team) ? "▼" : "▶"}
+                      </span>
+                    </button>
+
+                    {expandedBetTypes.has(team.team) && (
+                      <div className="mt-4 space-y-4">
+                        {/* Bet Type Breakdown */}
+                        {team.betTypeBreakdown.length > 0 && (
+                          <div>
+                            <h4 className="text-white font-medium mb-2">
+                              Bet Type Performance:
+                            </h4>
+                            <div className="space-y-1">
+                              {team.betTypeBreakdown.map((betType, idx) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm text-gray-300 ml-4"
+                                >
+                                  • {betType.betType}: {betType.wins}W,{" "}
+                                  {betType.losses}L ({betType.winRate}%) -{" "}
+                                  {betType.total} bets (Avg Odds:{" "}
+                                  {betType.avgOdds})
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* League Breakdown */}
+                        {team.leagueBreakdown.length > 0 && (
+                          <div>
+                            <h4 className="text-white font-medium mb-2">
+                              League Performance:
+                            </h4>
+                            <div className="space-y-1">
+                              {team.leagueBreakdown.map((league, idx) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm text-gray-300 ml-4"
+                                >
+                                  • {league.league}: {league.wins}W,{" "}
+                                  {league.losses}L ({league.winRate}%) -{" "}
+                                  {league.total} bets
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Recent Performance */}
+                        {team.recentTotal > 0 && (
+                          <div>
+                            <h4 className="text-white font-medium mb-2">
+                              Recent Performance:
+                            </h4>
+                            <div className="text-sm text-gray-300 ml-4">
+                              • Last {team.recentTotal} bets: {team.recentWins}
+                              W, {team.recentLosses}L ({team.recentWinRate}%)
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
