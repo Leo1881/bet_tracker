@@ -1119,6 +1119,62 @@ function App() {
     return Math.min(10, Math.max(1, confidence));
   };
 
+  const calculatePositionConfidence = (
+    homePosition,
+    awayPosition,
+    teamIncluded,
+    homeTeam,
+    awayTeam
+  ) => {
+    // If either position is "Cup" or missing, exclude from calculation
+    if (
+      !homePosition ||
+      !awayPosition ||
+      homePosition === "Cup" ||
+      awayPosition === "Cup"
+    ) {
+      return 5; // Neutral score for cup games or missing data
+    }
+
+    // Define position hierarchy
+    const positionValues = { Top: 3, Mid: 2, Bottom: 1 };
+
+    const homeValue = positionValues[homePosition] || 2;
+    const awayValue = positionValues[awayPosition] || 2;
+
+    // Determine which team you're betting on
+    const isBettingOnHomeTeam =
+      teamIncluded &&
+      homeTeam &&
+      teamIncluded.toLowerCase().includes(homeTeam.toLowerCase());
+    const isBettingOnAwayTeam =
+      teamIncluded &&
+      awayTeam &&
+      teamIncluded.toLowerCase().includes(awayTeam.toLowerCase());
+
+    // Calculate advantage from the perspective of the team you're betting on
+    let advantage;
+    if (isBettingOnHomeTeam) {
+      // You're betting on home team, so advantage = homeValue - awayValue
+      advantage = homeValue - awayValue;
+    } else if (isBettingOnAwayTeam) {
+      // You're betting on away team, so advantage = awayValue - homeValue
+      advantage = awayValue - homeValue;
+    } else {
+      // Fallback: use home team perspective
+      advantage = homeValue - awayValue;
+    }
+
+    // Convert advantage to confidence score (0-10)
+    if (advantage >= 2) return 9; // Strong advantage
+    if (advantage === 1) return 7; // Moderate advantage
+    if (advantage === 0) return 5; // Even matchups
+    if (advantage === -1) return 3; // Moderate disadvantage
+    if (advantage <= -2) return 1; // Strong disadvantage
+
+    return 5; // Default neutral score
+  };
+
   const calculateConfidenceScore = (bet) => {
     const teamConfidence = calculateTeamConfidence(
       bet.team_included,
@@ -1137,13 +1193,21 @@ function App() {
       bet.country,
       bet.league
     );
+    const positionConfidence = calculatePositionConfidence(
+      bet.home_team_position,
+      bet.away_team_position,
+      bet.team_included,
+      bet.home_team,
+      bet.away_team
+    );
 
-    // Weighted average: Team (40%), League (25%), Odds (20%), Matchup (15%)
+    // Weighted average: Team (35%), League (20%), Odds (20%), Matchup (15%), Position (10%)
     const weightedScore =
-      teamConfidence * 0.4 +
-      leagueConfidence * 0.25 +
+      teamConfidence * 0.35 +
+      leagueConfidence * 0.2 +
       oddsConfidence * 0.2 +
-      matchupConfidence * 0.15;
+      matchupConfidence * 0.15 +
+      positionConfidence * 0.1;
 
     return Math.round(weightedScore * 10) / 10; // Round to 1 decimal place
   };
@@ -1166,12 +1230,20 @@ function App() {
       bet.country,
       bet.league
     );
+    const positionConfidence = calculatePositionConfidence(
+      bet.home_team_position,
+      bet.away_team_position,
+      bet.team_included,
+      bet.home_team,
+      bet.away_team
+    );
 
     return {
       team: Math.round(teamConfidence * 10) / 10,
       league: Math.round(leagueConfidence * 10) / 10,
       odds: Math.round(oddsConfidence * 10) / 10,
       matchup: Math.round(matchupConfidence * 10) / 10,
+      position: Math.round(positionConfidence * 10) / 10,
     };
   };
 
@@ -1582,6 +1654,8 @@ function App() {
           bet_type: newBet.bet_type,
           home_team: newBet.home_team,
           away_team: newBet.away_team,
+          home_team_position: newBet.home_team_position,
+          away_team_position: newBet.away_team_position,
         });
 
         const confidenceBreakdown = getConfidenceBreakdown({
@@ -1592,6 +1666,8 @@ function App() {
           bet_type: newBet.bet_type,
           home_team: newBet.home_team,
           away_team: newBet.away_team,
+          home_team_position: newBet.home_team_position,
+          away_team_position: newBet.away_team_position,
         });
 
         const confidenceLabel = getConfidenceLabel(confidenceScore);
@@ -1967,6 +2043,23 @@ function App() {
       (team) => team.teamName.toLowerCase() === teamName?.toLowerCase()
     );
     return team ? topTeams.indexOf(team) + 1 : null;
+  };
+
+  const getPositionBadge = (position) => {
+    if (!position) return null;
+
+    switch (position) {
+      case "Top":
+        return { text: "🥇 Top", color: "text-green-400" };
+      case "Mid":
+        return { text: "🥈 Mid", color: "text-yellow-400" };
+      case "Bottom":
+        return { text: "🥉 Bottom", color: "text-red-400" };
+      case "Cup":
+        return { text: "🏆 Cup", color: "text-purple-400" };
+      default:
+        return null;
+    }
   };
 
   const getDeduplicatedNewBets = (newBets) => {
@@ -3356,6 +3449,9 @@ function App() {
                 💰 Odds Value: Risk assessment based on betting odds
                 <br />
                 ⚔️ Head-to-Head: Previous results when these teams met
+                <br />
+                📊 League Position: Team strength based on league position
+                (Top/Mid/Bottom)
               </p>
             </div>
 
@@ -3390,6 +3486,9 @@ function App() {
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Match
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold w-20">
+                          Positions
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-24">
                           Bet On
@@ -3435,6 +3534,36 @@ function App() {
                               </div>
                             </div>
                           </td>
+                          <td className="px-4 py-6 text-gray-300">
+                            <div className="text-sm">
+                              {(() => {
+                                const homeBadge = getPositionBadge(
+                                  result.home_team_position
+                                );
+                                const awayBadge = getPositionBadge(
+                                  result.away_team_position
+                                );
+                                return (
+                                  <div>
+                                    <div
+                                      className={`text-xs ${
+                                        homeBadge?.color || "text-gray-400"
+                                      }`}
+                                    >
+                                      {homeBadge?.text || "N/A"}
+                                    </div>
+                                    <div
+                                      className={`text-xs ${
+                                        awayBadge?.color || "text-gray-400"
+                                      }`}
+                                    >
+                                      {awayBadge?.text || "N/A"}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </td>
                           <td className="px-4 py-6 text-purple-300 font-medium">
                             <div>
                               {result.team_included}
@@ -3478,6 +3607,10 @@ function App() {
                                 <div className="mb-1">
                                   ⚔️ Head-to-Head:{" "}
                                   {result.confidenceBreakdown.matchup}/10
+                                </div>
+                                <div className="mb-1">
+                                  📊 League Position:{" "}
+                                  {result.confidenceBreakdown.position}/10
                                 </div>
                               </div>
 
