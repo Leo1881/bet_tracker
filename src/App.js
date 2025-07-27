@@ -1932,6 +1932,21 @@ function App() {
     );
   };
 
+  const isTeamInTop40 = (teamName) => {
+    const topTeams = getTopTeams();
+    return topTeams.some(
+      (team) => team.teamName.toLowerCase() === teamName?.toLowerCase()
+    );
+  };
+
+  const getTop40Ranking = (teamName) => {
+    const topTeams = getTopTeams();
+    const team = topTeams.find(
+      (team) => team.teamName.toLowerCase() === teamName?.toLowerCase()
+    );
+    return team ? topTeams.indexOf(team) + 1 : null;
+  };
+
   const getDeduplicatedNewBets = (newBets) => {
     const uniqueBets = new Map();
 
@@ -3241,7 +3256,15 @@ function App() {
                             </div>
                           </td>
                           <td className="px-4 py-6 text-purple-300 font-medium">
-                            {result.team_included}
+                            <div>
+                              {result.team_included}
+                              {isTeamInTop40(result.team_included) && (
+                                <div className="text-xs text-yellow-400 mt-1">
+                                  Top 40: #
+                                  {getTop40Ranking(result.team_included)}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-6 text-yellow-400 font-mono">
                             {result.betOdds}
