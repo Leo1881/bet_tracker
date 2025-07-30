@@ -1175,6 +1175,69 @@ function App() {
     return 5; // Default neutral score
   };
 
+  const calculateHomeAwayConfidence = (
+    teamName,
+    country,
+    league,
+    isHomeGame
+  ) => {
+    // Filter bets for this team in this specific league
+    let teamBets = bets.filter(
+      (bet) =>
+        bet.TEAM_INCLUDED === teamName &&
+        bet.COUNTRY === country &&
+        bet.LEAGUE === league &&
+        bet.RESULT !== "" &&
+        bet.RESULT !== "pending"
+    );
+
+    // If no exact matches, look for the team in any competition
+    if (teamBets.length === 0) {
+      teamBets = bets.filter(
+        (bet) =>
+          bet.TEAM_INCLUDED === teamName &&
+          bet.RESULT !== "" &&
+          bet.RESULT !== "pending"
+      );
+    }
+
+    if (teamBets.length === 0) return 5; // Neutral if no data
+
+    // Filter for home or away games based on the team being bet on
+    const homeAwayBets = teamBets.filter((bet) => {
+      const isBettingOnHomeTeam =
+        bet.TEAM_INCLUDED &&
+        bet.HOME_TEAM &&
+        bet.TEAM_INCLUDED.toLowerCase().includes(bet.HOME_TEAM.toLowerCase());
+
+      return isHomeGame ? isBettingOnHomeTeam : !isBettingOnHomeTeam;
+    });
+
+    if (homeAwayBets.length === 0) return 5; // Neutral if no home/away data
+
+    const wins = homeAwayBets.filter((bet) => bet.RESULT === "win").length;
+    const winRate = (wins / homeAwayBets.length) * 100;
+
+    // Calculate confidence based on win rate and sample size
+    let confidence = 5; // Start neutral
+
+    // Win rate factor (70% weight)
+    if (winRate >= 80) confidence += 3.5;
+    else if (winRate >= 70) confidence += 2.5;
+    else if (winRate >= 60) confidence += 1.5;
+    else if (winRate >= 50) confidence += 0.5;
+    else if (winRate >= 40) confidence -= 0.5;
+    else if (winRate >= 30) confidence -= 1.5;
+    else confidence -= 2.5;
+
+    // Sample size factor (30% weight)
+    if (homeAwayBets.length >= 8) confidence += 1.5;
+    else if (homeAwayBets.length >= 5) confidence += 1;
+    else if (homeAwayBets.length >= 3) confidence += 0.5;
+
+    return Math.min(10, Math.max(1, confidence));
+  };
+
   const calculateConfidenceScore = (bet) => {
     const teamConfidence = calculateTeamConfidence(
       bet.team_included,
@@ -1201,13 +1264,28 @@ function App() {
       bet.away_team
     );
 
-    // Weighted average: Team (35%), League (20%), Odds (20%), Matchup (15%), Position (10%)
+    // Determine if this is a home or away game for the team being bet on
+    const isBettingOnHomeTeam =
+      bet.team_included &&
+      bet.home_team &&
+      bet.team_included.toLowerCase().includes(bet.home_team.toLowerCase());
+    const isHomeGame = isBettingOnHomeTeam;
+
+    const homeAwayConfidence = calculateHomeAwayConfidence(
+      bet.team_included,
+      bet.country,
+      bet.league,
+      isHomeGame
+    );
+
+    // Weighted average: Team (30%), League (15%), Odds (15%), Matchup (15%), Position (10%), Home/Away (15%)
     const weightedScore =
-      teamConfidence * 0.35 +
-      leagueConfidence * 0.2 +
-      oddsConfidence * 0.2 +
+      teamConfidence * 0.3 +
+      leagueConfidence * 0.15 +
+      oddsConfidence * 0.15 +
       matchupConfidence * 0.15 +
-      positionConfidence * 0.1;
+      positionConfidence * 0.1 +
+      homeAwayConfidence * 0.15;
 
     return Math.round(weightedScore * 10) / 10; // Round to 1 decimal place
   };
@@ -1238,12 +1316,27 @@ function App() {
       bet.away_team
     );
 
+    // Determine if this is a home or away game for the team being bet on
+    const isBettingOnHomeTeam =
+      bet.team_included &&
+      bet.home_team &&
+      bet.team_included.toLowerCase().includes(bet.home_team.toLowerCase());
+    const isHomeGame = isBettingOnHomeTeam;
+
+    const homeAwayConfidence = calculateHomeAwayConfidence(
+      bet.team_included,
+      bet.country,
+      bet.league,
+      isHomeGame
+    );
+
     return {
       team: Math.round(teamConfidence * 10) / 10,
       league: Math.round(leagueConfidence * 10) / 10,
       odds: Math.round(oddsConfidence * 10) / 10,
       matchup: Math.round(matchupConfidence * 10) / 10,
       position: Math.round(positionConfidence * 10) / 10,
+      homeAway: Math.round(homeAwayConfidence * 10) / 10,
     };
   };
 
@@ -1791,8 +1884,13 @@ function App() {
       const league = bet.LEAGUE?.toLowerCase() || "";
       const homeTeam = bet.HOME_TEAM?.toLowerCase() || "";
       const awayTeam = bet.AWAY_TEAM?.toLowerCase() || "";
+      const result = bet.RESULT?.toLowerCase() || "";
 
       if (!homeTeam || !awayTeam) return;
+
+      // Only include bets with actual results (Win or Loss)
+      const hasResult = result.includes("win") || result.includes("loss");
+      if (!hasResult) return;
 
       // Create matchup key
       const sortedTeams = [homeTeam, awayTeam].sort();
@@ -1826,9 +1924,9 @@ function App() {
       });
 
       matchup.totalBets++;
-      if (bet.RESULT?.toLowerCase().includes("win")) {
+      if (result.includes("win")) {
         matchup.wins++;
-      } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+      } else if (result.includes("loss")) {
         matchup.losses++;
       }
 
@@ -2095,6 +2193,62 @@ function App() {
       `Analysis Deduplication: ${bets.length} original bets -> ${result.length} unique bets`
     );
     return result;
+  };
+
+  const getBetTypeAnalyticsForTeam = (teamName, country, league) => {
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+
+    // Filter bets for the specific team (any league/competition for more data)
+    let teamBets = deduplicatedBets.filter(
+      (bet) => bet.TEAM_INCLUDED === teamName
+    );
+
+    // If no exact matches, try case-insensitive matching
+    if (teamBets.length === 0) {
+      teamBets = deduplicatedBets.filter(
+        (bet) => bet.TEAM_INCLUDED?.toLowerCase() === teamName.toLowerCase()
+      );
+    }
+
+    if (teamBets.length === 0) return null;
+
+    // Group by bet type
+    const betTypeGroups = {};
+
+    teamBets.forEach((bet) => {
+      const betType = bet.BET_TYPE || "Unknown";
+      const result = bet.RESULT?.toLowerCase() || "";
+      const isWin = result.includes("win");
+      const isLoss = result.includes("loss");
+
+      if (!betTypeGroups[betType]) {
+        betTypeGroups[betType] = {
+          betType,
+          wins: 0,
+          losses: 0,
+          total: 0,
+        };
+      }
+
+      betTypeGroups[betType].total++;
+      if (isWin) betTypeGroups[betType].wins++;
+      if (isLoss) betTypeGroups[betType].losses++;
+    });
+
+    // Calculate win rates and sort by performance
+    const analytics = Object.values(betTypeGroups)
+      .filter((group) => group.total >= 2) // Only include bet types with 2+ bets
+      .map((group) => ({
+        betType: group.betType,
+        wins: group.wins,
+        losses: group.losses,
+        total: group.total,
+        winRate:
+          group.total > 0 ? ((group.wins / group.total) * 100).toFixed(1) : 0,
+      }))
+      .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
+
+    return analytics;
   };
 
   const getTeamBetTypeAnalytics = () => {
@@ -3452,6 +3606,8 @@ function App() {
                 <br />
                 📊 League Position: Team strength based on league position
                 (Top/Mid/Bottom)
+                <br />
+                🏠 Home/Away: Team performance in home vs away games
               </p>
             </div>
 
@@ -3612,7 +3768,67 @@ function App() {
                                   📊 League Position:{" "}
                                   {result.confidenceBreakdown.position}/10
                                 </div>
+                                <div className="mb-1">
+                                  🏠 Home/Away:{" "}
+                                  {result.confidenceBreakdown.homeAway}/10
+                                </div>
                               </div>
+
+                              {/* Bet Type Suggestions */}
+                              {(() => {
+                                const betTypeAnalytics =
+                                  getBetTypeAnalyticsForTeam(
+                                    result.team_included,
+                                    result.country,
+                                    result.league
+                                  );
+
+                                if (
+                                  betTypeAnalytics &&
+                                  betTypeAnalytics.length > 0
+                                ) {
+                                  const topBetTypes = betTypeAnalytics.slice(
+                                    0,
+                                    3
+                                  ); // Show top 3
+                                  return (
+                                    <div className="mt-3 pt-3 border-t border-white/10">
+                                      <div className="text-xs text-blue-400 font-medium mb-2">
+                                        💡 Bet Type Tips for{" "}
+                                        {result.team_included}:
+                                      </div>
+                                      {topBetTypes.map((betType, idx) => {
+                                        const isGood =
+                                          parseFloat(betType.winRate) >= 60;
+                                        const isAverage =
+                                          parseFloat(betType.winRate) >= 40;
+                                        const icon = isGood
+                                          ? "✅"
+                                          : isAverage
+                                          ? "⚠️"
+                                          : "❌";
+                                        const color = isGood
+                                          ? "text-green-300"
+                                          : isAverage
+                                          ? "text-yellow-300"
+                                          : "text-red-300";
+
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className={`text-xs ${color} mb-1`}
+                                          >
+                                            {icon} {betType.betType}:{" "}
+                                            {betType.winRate}% ({betType.wins}/
+                                            {betType.total})
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
 
                               {/* Team Notes Display */}
                               {(() => {
