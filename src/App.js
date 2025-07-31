@@ -46,6 +46,13 @@ function App() {
   const [expandedOddsRanges, setExpandedOddsRanges] = useState(new Set());
   const [expandedSlips, setExpandedSlips] = useState(new Set());
   const [expandedBetTypes, setExpandedBetTypes] = useState(new Set());
+  const [expandedAnalyticsTeams, setExpandedAnalyticsTeams] = useState(
+    new Set()
+  );
+  const [analyticsSortConfig, setAnalyticsSortConfig] = useState({
+    key: "wins",
+    direction: "desc",
+  });
   const [teamNotes, setTeamNotes] = useState([]);
   const [filters, setFilters] = useState({
     team: "",
@@ -770,6 +777,26 @@ function App() {
     setExpandedBetTypes(newExpanded);
   };
 
+  const toggleAnalyticsTeamExpansion = (team) => {
+    const newExpanded = new Set(expandedAnalyticsTeams);
+    if (newExpanded.has(team)) {
+      newExpanded.delete(team);
+    } else {
+      newExpanded.add(team);
+    }
+    setExpandedAnalyticsTeams(newExpanded);
+  };
+
+  const handleAnalyticsSort = (key) => {
+    setAnalyticsSortConfig((prevConfig) => ({
+      key,
+      direction:
+        prevConfig.key === key && prevConfig.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  };
+
   const getStatusColor = (status) => {
     if (!status) return "bg-gray-100 text-gray-800";
     const lowerStatus = status.toLowerCase();
@@ -1388,26 +1415,65 @@ function App() {
       }
 
       if (!teams[teamName]) {
-        teams[teamName] = { wins: 0, losses: 0, pending: 0 };
+        teams[teamName] = {
+          wins: 0,
+          losses: 0,
+          pending: 0,
+          betTypes: {},
+        };
       }
 
+      // Track overall stats
       if (bet.RESULT?.toLowerCase().includes("win")) teams[teamName].wins++;
       else if (bet.RESULT?.toLowerCase().includes("loss"))
         teams[teamName].losses++;
       else if (bet.RESULT?.toLowerCase().includes("pending"))
         teams[teamName].pending++;
+
+      // Track bet type stats
+      const betType = bet.BET_TYPE || "Unknown";
+      if (!teams[teamName].betTypes[betType]) {
+        teams[teamName].betTypes[betType] = { wins: 0, losses: 0, total: 0 };
+      }
+
+      teams[teamName].betTypes[betType].total++;
+      if (bet.RESULT?.toLowerCase().includes("win"))
+        teams[teamName].betTypes[betType].wins++;
+      else if (bet.RESULT?.toLowerCase().includes("loss"))
+        teams[teamName].betTypes[betType].losses++;
     });
 
     return Object.entries(teams)
-      .map(([team, stats]) => ({
-        team,
-        ...stats,
-        total: stats.wins + stats.losses + stats.pending,
-        winRate:
-          stats.wins + stats.losses > 0
-            ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)
-            : 0,
-      }))
+      .map(([team, stats]) => {
+        // Calculate bet type breakdown
+        const betTypeBreakdown = Object.entries(stats.betTypes)
+          .map(([betType, betStats]) => {
+            const totalWithResult = betStats.wins + betStats.losses;
+            return {
+              betType,
+              wins: betStats.wins,
+              losses: betStats.losses,
+              total: betStats.total,
+              totalWithResult: totalWithResult,
+              winRate:
+                totalWithResult > 0
+                  ? ((betStats.wins / totalWithResult) * 100).toFixed(1)
+                  : 0,
+            };
+          })
+          .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
+
+        return {
+          team,
+          ...stats,
+          total: stats.wins + stats.losses + stats.pending,
+          winRate:
+            stats.wins + stats.losses > 0
+              ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)
+              : 0,
+          betTypeBreakdown,
+        };
+      })
       .sort((a, b) => {
         // Sort by wins first (descending)
         if (a.wins !== b.wins) {
@@ -1416,6 +1482,30 @@ function App() {
         // If wins are equal, sort by win rate (descending)
         return parseFloat(b.winRate) - parseFloat(a.winRate);
       });
+  };
+
+  const getSortedAnalyticsData = () => {
+    const analytics = getTeamAnalytics();
+
+    return analytics.sort((a, b) => {
+      const { key, direction } = analyticsSortConfig;
+      const multiplier = direction === "asc" ? 1 : -1;
+
+      switch (key) {
+        case "team":
+          return multiplier * a.team.localeCompare(b.team);
+        case "total":
+          return multiplier * (a.total - b.total);
+        case "wins":
+          return multiplier * (a.wins - b.wins);
+        case "losses":
+          return multiplier * (a.losses - b.losses);
+        case "winRate":
+          return multiplier * (parseFloat(a.winRate) - parseFloat(b.winRate));
+        default:
+          return 0;
+      }
+    });
   };
 
   const getLeagueAnalytics = () => {
@@ -2914,47 +3004,160 @@ function App() {
               <table className="w-full">
                 <thead className="bg-white/20">
                   <tr>
-                    <th className="px-4 py-2 text-left text-white font-semibold">
-                      Team
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                      onClick={() => handleAnalyticsSort("team")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Team</span>
+                        {analyticsSortConfig.key === "team" && (
+                          <span className="ml-2">
+                            {analyticsSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                      onClick={() => handleAnalyticsSort("total")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Total Bets</span>
+                        {analyticsSortConfig.key === "total" && (
+                          <span className="ml-2">
+                            {analyticsSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                      onClick={() => handleAnalyticsSort("wins")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Wins</span>
+                        {analyticsSortConfig.key === "wins" && (
+                          <span className="ml-2">
+                            {analyticsSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                      onClick={() => handleAnalyticsSort("losses")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Losses</span>
+                        {analyticsSortConfig.key === "losses" && (
+                          <span className="ml-2">
+                            {analyticsSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                      onClick={() => handleAnalyticsSort("winRate")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Win Rate</span>
+                        {analyticsSortConfig.key === "winRate" && (
+                          <span className="ml-2">
+                            {analyticsSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <th className="px-4 py-2 text-left text-white font-semibold">
-                      Total Bets
-                    </th>
-                    <th className="px-4 py-2 text-left text-white font-semibold">
-                      Wins
-                    </th>
-                    <th className="px-4 py-2 text-left text-white font-semibold">
-                      Losses
-                    </th>
-                    <th className="px-4 py-2 text-left text-white font-semibold">
-                      Win Rate
+                      Details
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {getTeamAnalytics().map((team, index) => (
-                    <tr
-                      key={index}
-                      className="hover:bg-white/5 transition-colors"
-                    >
-                      <td className="px-4 py-2 text-gray-200">{team.team}</td>
-                      <td className="px-4 py-2 text-gray-200">{team.total}</td>
-                      <td className="px-4 py-2 text-green-400">{team.wins}</td>
-                      <td className="px-4 py-2 text-red-400">{team.losses}</td>
-                      <td className="px-4 py-2">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            parseFloat(team.winRate) >= 70
-                              ? "bg-green-100 text-green-800"
-                              : parseFloat(team.winRate) >= 50
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {team.winRate}%
-                        </span>
-                      </td>
-                    </tr>
+                  {getSortedAnalyticsData().map((team, index) => (
+                    <React.Fragment key={index}>
+                      <tr className="hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-2 text-gray-200">{team.team}</td>
+                        <td className="px-4 py-2 text-gray-200">
+                          {team.total}
+                        </td>
+                        <td className="px-4 py-2 text-green-400">
+                          {team.wins}
+                        </td>
+                        <td className="px-4 py-2 text-red-400">
+                          {team.losses}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              parseFloat(team.winRate) >= 70
+                                ? "bg-green-100 text-green-800"
+                                : parseFloat(team.winRate) >= 50
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {team.winRate}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          <button
+                            onClick={() =>
+                              toggleAnalyticsTeamExpansion(team.team)
+                            }
+                            className="text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            {expandedAnalyticsTeams.has(team.team) ? "▼" : "▶"}
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedAnalyticsTeams.has(team.team) &&
+                        team.betTypeBreakdown.length > 0 && (
+                          <tr>
+                            <td colSpan="6" className="px-4 py-2 bg-white/5">
+                              <div className="ml-4">
+                                <h4 className="text-white font-medium mb-2">
+                                  Bet Type Breakdown:
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                  {team.betTypeBreakdown.map((betType, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="text-sm bg-white/10 rounded p-2"
+                                    >
+                                      <div className="font-medium text-gray-200">
+                                        {betType.betType}
+                                      </div>
+                                      <div className="text-green-400">
+                                        {betType.wins}W
+                                      </div>
+                                      <div className="text-red-400">
+                                        {betType.losses}L
+                                      </div>
+                                      <div className="text-gray-300">
+                                        {betType.winRate}% (
+                                        {betType.totalWithResult} completed,{" "}
+                                        {betType.total} total)
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
