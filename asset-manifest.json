@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/bet_tracker/static/css/main.4c7cfb0e.css",
-    "main.js": "/bet_tracker/static/js/main.9226e47a.js",
+    "main.css": "/bet_tracker/static/css/main.a51c5dd3.css",
+    "main.js": "/bet_tracker/static/js/main.2b7e931b.js",
     "static/js/453.0350aa36.chunk.js": "/bet_tracker/static/js/453.0350aa36.chunk.js",
     "index.html": "/bet_tracker/index.html",
-    "main.4c7cfb0e.css.map": "/bet_tracker/static/css/main.4c7cfb0e.css.map",
-    "main.9226e47a.js.map": "/bet_tracker/static/js/main.9226e47a.js.map",
+    "main.a51c5dd3.css.map": "/bet_tracker/static/css/main.a51c5dd3.css.map",
+    "main.2b7e931b.js.map": "/bet_tracker/static/js/main.2b7e931b.js.map",
     "453.0350aa36.chunk.js.map": "/bet_tracker/static/js/453.0350aa36.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.4c7cfb0e.css",
-    "static/js/main.9226e47a.js"
+    "static/css/main.a51c5dd3.css",
+    "static/js/main.2b7e931b.js"
   ]
 }
