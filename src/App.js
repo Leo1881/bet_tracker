@@ -1471,6 +1471,10 @@ function App() {
         return;
       }
 
+      // Skip pending bets for analytics
+      const result = bet.RESULT?.toLowerCase() || "";
+      if (result.includes("pending")) return;
+
       if (!teams[teamName]) {
         teams[teamName] = {
           wins: 0,
@@ -1480,23 +1484,21 @@ function App() {
         };
       }
 
-      // Track overall stats
-      if (bet.RESULT?.toLowerCase().includes("win")) teams[teamName].wins++;
-      else if (bet.RESULT?.toLowerCase().includes("loss"))
+      // Track overall stats (excluding pending)
+      if (result.includes("win")) teams[teamName].wins++;
+      else if (result.includes("loss"))
         teams[teamName].losses++;
-      else if (bet.RESULT?.toLowerCase().includes("pending"))
-        teams[teamName].pending++;
 
-      // Track bet type stats
+      // Track bet type stats (excluding pending)
       const betType = bet.BET_TYPE || "Unknown";
       if (!teams[teamName].betTypes[betType]) {
         teams[teamName].betTypes[betType] = { wins: 0, losses: 0, total: 0 };
       }
 
       teams[teamName].betTypes[betType].total++;
-      if (bet.RESULT?.toLowerCase().includes("win"))
+      if (result.includes("win"))
         teams[teamName].betTypes[betType].wins++;
-      else if (bet.RESULT?.toLowerCase().includes("loss"))
+      else if (result.includes("loss"))
         teams[teamName].betTypes[betType].losses++;
     });
 
@@ -1523,7 +1525,7 @@ function App() {
         return {
           team,
           ...stats,
-          total: stats.wins + stats.losses + stats.pending,
+          total: stats.wins + stats.losses, // Only completed bets
           winRate:
             stats.wins + stats.losses > 0
               ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)
