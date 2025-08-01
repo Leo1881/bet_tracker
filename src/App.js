@@ -53,6 +53,8 @@ function App() {
     key: "wins",
     direction: "desc",
   });
+  const [dailyGames, setDailyGames] = useState([]);
+  const [dailyGamesLoading, setDailyGamesLoading] = useState(false);
   const [teamNotes, setTeamNotes] = useState([]);
   const [filters, setFilters] = useState({
     team: "",
@@ -89,6 +91,61 @@ function App() {
     };
     getData();
   }, []);
+
+  // Fetch daily games when Daily Games tab is active
+  useEffect(() => {
+    const fetchDailyGames = async () => {
+      if (activeTab === "dailyGames") {
+        try {
+          setDailyGamesLoading(true);
+          const response = await fetch(
+            "https://docs.google.com/spreadsheets/d/1uairlmwCyYh_OwCFJZtEOHr8svQ2l8C_I8VnLsHHiXQ/gviz/tq?tqx=out:csv&gid=1498171880"
+          );
+          const csvText = await response.text();
+          console.log("Raw CSV text:", csvText);
+          const lines = csvText.split("\n").filter((line) => line.trim());
+          console.log("CSV lines:", lines);
+
+          // Parse data - try both comma and tab separators
+          const dataLines = lines.slice(1); // Skip header row
+          console.log("Data lines (after skipping header):", dataLines);
+
+          const games = dataLines
+            .map((line) => {
+              // Try tab separator first, then comma
+              let values = line
+                .split("\t")
+                .map((v) => v.trim().replace(/"/g, ""));
+
+              // If we don't have enough values, try comma separator
+              if (values.length < 5) {
+                values = line.split(",").map((v) => v.trim().replace(/"/g, ""));
+              }
+
+              console.log("Parsed values:", values);
+              return {
+                date: values[0] || "",
+                home_team: values[1] || "",
+                odds1: values[2] || "",
+                away_team: values[3] || "",
+                odds2: values[4] || "",
+              };
+            })
+            .filter((game) => game.home_team && game.away_team);
+
+          console.log("Final games array:", games);
+
+          setDailyGames(games);
+        } catch (err) {
+          console.error("Failed to fetch daily games:", err);
+        } finally {
+          setDailyGamesLoading(false);
+        }
+      }
+    };
+
+    fetchDailyGames();
+  }, [activeTab]);
 
   const applyFilters = useCallback(() => {
     let filtered = [...bets];
@@ -2341,6 +2398,113 @@ function App() {
     return analytics;
   };
 
+  const getProcessedDailyGames = () => {
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+    const allTeams = new Set();
+
+    // Get all teams from betting history
+    deduplicatedBets.forEach((bet) => {
+      if (bet.HOME_TEAM) allTeams.add(bet.HOME_TEAM);
+      if (bet.AWAY_TEAM) allTeams.add(bet.AWAY_TEAM);
+    });
+
+    // Simple exact team name matching
+    const findBestTeamMatch = (teamName) => {
+      if (!teamName) return null;
+
+      console.log(`Looking for exact match for: "${teamName}"`);
+
+      // Only try exact match
+      if (allTeams.has(teamName)) {
+        console.log(`Found exact match: "${teamName}"`);
+        return teamName;
+      }
+
+      console.log(`No exact match found for: "${teamName}"`);
+      return null;
+    };
+
+    // Debug: Log key information
+    console.log("Total teams in betting history:", allTeams.size);
+    console.log("Total daily games:", dailyGames.length);
+
+    // Check for specific teams we know should match
+    console.log(
+      "FK Tukums 2000/TSS in history:",
+      allTeams.has("FK Tukums 2000/TSS")
+    );
+    console.log("Riga FC in history:", allTeams.has("Riga FC"));
+
+    const processedGames = dailyGames.map((game) => {
+      console.log(`Processing game: ${game.home_team} vs ${game.away_team}`);
+
+      const matchedHomeTeam = findBestTeamMatch(game.home_team);
+      const matchedAwayTeam = findBestTeamMatch(game.away_team);
+
+      const homeTeamInHistory = matchedHomeTeam !== null;
+      const awayTeamInHistory = matchedAwayTeam !== null;
+
+      console.log(
+        `Home team match: ${
+          homeTeamInHistory ? "YES" : "NO"
+        } (${matchedHomeTeam})`
+      );
+      console.log(
+        `Away team match: ${
+          awayTeamInHistory ? "YES" : "NO"
+        } (${matchedAwayTeam})`
+      );
+
+      // Get team analytics if team exists in history
+      const homeTeamAnalytics = homeTeamInHistory
+        ? getTeamAnalytics().find((t) => t.team === matchedHomeTeam)
+        : null;
+      const awayTeamAnalytics = awayTeamInHistory
+        ? getTeamAnalytics().find((t) => t.team === matchedAwayTeam)
+        : null;
+
+      // Get head-to-head data
+      const headToHeadData =
+        homeTeamInHistory && awayTeamInHistory
+          ? findPreviousMatchups(matchedHomeTeam, matchedAwayTeam, "", "")
+          : [];
+
+      // Get top 40 rankings
+      const homeTeamRank = homeTeamInHistory
+        ? getTop40Ranking(matchedHomeTeam)
+        : null;
+      const awayTeamRank = awayTeamInHistory
+        ? getTop40Ranking(matchedAwayTeam)
+        : null;
+
+      const result = {
+        ...game,
+        matchedHomeTeam,
+        matchedAwayTeam,
+        homeTeamInHistory,
+        awayTeamInHistory,
+        homeTeamAnalytics,
+        awayTeamAnalytics,
+        headToHeadData,
+        homeTeamRank,
+        awayTeamRank,
+        hasHistoricalData: homeTeamInHistory || awayTeamInHistory,
+      };
+
+      console.log(`Game has historical data: ${result.hasHistoricalData}`);
+      return result;
+    });
+
+    const filteredGames = processedGames.filter(
+      (game) => game.hasHistoricalData
+    );
+    console.log(
+      `Total games processed: ${processedGames.length}, Games with historical data: ${filteredGames.length}`
+    );
+
+    return filteredGames;
+  };
+
   const getTeamBetTypeAnalytics = () => {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
 
@@ -2919,6 +3083,16 @@ function App() {
             }`}
           >
             Team Analytics
+          </button>
+          <button
+            onClick={() => setActiveTab("dailyGames")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "dailyGames"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Daily Games
           </button>
         </div>
 
@@ -5058,6 +5232,151 @@ function App() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "dailyGames" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Daily Games</h3>
+
+            {dailyGamesLoading ? (
+              <div className="text-center py-8">
+                <div className="text-gray-400 text-lg mb-4">
+                  Loading daily games...
+                </div>
+              </div>
+            ) : getProcessedDailyGames().length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-gray-400 text-lg mb-4">
+                  No Games with Historical Data
+                </div>
+                <p className="text-gray-500">
+                  Upload games to Sheet5 in your Google Spreadsheet to see teams
+                  you have betting history for.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {getProcessedDailyGames().map((game, index) => (
+                  <div key={index} className="bg-white/5 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-4">
+                        <span className="text-lg font-semibold text-white">
+                          {game.home_team} vs {game.away_team}
+                        </span>
+                        <span className="text-gray-400 text-sm">
+                          {game.date}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-yellow-400 text-sm">
+                          {game.odds1} / {game.odds2}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Home Team Analysis */}
+                      {game.homeTeamInHistory && (
+                        <div className="bg-white/5 rounded p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-purple-300 font-medium">
+                              {game.home_team}
+                            </span>
+                            {game.homeTeamRank && (
+                              <span className="text-yellow-400 text-sm">
+                                Top 40: #{game.homeTeamRank}
+                              </span>
+                            )}
+                          </div>
+                          {game.homeTeamAnalytics && (
+                            <div className="text-sm space-y-1">
+                              <div
+                                className={`${
+                                  parseFloat(game.homeTeamAnalytics.winRate) >=
+                                  60
+                                    ? "text-green-400"
+                                    : parseFloat(
+                                        game.homeTeamAnalytics.winRate
+                                      ) >= 40
+                                    ? "text-yellow-400"
+                                    : "text-red-400"
+                                }`}
+                              >
+                                Win Rate: {game.homeTeamAnalytics.winRate}% (
+                                {game.homeTeamAnalytics.wins}W,{" "}
+                                {game.homeTeamAnalytics.losses}L)
+                              </div>
+                              <div className="text-gray-300">
+                                Total Bets: {game.homeTeamAnalytics.total}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Away Team Analysis */}
+                      {game.awayTeamInHistory && (
+                        <div className="bg-white/5 rounded p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-purple-300 font-medium">
+                              {game.away_team}
+                            </span>
+                            {game.awayTeamRank && (
+                              <span className="text-yellow-400 text-sm">
+                                Top 40: #{game.awayTeamRank}
+                              </span>
+                            )}
+                          </div>
+                          {game.awayTeamAnalytics && (
+                            <div className="text-sm space-y-1">
+                              <div
+                                className={`${
+                                  parseFloat(game.awayTeamAnalytics.winRate) >=
+                                  60
+                                    ? "text-green-400"
+                                    : parseFloat(
+                                        game.awayTeamAnalytics.winRate
+                                      ) >= 40
+                                    ? "text-yellow-400"
+                                    : "text-red-400"
+                                }`}
+                              >
+                                Win Rate: {game.awayTeamAnalytics.winRate}% (
+                                {game.awayTeamAnalytics.wins}W,{" "}
+                                {game.awayTeamAnalytics.losses}L)
+                              </div>
+                              <div className="text-gray-300">
+                                Total Bets: {game.awayTeamAnalytics.total}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Head to Head Data */}
+                    {game.headToHeadData.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-white/10">
+                        <div className="text-sm text-blue-400 font-medium mb-2">
+                          Previous Matchups:
+                        </div>
+                        <div className="text-sm text-gray-300">
+                          {game.headToHeadData
+                            .slice(0, 3)
+                            .map((matchup, idx) => (
+                              <div key={idx} className="mb-1">
+                                {matchup.date}: {matchup.result} ({matchup.odds}
+                                )
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     )}
                   </div>
