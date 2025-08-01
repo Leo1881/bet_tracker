@@ -2463,6 +2463,28 @@ function App() {
         ? getTeamAnalytics().find((t) => t.team === matchedAwayTeam)
         : null;
 
+      // Get country and league data from original betting data
+      const getTeamCountryLeague = (teamName) => {
+        const teamBets = deduplicatedBets.filter(
+          (bet) => bet.HOME_TEAM === teamName || bet.AWAY_TEAM === teamName
+        );
+        if (teamBets.length > 0) {
+          const bet = teamBets[0]; // Get first bet for this team
+          return {
+            country: bet.COUNTRY || "",
+            league: bet.LEAGUE || "",
+          };
+        }
+        return { country: "", league: "" };
+      };
+
+      const homeCountryLeague = homeTeamInHistory
+        ? getTeamCountryLeague(matchedHomeTeam)
+        : null;
+      const awayCountryLeague = awayTeamInHistory
+        ? getTeamCountryLeague(matchedAwayTeam)
+        : null;
+
       // Get head-to-head data
       const headToHeadData =
         homeTeamInHistory && awayTeamInHistory
@@ -2485,6 +2507,8 @@ function App() {
         awayTeamInHistory,
         homeTeamAnalytics,
         awayTeamAnalytics,
+        homeCountryLeague,
+        awayCountryLeague,
         headToHeadData,
         homeTeamRank,
         awayTeamRank,
@@ -5316,6 +5340,10 @@ function App() {
                               <div className="text-gray-300">
                                 Total Bets: {game.homeTeamAnalytics.total}
                               </div>
+                              <div className="text-blue-300 text-xs">
+                                {game.homeCountryLeague?.country} -{" "}
+                                {game.homeCountryLeague?.league}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -5354,6 +5382,10 @@ function App() {
                               </div>
                               <div className="text-gray-300">
                                 Total Bets: {game.awayTeamAnalytics.total}
+                              </div>
+                              <div className="text-blue-300 text-xs">
+                                {game.awayCountryLeague?.country} -{" "}
+                                {game.awayCountryLeague?.league}
                               </div>
                             </div>
                           )}
