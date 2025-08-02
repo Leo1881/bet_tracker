@@ -1052,8 +1052,8 @@ function App() {
 
   // Confidence Scoring Functions
   const calculateTeamConfidence = (teamName, country, league) => {
-    // First try exact match (country + league)
-    let teamBets = bets.filter(
+    // Only look for exact match (country + league) - no fallback to other competitions
+    const teamBets = bets.filter(
       (bet) =>
         bet.TEAM_INCLUDED === teamName &&
         bet.COUNTRY === country &&
@@ -1061,16 +1061,6 @@ function App() {
         bet.RESULT !== "" &&
         bet.RESULT !== "pending"
     );
-
-    // If no exact matches, look for the team in any competition
-    if (teamBets.length === 0) {
-      teamBets = bets.filter(
-        (bet) =>
-          bet.TEAM_INCLUDED === teamName &&
-          bet.RESULT !== "" &&
-          bet.RESULT !== "pending"
-      );
-    }
 
     if (teamBets.length === 0) return 0;
 
@@ -1265,8 +1255,8 @@ function App() {
     league,
     isHomeGame
   ) => {
-    // Filter bets for this team in this specific league
-    let teamBets = bets.filter(
+    // Only look for exact match (country + league) - no fallback to other competitions
+    const teamBets = bets.filter(
       (bet) =>
         bet.TEAM_INCLUDED === teamName &&
         bet.COUNTRY === country &&
@@ -1274,16 +1264,6 @@ function App() {
         bet.RESULT !== "" &&
         bet.RESULT !== "pending"
     );
-
-    // If no exact matches, look for the team in any competition
-    if (teamBets.length === 0) {
-      teamBets = bets.filter(
-        (bet) =>
-          bet.TEAM_INCLUDED === teamName &&
-          bet.RESULT !== "" &&
-          bet.RESULT !== "pending"
-      );
-    }
 
     if (teamBets.length === 0) return 5; // Neutral if no data
 
@@ -1486,8 +1466,7 @@ function App() {
 
       // Track overall stats (excluding pending)
       if (result.includes("win")) teams[teamName].wins++;
-      else if (result.includes("loss"))
-        teams[teamName].losses++;
+      else if (result.includes("loss")) teams[teamName].losses++;
 
       // Track bet type stats (excluding pending)
       const betType = bet.BET_TYPE || "Unknown";
@@ -1496,8 +1475,7 @@ function App() {
       }
 
       teams[teamName].betTypes[betType].total++;
-      if (result.includes("win"))
-        teams[teamName].betTypes[betType].wins++;
+      if (result.includes("win")) teams[teamName].betTypes[betType].wins++;
       else if (result.includes("loss"))
         teams[teamName].betTypes[betType].losses++;
     });
@@ -1817,14 +1795,20 @@ function App() {
             blacklistedTeam.team_name.toLowerCase() === teamName.toLowerCase()
         );
 
-        // Get historical performance for this team (ALL competitions for Bet Analysis)
+        // Get historical performance for this team (EXACT country + league match only)
         // Use deduplicated bets to avoid counting multiple tickets for the same game
         const deduplicatedBets = getDeduplicatedBetsForAnalysis();
         const teamHistory = deduplicatedBets.filter((bet) => {
           const betTeamIncluded = bet.TEAM_INCLUDED?.toLowerCase() || "";
+          const betCountry = bet.COUNTRY?.toLowerCase() || "";
+          const betLeague = bet.LEAGUE?.toLowerCase() || "";
 
-          // Match by exact team name (the team you bet on) - regardless of country/league
-          return betTeamIncluded === teamName.toLowerCase();
+          // Match by exact team name, country, and league
+          return (
+            betTeamIncluded === teamName.toLowerCase() &&
+            betCountry === country.toLowerCase() &&
+            betLeague === league.toLowerCase()
+          );
         });
 
         // Calculate historical stats with detailed bet information
@@ -2098,18 +2082,24 @@ function App() {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
     deduplicatedBets.forEach((bet) => {
       const teamIncluded = bet.TEAM_INCLUDED;
-      if (!teamIncluded) return;
+      const country = bet.COUNTRY;
+      const league = bet.LEAGUE;
+
+      if (!teamIncluded || !country || !league) return;
 
       // Exclude teams named "Over 1.5" and "Over 0.5"
       if (teamIncluded === "Over 1.5" || teamIncluded === "Over 0.5") {
         return;
       }
 
-      const teamKey = teamIncluded.toLowerCase();
+      // Create unique key for team + country + league combination
+      const teamKey = `${teamIncluded.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
 
       if (!teamStats.has(teamKey)) {
         teamStats.set(teamKey, {
           teamName: teamIncluded,
+          country: country,
+          league: league,
           totalBets: 0,
           wins: 0,
           losses: 0,
@@ -2118,8 +2108,6 @@ function App() {
           winRate: 0,
           recentWinRate: 0,
           lastBetDate: null,
-          countries: new Set(),
-          leagues: new Set(),
         });
       }
 
@@ -2146,10 +2134,6 @@ function App() {
         team.recentWins = Math.min(team.recentWins, 10);
       }
 
-      // Track countries and leagues
-      if (bet.COUNTRY) team.countries.add(bet.COUNTRY);
-      if (bet.LEAGUE) team.leagues.add(bet.LEAGUE);
-
       // Calculate win rates
       const totalBetsWithResult = team.wins + team.losses;
       team.winRate =
@@ -2159,13 +2143,13 @@ function App() {
     });
 
     // Convert to array and calculate composite score
-    const teamsArray = Array.from(teamStats.values())
-      .filter((team) => team.totalBets >= 2) // Only teams with at least 2 bets
+    const teamsArray = Array.from(teamStats.values() || [])
+      .filter((team) => team && team.totalBets >= 2) // Only teams with at least 2 bets
       .map((team) => {
         // Calculate composite score (win rate 50%, total wins 30%, recent performance 20%)
-        const winRateScore = team.winRate * 0.5;
-        const totalWinsScore = Math.min(team.wins * 2, 100) * 0.3; // Cap at 50 wins
-        const recentPerformanceScore = team.recentWinRate * 0.2;
+        const winRateScore = (team.winRate || 0) * 0.5;
+        const totalWinsScore = Math.min((team.wins || 0) * 2, 100) * 0.3; // Cap at 50 wins
+        const recentPerformanceScore = (team.recentWinRate || 0) * 0.2;
 
         const compositeScore =
           winRateScore + totalWinsScore + recentPerformanceScore;
@@ -2173,14 +2157,12 @@ function App() {
         return {
           ...team,
           compositeScore,
-          countries: Array.from(team.countries),
-          leagues: Array.from(team.leagues),
         };
       })
-      .sort((a, b) => b.compositeScore - a.compositeScore)
+      .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0))
       .slice(0, 40); // Top 40 teams
 
-    return teamsArray;
+    return teamsArray || [];
   };
 
   const getBetSlips = () => {
@@ -2347,17 +2329,13 @@ function App() {
   const getBetTypeAnalyticsForTeam = (teamName, country, league) => {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
 
-    // Filter bets for the specific team (any league/competition for more data)
-    let teamBets = deduplicatedBets.filter(
-      (bet) => bet.TEAM_INCLUDED === teamName
+    // Filter bets for the specific team in the exact country + league combination
+    const teamBets = deduplicatedBets.filter(
+      (bet) =>
+        bet.TEAM_INCLUDED === teamName &&
+        bet.COUNTRY === country &&
+        bet.LEAGUE === league
     );
-
-    // If no exact matches, try case-insensitive matching
-    if (teamBets.length === 0) {
-      teamBets = deduplicatedBets.filter(
-        (bet) => bet.TEAM_INCLUDED?.toLowerCase() === teamName.toLowerCase()
-      );
-    }
 
     if (teamBets.length === 0) return null;
 
@@ -4777,26 +4755,10 @@ function App() {
                         </div>
                       </td>
                       <td className="px-4 py-2 text-gray-300">
-                        <div className="text-xs">
-                          {team.countries.slice(0, 3).join(", ")}
-                          {team.countries.length > 3 && (
-                            <span className="text-gray-500">
-                              {" "}
-                              +{team.countries.length - 3}
-                            </span>
-                          )}
-                        </div>
+                        <div className="text-xs">{team.country || "N/A"}</div>
                       </td>
                       <td className="px-4 py-2 text-gray-300">
-                        <div className="text-xs">
-                          {team.leagues.slice(0, 3).join(", ")}
-                          {team.leagues.length > 3 && (
-                            <span className="text-gray-500">
-                              {" "}
-                              +{team.leagues.length - 3}
-                            </span>
-                          )}
-                        </div>
+                        <div className="text-xs">{team.league || "N/A"}</div>
                       </td>
                       <td className="px-4 py-2 text-gray-300">
                         <span className="font-medium text-blue-400">
