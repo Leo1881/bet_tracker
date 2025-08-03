@@ -36,7 +36,7 @@ function App() {
     direction: "desc",
   });
   const [slipsSortConfig, setSlipsSortConfig] = useState({
-    key: "date",
+    key: "betId",
     direction: "desc",
   });
   const [teamNotesSortConfig, setTeamNotesSortConfig] = useState({
@@ -65,6 +65,7 @@ function App() {
     result: "",
     minWinRate: "",
     maxWinRate: "",
+    status: "",
   });
 
   useEffect(() => {
@@ -428,7 +429,12 @@ function App() {
   };
 
   const getSortedSlipsData = () => {
-    const slipsData = getBetSlips();
+    let slipsData = getBetSlips();
+
+    // Apply status filter
+    if (filters.status) {
+      slipsData = slipsData.filter((slip) => slip.status === filters.status);
+    }
 
     if (!slipsSortConfig.key) return slipsData;
 
@@ -458,7 +464,36 @@ function App() {
         return bNum - aNum;
       }
 
-      // Default string sorting for betId
+      // Handle betId sorting by extracting the numeric part from the end
+      if (slipsSortConfig.key === "betId") {
+        const extractNumericPart = (betId) => {
+          // Extract the last part after " - " (e.g., "026" from "2025/07/29 - 026")
+          const match = betId.toString().match(/- (\d+)$/);
+          return match ? parseInt(match[1], 10) : 0;
+        };
+
+        const aNum = extractNumericPart(aValue);
+        const bNum = extractNumericPart(bValue);
+
+        if (slipsSortConfig.direction === "asc") {
+          return aNum - bNum;
+        }
+        return bNum - aNum;
+      }
+
+      // Handle status sorting
+      if (slipsSortConfig.key === "status") {
+        const statusOrder = { Complete: 1, Pending: 2 };
+        const aOrder = statusOrder[aValue] || 3;
+        const bOrder = statusOrder[bValue] || 3;
+
+        if (slipsSortConfig.direction === "asc") {
+          return aOrder - bOrder;
+        }
+        return bOrder - aOrder;
+      }
+
+      // Default string sorting for other fields
       if (slipsSortConfig.direction === "asc") {
         return aValue.toString().localeCompare(bValue.toString());
       }
@@ -2210,7 +2245,11 @@ function App() {
         slip.wins++;
       } else if (result.includes("loss")) {
         slip.losses++;
-      } else if (result.includes("pending")) {
+      } else if (
+        result.includes("pending") ||
+        !result ||
+        result.trim() === ""
+      ) {
         slip.pending++;
       }
     });
@@ -2221,6 +2260,8 @@ function App() {
         const totalWithResult = slip.wins + slip.losses;
         slip.winRate =
           totalWithResult > 0 ? (slip.wins / totalWithResult) * 100 : 0;
+        // Add status field
+        slip.status = slip.pending > 0 ? "Pending" : "Complete";
         return slip;
       })
       .sort((a, b) => {
@@ -4896,6 +4937,19 @@ function App() {
                         )}
                       </div>
                     </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
+                      onClick={() => handleSlipsSort("status")}
+                    >
+                      <div className="flex items-center">
+                        Status
+                        {slipsSortConfig.key === "status" && (
+                          <span className="ml-1">
+                            {slipsSortConfig.direction === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
@@ -4955,10 +5009,21 @@ function App() {
                             {slip.winRate.toFixed(1)}%
                           </span>
                         </td>
+                        <td className="px-4 py-2 text-gray-300">
+                          <span
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                              slip.status === "Complete"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {slip.status}
+                          </span>
+                        </td>
                       </tr>
                       {expandedSlips.has(slip.betId) && (
                         <tr className="bg-white/5">
-                          <td colSpan="6" className="px-4 py-3">
+                          <td colSpan="7" className="px-4 py-3">
                             <div className="bg-white/10 rounded-lg p-4">
                               <h4 className="text-white font-semibold mb-3">
                                 Individual Bets:
