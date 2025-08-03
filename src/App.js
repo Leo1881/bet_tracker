@@ -20,12 +20,12 @@ function App() {
   const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', 'teamNotes', or 'betTypeAnalytics'
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [leagueSortConfig, setLeagueSortConfig] = useState({
-    key: null,
-    direction: "asc",
+    key: "winRate",
+    direction: "desc",
   });
   const [countrySortConfig, setCountrySortConfig] = useState({
-    key: null,
-    direction: "asc",
+    key: "winRate",
+    direction: "desc",
   });
   const [blacklistSortConfig, setBlacklistSortConfig] = useState({
     key: "team_name",
@@ -50,7 +50,7 @@ function App() {
     new Set()
   );
   const [analyticsSortConfig, setAnalyticsSortConfig] = useState({
-    key: "wins",
+    key: "winRate",
     direction: "desc",
   });
   const [dailyGames, setDailyGames] = useState([]);
@@ -346,6 +346,10 @@ function App() {
         if (leagueSortConfig.direction === "asc") {
           return aNum - bNum;
         }
+        // For descending sort, if win rates are equal, sort by wins (descending)
+        if (leagueSortConfig.key === "winRate" && aNum === bNum) {
+          return b.wins - a.wins;
+        }
         return bNum - aNum;
       }
 
@@ -375,6 +379,10 @@ function App() {
         const bNum = parseFloat(bValue) || 0;
         if (countrySortConfig.direction === "asc") {
           return aNum - bNum;
+        }
+        // For descending sort, if win rates are equal, sort by wins (descending)
+        if (countrySortConfig.key === "winRate" && aNum === bNum) {
+          return b.wins - a.wins;
         }
         return bNum - aNum;
       }
@@ -1538,7 +1546,13 @@ function App() {
         case "losses":
           return multiplier * (a.losses - b.losses);
         case "winRate":
-          return multiplier * (parseFloat(a.winRate) - parseFloat(b.winRate));
+          const winRateComparison =
+            multiplier * (parseFloat(a.winRate) - parseFloat(b.winRate));
+          // If win rates are equal, sort by wins (descending)
+          if (winRateComparison === 0) {
+            return b.wins - a.wins;
+          }
+          return winRateComparison;
         default:
           return 0;
       }
@@ -3017,37 +3031,7 @@ function App() {
           >
             Performance
           </button>
-          <button
-            onClick={() => setActiveTab("blacklist")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "blacklist"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Blacklist
-          </button>
 
-          <button
-            onClick={() => setActiveTab("betAnalysis")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "betAnalysis"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Bet Analysis
-          </button>
-          <button
-            onClick={() => setActiveTab("headToHead")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "headToHead"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Head to Head
-          </button>
           <button
             onClick={() => setActiveTab("topTeams")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
@@ -3097,6 +3081,37 @@ function App() {
             }`}
           >
             Daily Games
+          </button>
+          <button
+            onClick={() => setActiveTab("blacklist")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "blacklist"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Blacklist
+          </button>
+
+          <button
+            onClick={() => setActiveTab("betAnalysis")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "betAnalysis"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Bet Analysis
+          </button>
+          <button
+            onClick={() => setActiveTab("headToHead")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "headToHead"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Head to Head
           </button>
         </div>
 
