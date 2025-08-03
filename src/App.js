@@ -80,6 +80,7 @@ function App() {
         console.log("Fetched data:", data);
         console.log("Fetched blacklist:", blacklist);
         console.log("Fetched team notes:", notes);
+
         setBets(data);
         setFilteredBets(data);
         setBlacklistedTeams(blacklist);
@@ -1476,6 +1477,7 @@ function App() {
   const getTeamAnalytics = () => {
     const teams = {};
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+
     deduplicatedBets.forEach((bet) => {
       const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
       if (!teamName) return;
@@ -2129,24 +2131,30 @@ function App() {
 
     // Process deduplicated bets to calculate team statistics
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+
     deduplicatedBets.forEach((bet) => {
       const teamIncluded = bet.TEAM_INCLUDED;
+      const homeTeam = bet.HOME_TEAM;
+      const awayTeam = bet.AWAY_TEAM;
       const country = bet.COUNTRY;
       const league = bet.LEAGUE;
 
-      if (!teamIncluded || !country || !league) return;
+      // Use TEAM_INCLUDED if available, otherwise use HOME_TEAM or AWAY_TEAM
+      const teamToAnalyze = teamIncluded || homeTeam || awayTeam;
+
+      if (!teamToAnalyze || !country || !league) return;
 
       // Exclude teams named "Over 1.5" and "Over 0.5"
-      if (teamIncluded === "Over 1.5" || teamIncluded === "Over 0.5") {
+      if (teamToAnalyze === "Over 1.5" || teamToAnalyze === "Over 0.5") {
         return;
       }
 
       // Create unique key for team + country + league combination
-      const teamKey = `${teamIncluded.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
+      const teamKey = `${teamToAnalyze.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
 
       if (!teamStats.has(teamKey)) {
         teamStats.set(teamKey, {
-          teamName: teamIncluded,
+          teamName: teamToAnalyze,
           country: country,
           league: league,
           totalBets: 0,
@@ -2572,6 +2580,8 @@ function App() {
 
     deduplicatedBets.forEach((bet) => {
       const teamIncluded = bet.TEAM_INCLUDED;
+      const homeTeam = bet.HOME_TEAM;
+      const awayTeam = bet.AWAY_TEAM;
       const betType = bet.BET_TYPE || "Unknown";
       const result = bet.RESULT?.toLowerCase() || "";
       const isWin = result.includes("win");
@@ -2579,11 +2589,14 @@ function App() {
       const odds = parseFloat(bet.ODDS1) || 0;
       const league = `${bet.COUNTRY} ${bet.LEAGUE}`;
 
-      if (!teamIncluded) return; // Skip bets without team_included
+      // Use TEAM_INCLUDED if available, otherwise use HOME_TEAM or AWAY_TEAM
+      const teamToAnalyze = teamIncluded || homeTeam || awayTeam;
 
-      if (!teamGroups[teamIncluded]) {
-        teamGroups[teamIncluded] = {
-          team: teamIncluded,
+      if (!teamToAnalyze) return; // Skip bets without any team
+
+      if (!teamGroups[teamToAnalyze]) {
+        teamGroups[teamToAnalyze] = {
+          team: teamToAnalyze,
           total: 0,
           wins: 0,
           losses: 0,
@@ -2594,7 +2607,7 @@ function App() {
         };
       }
 
-      const group = teamGroups[teamIncluded];
+      const group = teamGroups[teamToAnalyze];
       group.total++;
       group.totalOdds += odds;
 
