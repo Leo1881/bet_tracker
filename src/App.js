@@ -5351,90 +5351,92 @@ function App() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Home Team Analysis */}
-                      {game.homeTeamInHistory && (
-                        <div className="bg-white/5 rounded p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-purple-300 font-medium">
-                              {game.home_team}
+                      <div className="bg-white/5 rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-purple-300 font-medium">
+                            {game.home_team}
+                          </span>
+                          {game.homeTeamRank && (
+                            <span className="text-yellow-400 text-sm">
+                              Top 40: #{game.homeTeamRank}
                             </span>
-                            {game.homeTeamRank && (
-                              <span className="text-yellow-400 text-sm">
-                                Top 40: #{game.homeTeamRank}
-                              </span>
-                            )}
-                          </div>
-                          {game.homeTeamAnalytics && (
-                            <div className="text-sm space-y-1">
-                              <div
-                                className={`${
-                                  parseFloat(game.homeTeamAnalytics.winRate) >=
-                                  60
-                                    ? "text-green-400"
-                                    : parseFloat(
-                                        game.homeTeamAnalytics.winRate
-                                      ) >= 40
-                                    ? "text-yellow-400"
-                                    : "text-red-400"
-                                }`}
-                              >
-                                Win Rate: {game.homeTeamAnalytics.winRate}% (
-                                {game.homeTeamAnalytics.wins}W,{" "}
-                                {game.homeTeamAnalytics.losses}L)
-                              </div>
-                              <div className="text-gray-300">
-                                Total Bets: {game.homeTeamAnalytics.total}
-                              </div>
-                              <div className="text-blue-300 text-xs">
-                                {game.homeCountryLeague?.country} -{" "}
-                                {game.homeCountryLeague?.league}
-                              </div>
-                            </div>
                           )}
                         </div>
-                      )}
+                        {game.homeTeamInHistory && game.homeTeamAnalytics ? (
+                          <div className="text-sm space-y-1">
+                            <div
+                              className={`${
+                                parseFloat(game.homeTeamAnalytics.winRate) >= 60
+                                  ? "text-green-400"
+                                  : parseFloat(
+                                      game.homeTeamAnalytics.winRate
+                                    ) >= 40
+                                  ? "text-yellow-400"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              Win Rate: {game.homeTeamAnalytics.winRate}% (
+                              {game.homeTeamAnalytics.wins}W,{" "}
+                              {game.homeTeamAnalytics.losses}L)
+                            </div>
+                            <div className="text-gray-300">
+                              Total Bets: {game.homeTeamAnalytics.total}
+                            </div>
+                            <div className="text-blue-300 text-xs">
+                              {game.homeCountryLeague?.country} -{" "}
+                              {game.homeCountryLeague?.league}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-400">
+                            No historical betting data
+                          </div>
+                        )}
+                      </div>
 
                       {/* Away Team Analysis */}
-                      {game.awayTeamInHistory && (
-                        <div className="bg-white/5 rounded p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-purple-300 font-medium">
-                              {game.away_team}
+                      <div className="bg-white/5 rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-purple-300 font-medium">
+                            {game.away_team}
+                          </span>
+                          {game.awayTeamRank && (
+                            <span className="text-yellow-400 text-sm">
+                              Top 40: #{game.awayTeamRank}
                             </span>
-                            {game.awayTeamRank && (
-                              <span className="text-yellow-400 text-sm">
-                                Top 40: #{game.awayTeamRank}
-                              </span>
-                            )}
-                          </div>
-                          {game.awayTeamAnalytics && (
-                            <div className="text-sm space-y-1">
-                              <div
-                                className={`${
-                                  parseFloat(game.awayTeamAnalytics.winRate) >=
-                                  60
-                                    ? "text-green-400"
-                                    : parseFloat(
-                                        game.awayTeamAnalytics.winRate
-                                      ) >= 40
-                                    ? "text-yellow-400"
-                                    : "text-red-400"
-                                }`}
-                              >
-                                Win Rate: {game.awayTeamAnalytics.winRate}% (
-                                {game.awayTeamAnalytics.wins}W,{" "}
-                                {game.awayTeamAnalytics.losses}L)
-                              </div>
-                              <div className="text-gray-300">
-                                Total Bets: {game.awayTeamAnalytics.total}
-                              </div>
-                              <div className="text-blue-300 text-xs">
-                                {game.awayCountryLeague?.country} -{" "}
-                                {game.awayCountryLeague?.league}
-                              </div>
-                            </div>
                           )}
                         </div>
-                      )}
+                        {game.awayTeamInHistory && game.awayTeamAnalytics ? (
+                          <div className="text-sm space-y-1">
+                            <div
+                              className={`${
+                                parseFloat(game.awayTeamAnalytics.winRate) >= 60
+                                  ? "text-green-400"
+                                  : parseFloat(
+                                      game.awayTeamAnalytics.winRate
+                                    ) >= 40
+                                  ? "text-yellow-400"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              Win Rate: {game.awayTeamAnalytics.winRate}% (
+                              {game.awayTeamAnalytics.wins}W,{" "}
+                              {game.awayTeamAnalytics.losses}L)
+                            </div>
+                            <div className="text-gray-300">
+                              Total Bets: {game.awayTeamAnalytics.total}
+                            </div>
+                            <div className="text-blue-300 text-xs">
+                              {game.awayCountryLeague?.country} -{" "}
+                              {game.awayCountryLeague?.league}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-400">
+                            No historical betting data
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Head to Head Data */}
