@@ -264,6 +264,9 @@ export const fetchNewBets = async () => {
       (header) =>
         header && header.toString().toLowerCase().includes("away_team_position")
     );
+    const oddsXIndex = headers.findIndex(
+      (header) => header && header.toString().toLowerCase().includes("oddsx")
+    );
 
     const newBets = dataRows
       .map((row) => ({
@@ -289,6 +292,7 @@ export const fetchNewBets = async () => {
           awayTeamPositionIndex !== -1
             ? (row[awayTeamPositionIndex] || "").trim()
             : "",
+        oddsX: oddsXIndex !== -1 ? parseFloat(row[oddsXIndex]) || 0 : 0,
       }))
       .filter(
         (bet) => bet.team_included !== "" && (bet.odds1 > 0 || bet.odds2 > 0)

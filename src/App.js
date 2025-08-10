@@ -7,6 +7,67 @@ import {
 } from "./utils/fetchSheetData";
 import "./App.css";
 
+// Helper function: factorial
+const factorial = (n) => (n <= 1 ? 1 : n * factorial(n - 1));
+
+// Poisson probability mass function
+const poissonPMF = (lambda, k) => (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
+
+// Calculate probabilities from odds
+const calculateProbabilities = (homeOdds, drawOdds, awayOdds) => {
+  if (!homeOdds || !drawOdds || !awayOdds) return null;
+  
+  const home = parseFloat(homeOdds);
+  const draw = parseFloat(drawOdds);
+  const away = parseFloat(awayOdds);
+  
+  if (!home || !draw || !away) return null;
+
+  // Step 1: implied probabilities
+  const probHome = 1 / home;
+  const probDraw = 1 / draw;
+  const probAway = 1 / away;
+
+  // Step 2: overround
+  const overround = probHome + probDraw + probAway;
+
+  // Step 3: normalized probabilities
+  const trueHome = probHome / overround;
+  const trueDraw = probDraw / overround;
+  const trueAway = probAway / overround;
+
+  // Step 4: fit expected goals (lambda) using a simple proportion
+  const lambdaHome = 2.5 * (trueHome / (trueHome + trueAway));
+  const lambdaAway = 2.5 * (trueAway / (trueHome + trueAway));
+
+  // Step 5: probability grid for scorelines (0-5 goals each)
+  let scorelines = [];
+  for (let i = 0; i <= 5; i++) {
+    for (let j = 0; j <= 5; j++) {
+      const p = poissonPMF(lambdaHome, i) * poissonPMF(lambdaAway, j);
+      scorelines.push({ home: i, away: j, prob: p });
+    }
+  }
+  scorelines.sort((a, b) => b.prob - a.prob);
+
+  return {
+    probs: {
+      home: (trueHome * 100).toFixed(1),
+      draw: (trueDraw * 100).toFixed(1),
+      away: (trueAway * 100).toFixed(1),
+    },
+    lambda: {
+      home: lambdaHome.toFixed(2),
+      away: lambdaAway.toFixed(2)
+    },
+    topScores: scorelines.slice(0, 5).map(s => ({
+      score: `${s.home}-${s.away}`,
+      prob: (s.prob * 100).toFixed(1)
+    })),
+    overround: (overround * 100).toFixed(1)
+  };
+};
+
 function App() {
   const [bets, setBets] = useState([]);
   const [filteredBets, setFilteredBets] = useState([]);
@@ -131,6 +192,7 @@ function App() {
                 odds1: values[2] || "",
                 away_team: values[3] || "",
                 odds2: values[4] || "",
+                oddsX: values[5] || "",
               };
             })
             .filter((game) => game.home_team && game.away_team);
@@ -1634,8 +1696,11 @@ function App() {
       // Calculate average odds
       const odds1 = parseFloat(bet.ODDS_1) || 0;
       const odds2 = parseFloat(bet.ODDS_2) || 0;
-      if (odds1 > 0 || odds2 > 0) {
-        leagues[leagueKey].totalOdds += (odds1 + odds2) / 2;
+      const oddsX = parseFloat(bet.ODDS_X) || 0;
+      if (odds1 > 0 || odds2 > 0 || oddsX > 0) {
+        const validOdds = [odds1, odds2, oddsX].filter((odds) => odds > 0);
+        leagues[leagueKey].totalOdds +=
+          validOdds.reduce((sum, odds) => sum + odds, 0) / validOdds.length;
         leagues[leagueKey].betCount++;
       }
     });
@@ -1692,8 +1757,11 @@ function App() {
       // Calculate average odds
       const odds1 = parseFloat(bet.ODDS_1) || 0;
       const odds2 = parseFloat(bet.ODDS_2) || 0;
-      if (odds1 > 0 || odds2 > 0) {
-        countries[countryName].totalOdds += (odds1 + odds2) / 2;
+      const oddsX = parseFloat(bet.ODDS_X) || 0;
+      if (odds1 > 0 || odds2 > 0 || oddsX > 0) {
+        const validOdds = [odds1, odds2, oddsX].filter((odds) => odds > 0);
+        countries[countryName].totalOdds +=
+          validOdds.reduce((sum, odds) => sum + odds, 0) / validOdds.length;
         countries[countryName].betCount++;
       }
     });
@@ -1980,6 +2048,13 @@ function App() {
           ...new Set(teamHistory.map((bet) => `${bet.COUNTRY} ${bet.LEAGUE}`)),
         ];
 
+        // Calculate probabilities using the new ODDSX column
+        const probabilities = calculateProbabilities(
+          newBet.odds1,
+          newBet.oddsX,
+          newBet.odds2
+        );
+
         return {
           ...newBet,
           betOdds,
@@ -1998,6 +2073,7 @@ function App() {
           confidenceScore,
           confidenceBreakdown,
           confidenceLabel,
+          probabilities,
         };
       });
 
@@ -4044,7 +4120,7 @@ function App() {
             <h3 className="text-lg font-bold text-white mb-4">Bet Analysis</h3>
             <div className="text-gray-300 mb-6">
               <p>
-                Confidence Score (0-10):
+                <strong>Confidence Score (0-10):</strong>
                 <br />
                 🏆 Team Performance: Historical win rate and betting experience
                 <br />
@@ -4058,6 +4134,15 @@ function App() {
                 (Top/Mid/Bottom)
                 <br />
                 🏠 Home/Away: Team performance in home vs away games
+                <br />
+                <br />
+                <strong>📊 Probability Calculator:</strong>
+                <br />
+                🏠 Home/Draw/Away: Mathematical probabilities from odds
+                <br />
+                📈 Expected Goals: Poisson distribution modeling
+                <br />
+                🎯 Top Scorelines: Most likely final scores
               </p>
             </div>
 
@@ -4104,6 +4189,9 @@ function App() {
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-80">
                           🎯 Confidence
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold w-80">
+                          📊 Probability
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Blacklist
@@ -4336,6 +4424,38 @@ function App() {
                                 return null;
                               })()}
                             </div>
+                          </td>
+                          <td className="px-4 py-6">
+                            {result.probabilities ? (
+                              <div className="text-sm">
+                                <div className="mb-2">
+                                  <div className="text-xs text-gray-400 mb-1">Win Probabilities:</div>
+                                  <div className="flex space-x-2 text-xs">
+                                    <span className="text-blue-300">🏠 {result.probabilities.probs.home}%</span>
+                                    <span className="text-yellow-300">🤝 {result.probabilities.probs.draw}%</span>
+                                    <span className="text-red-300">✈️ {result.probabilities.probs.away}%</span>
+                                  </div>
+                                </div>
+                                <div className="mb-2">
+                                  <div className="text-xs text-gray-400 mb-1">Expected Goals:</div>
+                                  <div className="text-xs text-purple-300">
+                                    {result.probabilities.lambda.home} - {result.probabilities.lambda.away}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-400 mb-1">Top Scorelines:</div>
+                                  {result.probabilities.topScores.slice(0, 3).map((score, idx) => (
+                                    <div key={idx} className="text-xs text-green-300">
+                                      {score.score} ({score.prob}%)
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">
+                                No odds data
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-6">
                             {result.isBlacklisted ? (
