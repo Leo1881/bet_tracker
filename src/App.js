@@ -1413,12 +1413,12 @@ function App() {
 
   // Store predictions from analysis
   const storePredictions = (analysisResults) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     const predictions = {
       id: `pred_${Date.now()}`,
       date: today,
       timestamp: new Date().toISOString(),
-      games: analysisResults.map(result => ({
+      games: analysisResults.map((result) => ({
         home_team: result.home_team,
         away_team: result.away_team,
         country: result.country,
@@ -1433,36 +1433,48 @@ function App() {
         confidenceScore: result.confidenceScore,
         confidenceBreakdown: result.confidenceBreakdown,
         confidenceLabel: result.confidenceLabel,
-        recommendation: result.recommendation
-      }))
+        recommendation: result.recommendation,
+      })),
     };
-    
-    setStoredPredictions(prev => {
-      const filtered = prev.filter(p => p.date !== today);
+
+    setStoredPredictions((prev) => {
+      const filtered = prev.filter((p) => p.date !== today);
       return [...filtered, predictions];
     });
   };
 
   // Get today's stored predictions
   const getTodayPredictions = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return storedPredictions.find(p => p.date === today);
+    const today = new Date().toISOString().split("T")[0];
+    return storedPredictions.find((p) => p.date === today);
   };
 
   // Check if betslip matches analysis
   const checkBetslipMatch = (betslipGames, analysisGames) => {
-    const betslipSet = new Set(betslipGames.map(game => 
-      `${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`
-    ));
-    const analysisSet = new Set(analysisGames.map(game => 
-      `${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`
-    ));
-
-    const missingFromBetslip = analysisGames.filter(game => 
-      !betslipSet.has(`${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`)
+    const betslipSet = new Set(
+      betslipGames.map(
+        (game) =>
+          `${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`
+      )
     );
-    const extraInBetslip = betslipGames.filter(game => 
-      !analysisSet.has(`${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`)
+    const analysisSet = new Set(
+      analysisGames.map(
+        (game) =>
+          `${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`
+      )
+    );
+
+    const missingFromBetslip = analysisGames.filter(
+      (game) =>
+        !betslipSet.has(
+          `${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`
+        )
+    );
+    const extraInBetslip = betslipGames.filter(
+      (game) =>
+        !analysisSet.has(
+          `${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`
+        )
     );
 
     return {
@@ -1470,16 +1482,40 @@ function App() {
       total: analysisGames.length,
       missingFromBetslip,
       extraInBetslip,
-      isPerfectMatch: missingFromBetslip.length === 0 && extraInBetslip.length === 0
+      isPerfectMatch:
+        missingFromBetslip.length === 0 && extraInBetslip.length === 0,
     };
   };
 
   // Attach predictions to betslip
   const attachPredictionsToBetslip = (betslipId, predictions) => {
-    setAttachedPredictions(prev => ({
+    setAttachedPredictions((prev) => ({
       ...prev,
-      [betslipId]: predictions
+      [betslipId]: predictions,
     }));
+  };
+
+  // Convert confidence score to betting recommendation
+  const getConfidenceRecommendation = (confidenceScore, teamIncluded, homeTeam, awayTeam) => {
+    if (confidenceScore >= 7) {
+      if (teamIncluded.toLowerCase().includes(homeTeam.toLowerCase())) {
+        return "Home Win";
+      } else if (teamIncluded.toLowerCase().includes(awayTeam.toLowerCase())) {
+        return "Away Win";
+      } else {
+        return "Win";
+      }
+    } else if (confidenceScore >= 4) {
+      if (teamIncluded.toLowerCase().includes(homeTeam.toLowerCase())) {
+        return "Double Chance Home/Draw";
+      } else if (teamIncluded.toLowerCase().includes(awayTeam.toLowerCase())) {
+        return "Double Chance Away/Draw";
+      } else {
+        return "Double Chance";
+      }
+    } else {
+      return "Avoid";
+    }
   };
 
   const calculateConfidenceScore = (bet) => {
@@ -2098,18 +2134,22 @@ function App() {
         if (isBlacklisted) {
           recommendation = "AVOID (Blacklisted)";
           recommendationColor = "text-red-400";
-        } else if (confidenceScore >= 8) {
-          recommendation = "HIGH CONFIDENCE BET";
-          recommendationColor = "text-green-400";
-        } else if (confidenceScore >= 6) {
-          recommendation = "GOOD CONFIDENCE BET";
-          recommendationColor = "text-green-400";
-        } else if (confidenceScore >= 4) {
-          recommendation = "MODERATE CONFIDENCE - CAUTION";
-          recommendationColor = "text-yellow-400";
-        } else if (confidenceScore <= 3) {
-          recommendation = "LOW CONFIDENCE - AVOID";
-          recommendationColor = "text-red-400";
+        } else {
+          recommendation = getConfidenceRecommendation(
+            confidenceScore,
+            teamName,
+            newBet.home_team,
+            newBet.away_team
+          );
+          
+          // Set color based on recommendation
+          if (recommendation.includes("Win")) {
+            recommendationColor = "text-green-400";
+          } else if (recommendation.includes("Double Chance")) {
+            recommendationColor = "text-yellow-400";
+          } else if (recommendation === "Avoid") {
+            recommendationColor = "text-red-400";
+          }
         }
 
         // Debug logging
@@ -2152,7 +2192,7 @@ function App() {
       });
 
       setAnalysisResults(results);
-      
+
       // Automatically store predictions
       if (results.length > 0) {
         storePredictions(results);
@@ -5260,12 +5300,17 @@ function App() {
                               </h4>
                               <div className="grid gap-2">
                                 {slip.bets.map((bet, betIndex) => {
-                                  const hasAttachedPredictions = attachedPredictions[slip.betId];
-                                  const prediction = hasAttachedPredictions?.games.find(p => 
-                                    p.home_team?.toLowerCase() === bet.HOME_TEAM?.toLowerCase() &&
-                                    p.away_team?.toLowerCase() === bet.AWAY_TEAM?.toLowerCase()
-                                  );
-                                  
+                                  const hasAttachedPredictions =
+                                    attachedPredictions[slip.betId];
+                                  const prediction =
+                                    hasAttachedPredictions?.games.find(
+                                      (p) =>
+                                        p.home_team?.toLowerCase() ===
+                                          bet.HOME_TEAM?.toLowerCase() &&
+                                        p.away_team?.toLowerCase() ===
+                                          bet.AWAY_TEAM?.toLowerCase()
+                                    );
+
                                   return (
                                     <div
                                       key={betIndex}
@@ -5306,53 +5351,105 @@ function App() {
                                           </div>
                                         </div>
                                       </div>
-                                      
+
                                       {/* Prediction Data */}
-                                      {prediction && prediction.probabilities && (
-                                        <div className="mt-2 pt-2 border-t border-white/10">
-                                          <div className="grid grid-cols-2 gap-4 text-xs">
-                                            <div>
-                                              <div className="text-gray-400 mb-1">📊 Predictions:</div>
-                                              <div className="flex space-x-2">
-                                                <span className="text-blue-300">🏠 {prediction.probabilities.probs.home}%</span>
-                                                <span className="text-yellow-300">🤝 {prediction.probabilities.probs.draw}%</span>
-                                                <span className="text-red-300">✈️ {prediction.probabilities.probs.away}%</span>
+                                      {prediction &&
+                                        prediction.probabilities && (
+                                          <div className="mt-2 pt-2 border-t border-white/10">
+                                            <div className="grid grid-cols-2 gap-4 text-xs">
+                                              <div>
+                                                <div className="text-gray-400 mb-1">
+                                                  📊 Predictions:
+                                                </div>
+                                                <div className="flex space-x-2">
+                                                  <span className="text-blue-300">
+                                                    🏠{" "}
+                                                    {
+                                                      prediction.probabilities
+                                                        .probs.home
+                                                    }
+                                                    %
+                                                  </span>
+                                                  <span className="text-yellow-300">
+                                                    🤝{" "}
+                                                    {
+                                                      prediction.probabilities
+                                                        .probs.draw
+                                                    }
+                                                    %
+                                                  </span>
+                                                  <span className="text-red-300">
+                                                    ✈️{" "}
+                                                    {
+                                                      prediction.probabilities
+                                                        .probs.away
+                                                    }
+                                                    %
+                                                  </span>
+                                                </div>
+                                                <div className="text-purple-300 mt-1">
+                                                  Goals:{" "}
+                                                  {
+                                                    prediction.probabilities
+                                                      .lambda.home
+                                                  }
+                                                  -
+                                                  {
+                                                    prediction.probabilities
+                                                      .lambda.away
+                                                  }
+                                                </div>
                                               </div>
-                                              <div className="text-purple-300 mt-1">
-                                                Goals: {prediction.probabilities.lambda.home}-{prediction.probabilities.lambda.away}
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <div className="text-gray-400 mb-1">🎯 Confidence:</div>
-                                              <div className="text-green-300">
-                                                {prediction.confidenceLabel.emoji} {prediction.confidenceScore}/10
-                                              </div>
-                                              <div className="text-blue-300 text-xs mt-1">
-                                                {prediction.recommendation}
+                                              <div>
+                                                <div className="text-gray-400 mb-1">
+                                                  🎯 Confidence:
+                                                </div>
+                                                <div className="text-green-300">
+                                                  {prediction.recommendation}
+                                                </div>
+                                                <div className="text-blue-300 text-xs mt-1">
+                                                  {prediction.confidenceScore}/10
+                                                </div>
                                               </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      )}
+                                        )}
                                     </div>
                                   );
                                 })}
-                                
+
                                 {/* Attach Recent Analysis Button */}
                                 {(() => {
-                                  const todayPredictions = getTodayPredictions();
-                                  const hasAttachedPredictions = attachedPredictions[slip.betId];
-                                  
-                                  if (todayPredictions && !hasAttachedPredictions) {
-                                    const matchResult = checkBetslipMatch(slip.bets, todayPredictions.games);
-                                    
+                                  const todayPredictions =
+                                    getTodayPredictions();
+                                  const hasAttachedPredictions =
+                                    attachedPredictions[slip.betId];
+
+                                  if (
+                                    todayPredictions &&
+                                    !hasAttachedPredictions
+                                  ) {
+                                    const matchResult = checkBetslipMatch(
+                                      slip.bets,
+                                      todayPredictions.games
+                                    );
+
                                     return (
                                       <div className="mt-4 pt-4 border-t border-white/20">
                                         <div className="flex items-center justify-between mb-3">
-                                          <h5 className="text-white font-semibold">📊 Attach Recent Analysis</h5>
+                                          <h5 className="text-white font-semibold">
+                                            📊 Attach Recent Analysis
+                                          </h5>
                                           <button
-                                            onClick={() => attachPredictionsToBetslip(slip.betId, todayPredictions)}
-                                            disabled={!matchResult.isPerfectMatch}
+                                            onClick={() =>
+                                              attachPredictionsToBetslip(
+                                                slip.betId,
+                                                todayPredictions
+                                              )
+                                            }
+                                            disabled={
+                                              !matchResult.isPerfectMatch
+                                            }
                                             className={`px-3 py-1 rounded text-xs font-medium ${
                                               matchResult.isPerfectMatch
                                                 ? "bg-blue-500 text-white hover:bg-blue-600"
@@ -5362,25 +5459,38 @@ function App() {
                                             Attach Predictions
                                           </button>
                                         </div>
-                                        
+
                                         <div className="text-sm text-gray-300 mb-2">
-                                          <span className="text-green-400">✅ {matchResult.matches}</span> of {matchResult.total} games match
+                                          <span className="text-green-400">
+                                            ✅ {matchResult.matches}
+                                          </span>{" "}
+                                          of {matchResult.total} games match
                                         </div>
-                                        
+
                                         {!matchResult.isPerfectMatch && (
                                           <div className="text-xs text-red-300">
-                                            {matchResult.missingFromBetslip.length > 0 && (
+                                            {matchResult.missingFromBetslip
+                                              .length > 0 && (
                                               <div className="mb-1">
-                                                ❌ Missing from betslip: {matchResult.missingFromBetslip.map(game => 
-                                                  `${game.home_team} vs ${game.away_team}`
-                                                ).join(", ")}
+                                                ❌ Missing from betslip:{" "}
+                                                {matchResult.missingFromBetslip
+                                                  .map(
+                                                    (game) =>
+                                                      `${game.home_team} vs ${game.away_team}`
+                                                  )
+                                                  .join(", ")}
                                               </div>
                                             )}
-                                            {matchResult.extraInBetslip.length > 0 && (
+                                            {matchResult.extraInBetslip.length >
+                                              0 && (
                                               <div>
-                                                ❌ Extra in betslip: {matchResult.extraInBetslip.map(game => 
-                                                  `${game.HOME_TEAM} vs ${game.AWAY_TEAM}`
-                                                ).join(", ")}
+                                                ❌ Extra in betslip:{" "}
+                                                {matchResult.extraInBetslip
+                                                  .map(
+                                                    (game) =>
+                                                      `${game.HOME_TEAM} vs ${game.AWAY_TEAM}`
+                                                  )
+                                                  .join(", ")}
                                               </div>
                                             )}
                                           </div>
@@ -5388,7 +5498,7 @@ function App() {
                                       </div>
                                     );
                                   }
-                                  
+
                                   return null;
                                 })()}
                               </div>
