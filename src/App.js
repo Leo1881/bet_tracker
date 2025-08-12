@@ -4759,23 +4759,19 @@ function App() {
                         {
                           analysisResults.filter(
                             (r) =>
-                              r.recommendation.includes(
-                                "HIGH CONFIDENCE BET"
-                              ) ||
-                              r.recommendation.includes(
-                                "GOOD CONFIDENCE BET"
-                              ) ||
-                              r.recommendation === "BET"
+                              r.recommendation.includes("Win") ||
+                              r.recommendation === "Home Win" ||
+                              r.recommendation === "Away Win"
                           ).length
                         }
                       </div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Caution</div>
+                      <div className="text-gray-400">Double Chance</div>
                       <div className="text-yellow-400 font-medium">
                         {
                           analysisResults.filter((r) =>
-                            r.recommendation.includes("CAUTION")
+                            r.recommendation.includes("Double Chance")
                           ).length
                         }
                       </div>
@@ -4784,8 +4780,8 @@ function App() {
                       <div className="text-gray-400">Avoid</div>
                       <div className="text-red-400 font-medium">
                         {
-                          analysisResults.filter((r) =>
-                            r.recommendation.includes("AVOID")
+                          analysisResults.filter(
+                            (r) => r.recommendation === "Avoid"
                           ).length
                         }
                       </div>
