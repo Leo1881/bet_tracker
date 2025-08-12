@@ -1496,7 +1496,12 @@ function App() {
   };
 
   // Convert confidence score to betting recommendation
-  const getConfidenceRecommendation = (confidenceScore, teamIncluded, homeTeam, awayTeam) => {
+  const getConfidenceRecommendation = (
+    confidenceScore,
+    teamIncluded,
+    homeTeam,
+    awayTeam
+  ) => {
     if (confidenceScore >= 7) {
       if (teamIncluded.toLowerCase().includes(homeTeam.toLowerCase())) {
         return "Home Win";
@@ -2141,7 +2146,7 @@ function App() {
             newBet.home_team,
             newBet.away_team
           );
-          
+
           // Set color based on recommendation
           if (recommendation.includes("Win")) {
             recommendationColor = "text-green-400";
@@ -5349,6 +5354,13 @@ function App() {
                                               ? `Odds: ${bet.ODDS1}/${bet.ODDS2}`
                                               : "Odds: N/A"}
                                           </div>
+                                          {(bet.HOME_SCORE ||
+                                            bet.AWAY_SCORE) && (
+                                            <div className="text-purple-300 text-xs mt-1 font-mono">
+                                              {bet.HOME_SCORE || "?"}-
+                                              {bet.AWAY_SCORE || "?"}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
 
@@ -5399,6 +5411,14 @@ function App() {
                                                       .lambda.away
                                                   }
                                                 </div>
+                                                {(bet.HOME_SCORE ||
+                                                  bet.AWAY_SCORE) && (
+                                                  <div className="text-orange-300 mt-1">
+                                                    Actual:{" "}
+                                                    {bet.HOME_SCORE || "?"}-
+                                                    {bet.AWAY_SCORE || "?"}
+                                                  </div>
+                                                )}
                                               </div>
                                               <div>
                                                 <div className="text-gray-400 mb-1">
@@ -5407,8 +5427,16 @@ function App() {
                                                 <div className="text-green-300">
                                                   {prediction.recommendation}
                                                 </div>
+                                                {(bet.HOME_SCORE ||
+                                                  bet.AWAY_SCORE) && (
+                                                  <div className="text-gray-300 text-sm mt-1">
+                                                    {bet.HOME_SCORE || "?"}-
+                                                    {bet.AWAY_SCORE || "?"}
+                                                  </div>
+                                                )}
                                                 <div className="text-blue-300 text-xs mt-1">
-                                                  {prediction.confidenceScore}/10
+                                                  {prediction.confidenceScore}
+                                                  /10
                                                 </div>
                                               </div>
                                             </div>

@@ -38,6 +38,8 @@ export const fetchSheetData = async () => {
       "RESULT",
       "REASON",
       "BET_ID",
+      "HOME_SCORE",
+      "AWAY_SCORE",
     ];
 
     let headerRowIndex = -1;
