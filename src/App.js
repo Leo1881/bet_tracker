@@ -4241,33 +4241,46 @@ function App() {
 
         {activeTab === "betAnalysis" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-            <h3 className="text-lg font-bold text-white mb-4">Bet Analysis</h3>
-            <div className="text-gray-300 mb-6">
-              <p>
-                <strong>Confidence Score (0-10):</strong>
-                <br />
-                🏆 Team Performance: Historical win rate and betting experience
-                <br />
-                🏛️ League Experience: Your success rate in this league/country
-                <br />
-                💰 Odds Value: Risk assessment based on betting odds
-                <br />
-                ⚔️ Head-to-Head: Previous results when these teams met
-                <br />
-                📊 League Position: Team strength based on league position
-                (Top/Mid/Bottom)
-                <br />
-                🏠 Home/Away: Team performance in home vs away games
-                <br />
-                <br />
-                <strong>📊 Probability Calculator:</strong>
-                <br />
-                🏠 Home/Draw/Away: Mathematical probabilities from odds
-                <br />
-                📈 Expected Goals: Poisson distribution modeling
-                <br />
-                🎯 Top Scorelines: Most likely final scores
-              </p>
+            <div className="flex items-center mb-4">
+              <h3 className="text-lg font-bold text-white">Bet Analysis</h3>
+              <div className="relative ml-2 group">
+                <button className="text-blue-400 hover:text-blue-300 text-sm bg-blue-500/20 hover:bg-blue-500/30 rounded-full w-6 h-6 flex items-center justify-center transition-colors">
+                  ?
+                </button>
+                <div className="absolute left-0 top-8 w-96 bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm text-gray-300 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto z-50">
+                  <div className="mb-3">
+                    <strong className="text-white">
+                      Confidence Score (0-10):
+                    </strong>
+                    <br />
+                    🏆 Team Performance: Historical win rate and betting
+                    experience
+                    <br />
+                    🏛️ League Experience: Your success rate in this
+                    league/country
+                    <br />
+                    💰 Odds Value: Risk assessment based on betting odds
+                    <br />
+                    ⚔️ Head-to-Head: Previous results when these teams met
+                    <br />
+                    📊 League Position: Team strength based on league position
+                    (Top/Mid/Bottom)
+                    <br />
+                    🏠 Home/Away: Team performance in home vs away games
+                  </div>
+                  <div>
+                    <strong className="text-white">
+                      📊 Probability Calculator:
+                    </strong>
+                    <br />
+                    🏠 Home/Draw/Away: Mathematical probabilities from odds
+                    <br />
+                    📈 Expected Goals: Poisson distribution modeling
+                    <br />
+                    🎯 Top Scorelines: Most likely final scores
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Fetch and Analyze Button */}
