@@ -131,6 +131,12 @@ function App() {
   });
   const [storedPredictions, setStoredPredictions] = useState([]);
   const [attachedPredictions, setAttachedPredictions] = useState({});
+  const [scoringAnalysis, setScoringAnalysis] = useState([]);
+  const [scoringAnalysisLoading, setScoringAnalysisLoading] = useState(false);
+  const [scoringSortConfig, setScoringSortConfig] = useState({
+    key: "totalGames",
+    direction: "desc",
+  });
 
   useEffect(() => {
     const getData = async () => {
@@ -2174,6 +2180,14 @@ function App() {
           newBet.odds2
         );
 
+        // Get scoring recommendation
+        const scoringRecommendation = getScoringRecommendation(
+          newBet.home_team,
+          newBet.away_team,
+          newBet.league,
+          newBet.league
+        );
+
         return {
           ...newBet,
           betOdds,
@@ -2193,6 +2207,7 @@ function App() {
           confidenceBreakdown,
           confidenceLabel,
           probabilities,
+          scoringRecommendation,
         };
       });
 
@@ -2255,6 +2270,177 @@ function App() {
       odds1: bet.ODDS1,
       odds2: bet.ODDS2,
     }));
+  };
+
+  // Scoring Analysis Functions
+  const analyzeScoringPatterns = async () => {
+    try {
+      setScoringAnalysisLoading(true);
+      
+      // Get bets with scores
+      const betsWithScores = bets.filter(bet => 
+        bet.HOME_SCORE !== null && bet.HOME_SCORE !== undefined && 
+        bet.AWAY_SCORE !== null && bet.AWAY_SCORE !== undefined
+      );
+
+      if (betsWithScores.length === 0) {
+        setScoringAnalysis([]);
+        return;
+      }
+
+      // Analyze by team and league
+      const teamLeagueMap = new Map();
+
+      betsWithScores.forEach(bet => {
+        const homeTeam = bet.HOME_TEAM?.trim();
+        const awayTeam = bet.AWAY_TEAM?.trim();
+        const league = bet.LEAGUE?.trim();
+        const country = bet.COUNTRY?.trim();
+        const homeScore = parseInt(bet.HOME_SCORE);
+        const awayScore = parseInt(bet.AWAY_SCORE);
+
+        if (!homeTeam || !awayTeam || !league || !country || isNaN(homeScore) || isNaN(awayScore)) {
+          return;
+        }
+
+        const totalGoals = homeScore + awayScore;
+        const hasOver1_5 = totalGoals > 1;
+        const hasOver2_5 = totalGoals > 2;
+        const hasOver3_5 = totalGoals > 3;
+
+        // Analyze home team
+        const homeKey = `${homeTeam}-${country}-${league}`;
+        if (!teamLeagueMap.has(homeKey)) {
+          teamLeagueMap.set(homeKey, {
+            team: homeTeam,
+            country: country,
+            league: league,
+            totalGames: 0,
+            totalGoals: 0,
+            avgGoals: 0,
+            over1_5Count: 0,
+            over2_5Count: 0,
+            over3_5Count: 0,
+            over1_5Rate: 0,
+            over2_5Rate: 0,
+            over3_5Rate: 0,
+            homeGames: 0,
+            awayGames: 0
+          });
+        }
+        const homeStats = teamLeagueMap.get(homeKey);
+        homeStats.totalGames++;
+        homeStats.totalGoals += totalGoals;
+        homeStats.over1_5Count += hasOver1_5 ? 1 : 0;
+        homeStats.over2_5Count += hasOver2_5 ? 1 : 0;
+        homeStats.over3_5Count += hasOver3_5 ? 1 : 0;
+        homeStats.homeGames++;
+
+        // Analyze away team
+        const awayKey = `${awayTeam}-${country}-${league}`;
+        if (!teamLeagueMap.has(awayKey)) {
+          teamLeagueMap.set(awayKey, {
+            team: awayTeam,
+            country: country,
+            league: league,
+            totalGames: 0,
+            totalGoals: 0,
+            avgGoals: 0,
+            over1_5Count: 0,
+            over2_5Count: 0,
+            over3_5Count: 0,
+            over1_5Rate: 0,
+            over2_5Rate: 0,
+            over3_5Rate: 0,
+            homeGames: 0,
+            awayGames: 0
+          });
+        }
+        const awayStats = teamLeagueMap.get(awayKey);
+        awayStats.totalGames++;
+        awayStats.totalGoals += totalGoals;
+        awayStats.over1_5Count += hasOver1_5 ? 1 : 0;
+        awayStats.over2_5Count += hasOver2_5 ? 1 : 0;
+        awayStats.over3_5Count += hasOver3_5 ? 1 : 0;
+        awayStats.awayGames++;
+      });
+
+      // Calculate averages and rates
+      const analysisResults = Array.from(teamLeagueMap.values()).map(stats => ({
+        ...stats,
+        avgGoals: stats.totalGames > 0 ? (stats.totalGoals / stats.totalGames).toFixed(2) : 0,
+        over1_5Rate: stats.totalGames > 0 ? ((stats.over1_5Count / stats.totalGames) * 100).toFixed(1) : 0,
+        over2_5Rate: stats.totalGames > 0 ? ((stats.over2_5Count / stats.totalGames) * 100).toFixed(1) : 0,
+        over3_5Rate: stats.totalGames > 0 ? ((stats.over3_5Count / stats.totalGames) * 100).toFixed(1) : 0
+      }));
+
+      setScoringAnalysis(analysisResults);
+    } catch (error) {
+      console.error('Error analyzing scoring patterns:', error);
+    } finally {
+      setScoringAnalysisLoading(false);
+    }
+  };
+
+  const getScoringRecommendation = (homeTeam, awayTeam, homeLeague, awayLeague) => {
+    if (!homeTeam || !awayTeam) return null;
+
+    const homeStats = scoringAnalysis.find(stat => 
+      stat.team.toLowerCase() === homeTeam.toLowerCase() && 
+      stat.league.toLowerCase() === homeLeague.toLowerCase()
+    );
+
+    const awayStats = scoringAnalysis.find(stat => 
+      stat.team.toLowerCase() === awayTeam.toLowerCase() && 
+      stat.league.toLowerCase() === awayLeague.toLowerCase()
+    );
+
+    // Get league averages as fallback
+    const homeLeagueStats = scoringAnalysis.filter(stat => 
+      stat.league.toLowerCase() === homeLeague.toLowerCase()
+    );
+    const awayLeagueStats = scoringAnalysis.filter(stat => 
+      stat.league.toLowerCase() === awayLeague.toLowerCase()
+    );
+
+    const homeLeagueAvg = homeLeagueStats.length > 0 
+      ? homeLeagueStats.reduce((sum, stat) => sum + parseFloat(stat.over2_5Rate), 0) / homeLeagueStats.length 
+      : 0;
+    const awayLeagueAvg = awayLeagueStats.length > 0 
+      ? awayLeagueStats.reduce((sum, stat) => sum + parseFloat(stat.over2_5Rate), 0) / awayLeagueStats.length 
+      : 0;
+
+    // Calculate recommendation
+    let homeRate = homeStats ? parseFloat(homeStats.over2_5Rate) : homeLeagueAvg;
+    let awayRate = awayStats ? parseFloat(awayStats.over2_5Rate) : awayLeagueAvg;
+
+    // If both teams have data, average them
+    if (homeStats && awayStats) {
+      const avgRate = (homeRate + awayRate) / 2;
+      if (avgRate >= 70) return { type: 'Strong Over 1.5', confidence: 'high', rate: avgRate };
+      if (avgRate >= 55) return { type: 'Moderate Over 1.5', confidence: 'medium', rate: avgRate };
+      if (avgRate >= 40) return { type: 'Consider Over 0.5', confidence: 'low', rate: avgRate };
+      return { type: 'Low Scoring Expected', confidence: 'low', rate: avgRate };
+    }
+
+    // If only one team has data, use that + league average
+    if (homeStats || awayStats) {
+      const availableRate = homeStats ? homeRate : awayRate;
+      const leagueAvg = homeStats ? awayLeagueAvg : homeLeagueAvg;
+      const avgRate = (availableRate + leagueAvg) / 2;
+      
+      if (avgRate >= 70) return { type: 'Strong Over 1.5', confidence: 'medium', rate: avgRate };
+      if (avgRate >= 55) return { type: 'Moderate Over 1.5', confidence: 'medium', rate: avgRate };
+      if (avgRate >= 40) return { type: 'Consider Over 0.5', confidence: 'low', rate: avgRate };
+      return { type: 'Low Scoring Expected', confidence: 'low', rate: avgRate };
+    }
+
+    // If neither team has data, use league average
+    const leagueAvg = (homeLeagueAvg + awayLeagueAvg) / 2;
+    if (leagueAvg >= 70) return { type: 'Strong Over 1.5', confidence: 'low', rate: leagueAvg };
+    if (leagueAvg >= 55) return { type: 'Moderate Over 1.5', confidence: 'low', rate: leagueAvg };
+    if (leagueAvg >= 40) return { type: 'Consider Over 0.5', confidence: 'low', rate: leagueAvg };
+    return { type: 'Low Scoring Expected', confidence: 'low', rate: leagueAvg };
   };
 
   const getHeadToHeadData = () => {
@@ -3358,6 +3544,16 @@ function App() {
             Bet Analysis
           </button>
           <button
+            onClick={() => setActiveTab("scoringAnalysis")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "scoringAnalysis"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Scoring Analysis
+          </button>
+          <button
             onClick={() => setActiveTab("headToHead")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "headToHead"
@@ -4342,6 +4538,9 @@ function App() {
                         <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Recommendation
                         </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold w-40">
+                          ⚽ Scoring
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
@@ -4742,6 +4941,28 @@ function App() {
                             >
                               {result.recommendation}
                             </span>
+                          </td>
+                          <td className="px-4 py-6">
+                            {result.scoringRecommendation ? (
+                              <div className="text-sm">
+                                <div className={`px-2 py-1 rounded text-xs font-medium ${
+                                  result.scoringRecommendation.confidence === 'high' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : result.scoringRecommendation.confidence === 'medium'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {result.scoringRecommendation.type}
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">
+                                  {result.scoringRecommendation.rate.toFixed(1)}% rate
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">
+                                No data
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -5928,6 +6149,108 @@ function App() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "scoringAnalysis" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-white">Scoring Analysis</h3>
+              <button
+                onClick={analyzeScoringPatterns}
+                disabled={scoringAnalysisLoading}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                  scoringAnalysisLoading
+                    ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+                    : "bg-blue-500 text-white hover:bg-blue-600"
+                }`}
+              >
+                {scoringAnalysisLoading ? "🔄 Analyzing..." : "📊 Analyze Scoring Patterns"}
+              </button>
+            </div>
+
+            {scoringAnalysis.length > 0 ? (
+              <div className="space-y-4">
+                <div className="text-gray-300 mb-4">
+                  <p>📈 Team scoring patterns based on {bets.filter(bet => bet.HOME_SCORE && bet.AWAY_SCORE).length} games with scores</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-white/20">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
+                          Team
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
+                          League
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
+                          Games
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
+                          Avg Goals
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
+                          Over 1.5
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
+                          Over 2.5
+                        </th>
+                        <th className="px-4 py-2 text-left text-white font-semibold">
+                          Over 3.5
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {scoringAnalysis
+                        .filter(stat => stat.totalGames >= 3) // Only show teams with 3+ games
+                        .sort((a, b) => parseFloat(b.over2_5Rate) - parseFloat(a.over2_5Rate))
+                        .slice(0, 50) // Show top 50 teams
+                        .map((stat, index) => (
+                          <tr
+                            key={index}
+                            className={`${
+                              index % 2 === 0 ? "bg-white/5" : "bg-white/10"
+                            }`}
+                          >
+                            <td className="px-4 py-3 text-white font-medium">
+                              {stat.team}
+                            </td>
+                            <td className="px-4 py-3 text-gray-300">
+                              {stat.country} - {stat.league}
+                            </td>
+                            <td className="px-4 py-3 text-gray-300">
+                              {stat.totalGames}
+                            </td>
+                            <td className="px-4 py-3 text-blue-300 font-mono">
+                              {stat.avgGoals}
+                            </td>
+                            <td className="px-4 py-3 text-green-300 font-mono">
+                              {stat.over1_5Rate}%
+                            </td>
+                            <td className="px-4 py-3 text-yellow-300 font-mono">
+                              {stat.over2_5Rate}%
+                            </td>
+                            <td className="px-4 py-3 text-orange-300 font-mono">
+                              {stat.over3_5Rate}%
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-gray-400 text-lg mb-4">
+                  📊 No Scoring Analysis Available
+                </div>
+                <p className="text-gray-500">
+                  Click "Analyze Scoring Patterns" to generate scoring analysis based on your historical data.
+                </p>
               </div>
             )}
           </div>
