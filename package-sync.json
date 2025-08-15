@@ -1,0 +1,18 @@
+{
+  "name": "bet-tracker-sync",
+  "version": "1.0.0",
+  "description": "Sync Google Sheets data to PostgreSQL for Bet Tracker",
+  "main": "sync-to-postgres.js",
+  "scripts": {
+    "sync": "node sync-to-postgres.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "googleapis": "^128.0.0",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  },
+  "keywords": ["bet-tracker", "sync", "postgresql", "google-sheets"],
+  "author": "Your Name",
+  "license": "MIT"
+}
