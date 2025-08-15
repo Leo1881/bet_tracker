@@ -3322,8 +3322,8 @@ function App() {
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
             <div className="text-2xl font-bold text-yellow-400">
               {
-                getDeduplicatedFilteredBets().filter((bet) =>
-                  bet.RESULT?.toLowerCase().includes("pending")
+                getDeduplicatedFilteredBets().filter(
+                  (bet) => !bet.RESULT || bet.RESULT.trim() === ""
                 ).length
               }
             </div>
