@@ -145,19 +145,34 @@ function App() {
     const getData = async () => {
       try {
         setLoading(true);
-        const [data, blacklist, notes] = await Promise.all([
-          fetchSheetData(),
-          fetchBlacklistedTeams(),
-          fetchTeamNotes(),
-        ]);
+        const [data, blacklist, notes, attachedPredictionsData] =
+          await Promise.all([
+            fetchSheetData(),
+            fetchBlacklistedTeams(),
+            fetchTeamNotes(),
+            fetch("/api/attached-predictions", {
+              headers: {
+                "Cache-Control": "no-cache",
+                Pragma: "no-cache",
+              },
+            })
+              .then((res) => res.json())
+              .catch(() => []),
+          ]);
         console.log("Fetched data:", data);
         console.log("Fetched blacklist:", blacklist);
         console.log("Fetched team notes:", notes);
-
         setBets(data);
         setFilteredBets(data);
         setBlacklistedTeams(blacklist);
         setTeamNotes(notes);
+
+        // Load attached predictions
+        const predictionsMap = {};
+        attachedPredictionsData.forEach((item) => {
+          predictionsMap[item.betslipId] = item.predictions;
+        });
+        setAttachedPredictions(predictionsMap);
       } catch (err) {
         setError("Failed to load bet data");
       } finally {
@@ -1458,7 +1473,30 @@ function App() {
   // Get today's stored predictions
   const getTodayPredictions = () => {
     const today = new Date().toISOString().split("T")[0];
-    return storedPredictions.find((p) => p.date === today);
+    const stored = storedPredictions.find((p) => p.date === today);
+
+    // If we have stored predictions, use them
+    if (stored) {
+      return stored;
+    }
+
+    // If we have current analysis results, create predictions from them
+    if (analysisResults && analysisResults.length > 0) {
+      return {
+        date: today,
+        games: analysisResults.map((result) => ({
+          home_team: result.homeTeam,
+          away_team: result.awayTeam,
+          team_included: result.teamIncluded,
+          confidenceScore: result.confidenceScore,
+          confidenceBreakdown: result.confidenceBreakdown,
+          confidenceLabel: result.confidenceLabel,
+          recommendation: result.recommendation,
+        })),
+      };
+    }
+
+    return null;
   };
 
   // Check if betslip matches analysis
@@ -1500,11 +1538,29 @@ function App() {
   };
 
   // Attach predictions to betslip
-  const attachPredictionsToBetslip = (betslipId, predictions) => {
-    setAttachedPredictions((prev) => ({
-      ...prev,
-      [betslipId]: predictions,
-    }));
+  const attachPredictionsToBetslip = async (betslipId, predictions) => {
+    try {
+      // Save to database
+      const response = await fetch("/api/attached-predictions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ betslipId, predictions }),
+      });
+
+      if (response.ok) {
+        // Update local state using original betslip ID
+        setAttachedPredictions((prev) => ({
+          ...prev,
+          [betslipId]: predictions,
+        }));
+      } else {
+        console.error("Failed to save predictions to database");
+      }
+    } catch (error) {
+      console.error("Error saving predictions:", error);
+    }
   };
 
   // Convert confidence score to betting recommendation
@@ -5736,83 +5792,20 @@ function App() {
                                       </div>
 
                                       {/* Prediction Data */}
-                                      {prediction &&
-                                        prediction.probabilities && (
-                                          <div className="mt-2 pt-2 border-t border-white/10">
-                                            <div className="grid grid-cols-2 gap-4 text-xs">
-                                              <div>
-                                                <div className="text-gray-400 mb-1">
-                                                  📊 Predictions:
-                                                </div>
-                                                <div className="flex space-x-2">
-                                                  <span className="text-blue-300">
-                                                    🏠{" "}
-                                                    {
-                                                      prediction.probabilities
-                                                        .probs.home
-                                                    }
-                                                    %
-                                                  </span>
-                                                  <span className="text-yellow-300">
-                                                    🤝{" "}
-                                                    {
-                                                      prediction.probabilities
-                                                        .probs.draw
-                                                    }
-                                                    %
-                                                  </span>
-                                                  <span className="text-red-300">
-                                                    ✈️{" "}
-                                                    {
-                                                      prediction.probabilities
-                                                        .probs.away
-                                                    }
-                                                    %
-                                                  </span>
-                                                </div>
-                                                <div className="text-purple-300 mt-1">
-                                                  Goals:{" "}
-                                                  {
-                                                    prediction.probabilities
-                                                      .lambda.home
-                                                  }
-                                                  -
-                                                  {
-                                                    prediction.probabilities
-                                                      .lambda.away
-                                                  }
-                                                </div>
-                                                {(bet.HOME_SCORE ||
-                                                  bet.AWAY_SCORE) && (
-                                                  <div className="text-orange-300 mt-1">
-                                                    Actual:{" "}
-                                                    {bet.HOME_SCORE || "?"}-
-                                                    {bet.AWAY_SCORE || "?"}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              <div>
-                                                <div className="text-gray-400 mb-1">
-                                                  🎯 Confidence:
-                                                </div>
-                                                <div className="text-green-300">
-                                                  {prediction.recommendation}
-                                                </div>
-                                                {(bet.HOME_SCORE ||
-                                                  bet.AWAY_SCORE) && (
-                                                  <div className="text-gray-300 text-sm mt-1">
-                                                    {bet.HOME_SCORE || "?"}-
-                                                    {bet.AWAY_SCORE || "?"}
-                                                  </div>
-                                                )}
-                                                <div className="text-blue-300 text-xs mt-1">
-                                                  {prediction.confidenceScore}
-                                                  /10
-                                                </div>
-                                              </div>
-                                            </div>
+                                      {prediction && (
+                                        <div className="mt-2 pt-2 border-t border-white/10">
+                                          <div className="text-gray-400 mb-1">
+                                            🎯 Recommendation:
                                           </div>
-                                        )}
+                                          <div className="text-green-300 font-medium text-sm">
+                                            {prediction.recommendation}
+                                          </div>
+                                          <div className="text-blue-300 text-xs mt-1">
+                                            Confidence:{" "}
+                                            {prediction.confidenceScore}/10
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
