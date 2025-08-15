@@ -71,8 +71,10 @@ const calculateProbabilities = (homeOdds, drawOdds, awayOdds) => {
 
 function App() {
   const [bets, setBets] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [filteredBets, setFilteredBets] = useState([]);
   const [blacklistedTeams, setBlacklistedTeams] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [newBets, setNewBets] = useState([]);
   const [analysisResults, setAnalysisResults] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -133,6 +135,7 @@ function App() {
   const [attachedPredictions, setAttachedPredictions] = useState({});
   const [scoringAnalysis, setScoringAnalysis] = useState([]);
   const [scoringAnalysisLoading, setScoringAnalysisLoading] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [scoringSortConfig, setScoringSortConfig] = useState({
     key: "totalGames",
     direction: "desc",
@@ -598,6 +601,7 @@ function App() {
     });
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getOddsAnalytics = () => {
     const oddsRanges = {
       "1.0-1.5": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
@@ -1002,6 +1006,7 @@ function App() {
   };
 
   // Get deduplicated bets for team performance analytics
+  // eslint-disable-next-line no-unused-vars
   const getDeduplicatedBets = () => {
     const uniqueBets = new Map();
 
@@ -1116,6 +1121,7 @@ function App() {
     return filtered;
   };
 
+  // eslint-disable-next-line no-unused-vars
   const isTeamBlacklisted = (teamName) => {
     if (!teamName || !blacklistedTeams.length) return false;
     const normalizedTeamName = teamName.toLowerCase().trim();
@@ -2005,8 +2011,20 @@ function App() {
   };
 
   const analyzeNewBets = async () => {
+    console.log("=== STARTING BET ANALYSIS ===");
     try {
       setIsAnalyzing(true);
+
+      // First, run scoring analysis to get historical scoring patterns
+      console.log("About to call analyzeScoringPatterns...");
+      let scoringData = [];
+      try {
+        scoringData = await analyzeScoringPatterns();
+        console.log("analyzeScoringPatterns completed successfully");
+        console.log("Scoring data returned:", scoringData.length, "teams");
+      } catch (scoringError) {
+        console.error("Error in analyzeScoringPatterns:", scoringError);
+      }
 
       // Fetch new bets from Sheet3
       const fetchedNewBets = await fetchNewBets();
@@ -2185,7 +2203,8 @@ function App() {
           newBet.home_team,
           newBet.away_team,
           newBet.league,
-          newBet.league
+          newBet.league,
+          scoringData
         );
 
         return {
@@ -2274,16 +2293,37 @@ function App() {
 
   // Scoring Analysis Functions
   const analyzeScoringPatterns = async () => {
+    console.log("=== STARTING SCORING ANALYSIS ===");
     try {
       setScoringAnalysisLoading(true);
-      
-      // Get bets with scores
-      const betsWithScores = bets.filter(bet => 
-        bet.HOME_SCORE !== null && bet.HOME_SCORE !== undefined && 
-        bet.AWAY_SCORE !== null && bet.AWAY_SCORE !== undefined
+
+      // Get completed historical bets with scores and results
+      const completedBetsWithScores = bets.filter(
+        (bet) =>
+          bet.HOME_SCORE !== null &&
+          bet.HOME_SCORE !== undefined &&
+          bet.AWAY_SCORE !== null &&
+          bet.AWAY_SCORE !== undefined &&
+          bet.RESULT &&
+          bet.RESULT.trim() !== "" &&
+          (bet.RESULT.toLowerCase().includes("win") ||
+            bet.RESULT.toLowerCase().includes("loss"))
       );
 
-      if (betsWithScores.length === 0) {
+      console.log("Total bets:", bets.length);
+      console.log("Sample bet fields:", Object.keys(bets[0] || {}));
+      console.log(
+        "Sample bet with result:",
+        bets.find((bet) => bet.RESULT && bet.RESULT.trim() !== "")
+      );
+      console.log(
+        "Completed bets with scores:",
+        completedBetsWithScores.length
+      );
+      console.log("Sample completed bet:", completedBetsWithScores[0]);
+
+      if (completedBetsWithScores.length === 0) {
+        console.log("No completed bets with scores found!");
         setScoringAnalysis([]);
         return;
       }
@@ -2291,7 +2331,7 @@ function App() {
       // Analyze by team and league
       const teamLeagueMap = new Map();
 
-      betsWithScores.forEach(bet => {
+      completedBetsWithScores.forEach((bet) => {
         const homeTeam = bet.HOME_TEAM?.trim();
         const awayTeam = bet.AWAY_TEAM?.trim();
         const league = bet.LEAGUE?.trim();
@@ -2299,7 +2339,14 @@ function App() {
         const homeScore = parseInt(bet.HOME_SCORE);
         const awayScore = parseInt(bet.AWAY_SCORE);
 
-        if (!homeTeam || !awayTeam || !league || !country || isNaN(homeScore) || isNaN(awayScore)) {
+        if (
+          !homeTeam ||
+          !awayTeam ||
+          !league ||
+          !country ||
+          isNaN(homeScore) ||
+          isNaN(awayScore)
+        ) {
           return;
         }
 
@@ -2325,7 +2372,7 @@ function App() {
             over2_5Rate: 0,
             over3_5Rate: 0,
             homeGames: 0,
-            awayGames: 0
+            awayGames: 0,
           });
         }
         const homeStats = teamLeagueMap.get(homeKey);
@@ -2353,7 +2400,7 @@ function App() {
             over2_5Rate: 0,
             over3_5Rate: 0,
             homeGames: 0,
-            awayGames: 0
+            awayGames: 0,
           });
         }
         const awayStats = teamLeagueMap.get(awayKey);
@@ -2366,61 +2413,116 @@ function App() {
       });
 
       // Calculate averages and rates
-      const analysisResults = Array.from(teamLeagueMap.values()).map(stats => ({
-        ...stats,
-        avgGoals: stats.totalGames > 0 ? (stats.totalGoals / stats.totalGames).toFixed(2) : 0,
-        over1_5Rate: stats.totalGames > 0 ? ((stats.over1_5Count / stats.totalGames) * 100).toFixed(1) : 0,
-        over2_5Rate: stats.totalGames > 0 ? ((stats.over2_5Count / stats.totalGames) * 100).toFixed(1) : 0,
-        over3_5Rate: stats.totalGames > 0 ? ((stats.over3_5Count / stats.totalGames) * 100).toFixed(1) : 0
-      }));
+      const analysisResults = Array.from(teamLeagueMap.values()).map(
+        (stats) => ({
+          ...stats,
+          avgGoals:
+            stats.totalGames > 0
+              ? (stats.totalGoals / stats.totalGames).toFixed(2)
+              : 0,
+          over1_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over1_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+          over2_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over2_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+          over3_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over3_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+        })
+      );
+
+      console.log("Scoring analysis results:", analysisResults);
+      console.log("Sample team stats:", analysisResults[0]);
 
       setScoringAnalysis(analysisResults);
+      console.log("=== SCORING ANALYSIS COMPLETE ===");
+      return analysisResults; // Return the results directly
     } catch (error) {
-      console.error('Error analyzing scoring patterns:', error);
+      console.error("Error analyzing scoring patterns:", error);
+      return []; // Return empty array on error
     } finally {
       setScoringAnalysisLoading(false);
     }
   };
 
-  const getScoringRecommendation = (homeTeam, awayTeam, homeLeague, awayLeague) => {
+  const getScoringRecommendation = (
+    homeTeam,
+    awayTeam,
+    homeLeague,
+    awayLeague,
+    scoringData = scoringAnalysis // Use passed data or fallback to state
+  ) => {
     if (!homeTeam || !awayTeam) return null;
 
-    const homeStats = scoringAnalysis.find(stat => 
-      stat.team.toLowerCase() === homeTeam.toLowerCase() && 
-      stat.league.toLowerCase() === homeLeague.toLowerCase()
+    console.log(
+      `Getting scoring recommendation for ${homeTeam} vs ${awayTeam} in ${homeLeague}`
+    );
+    console.log("Available scoring analysis:", scoringData.length, "teams");
+
+    const homeStats = scoringData.find(
+      (stat) =>
+        stat.team.toLowerCase() === homeTeam.toLowerCase() &&
+        stat.league.toLowerCase() === homeLeague.toLowerCase()
     );
 
-    const awayStats = scoringAnalysis.find(stat => 
-      stat.team.toLowerCase() === awayTeam.toLowerCase() && 
-      stat.league.toLowerCase() === awayLeague.toLowerCase()
+    const awayStats = scoringData.find(
+      (stat) =>
+        stat.team.toLowerCase() === awayTeam.toLowerCase() &&
+        stat.league.toLowerCase() === awayLeague.toLowerCase()
     );
 
     // Get league averages as fallback
-    const homeLeagueStats = scoringAnalysis.filter(stat => 
-      stat.league.toLowerCase() === homeLeague.toLowerCase()
+    const homeLeagueStats = scoringData.filter(
+      (stat) => stat.league.toLowerCase() === homeLeague.toLowerCase()
     );
-    const awayLeagueStats = scoringAnalysis.filter(stat => 
-      stat.league.toLowerCase() === awayLeague.toLowerCase()
+    const awayLeagueStats = scoringData.filter(
+      (stat) => stat.league.toLowerCase() === awayLeague.toLowerCase()
     );
 
-    const homeLeagueAvg = homeLeagueStats.length > 0 
-      ? homeLeagueStats.reduce((sum, stat) => sum + parseFloat(stat.over2_5Rate), 0) / homeLeagueStats.length 
-      : 0;
-    const awayLeagueAvg = awayLeagueStats.length > 0 
-      ? awayLeagueStats.reduce((sum, stat) => sum + parseFloat(stat.over2_5Rate), 0) / awayLeagueStats.length 
-      : 0;
+    const homeLeagueAvg =
+      homeLeagueStats.length > 0
+        ? homeLeagueStats.reduce(
+            (sum, stat) => sum + parseFloat(stat.over2_5Rate),
+            0
+          ) / homeLeagueStats.length
+        : 0;
+    const awayLeagueAvg =
+      awayLeagueStats.length > 0
+        ? awayLeagueStats.reduce(
+            (sum, stat) => sum + parseFloat(stat.over2_5Rate),
+            0
+          ) / awayLeagueStats.length
+        : 0;
 
     // Calculate recommendation
-    let homeRate = homeStats ? parseFloat(homeStats.over2_5Rate) : homeLeagueAvg;
-    let awayRate = awayStats ? parseFloat(awayStats.over2_5Rate) : awayLeagueAvg;
+    let homeRate = homeStats
+      ? parseFloat(homeStats.over2_5Rate)
+      : homeLeagueAvg;
+    let awayRate = awayStats
+      ? parseFloat(awayStats.over2_5Rate)
+      : awayLeagueAvg;
 
     // If both teams have data, average them
     if (homeStats && awayStats) {
       const avgRate = (homeRate + awayRate) / 2;
-      if (avgRate >= 70) return { type: 'Strong Over 1.5', confidence: 'high', rate: avgRate };
-      if (avgRate >= 55) return { type: 'Moderate Over 1.5', confidence: 'medium', rate: avgRate };
-      if (avgRate >= 40) return { type: 'Consider Over 0.5', confidence: 'low', rate: avgRate };
-      return { type: 'Low Scoring Expected', confidence: 'low', rate: avgRate };
+      console.log(
+        `Both teams found: ${homeTeam} (${homeRate}%), ${awayTeam} (${awayRate}%), Avg: ${avgRate}%`
+      );
+      if (avgRate >= 70)
+        return { type: "Strong Over 1.5", confidence: "high", rate: avgRate };
+      if (avgRate >= 55)
+        return {
+          type: "Moderate Over 1.5",
+          confidence: "medium",
+          rate: avgRate,
+        };
+      if (avgRate >= 40)
+        return { type: "Consider Over 0.5", confidence: "low", rate: avgRate };
+      return { type: "Low Scoring Expected", confidence: "low", rate: avgRate };
     }
 
     // If only one team has data, use that + league average
@@ -2428,21 +2530,35 @@ function App() {
       const availableRate = homeStats ? homeRate : awayRate;
       const leagueAvg = homeStats ? awayLeagueAvg : homeLeagueAvg;
       const avgRate = (availableRate + leagueAvg) / 2;
-      
-      if (avgRate >= 70) return { type: 'Strong Over 1.5', confidence: 'medium', rate: avgRate };
-      if (avgRate >= 55) return { type: 'Moderate Over 1.5', confidence: 'medium', rate: avgRate };
-      if (avgRate >= 40) return { type: 'Consider Over 0.5', confidence: 'low', rate: avgRate };
-      return { type: 'Low Scoring Expected', confidence: 'low', rate: avgRate };
+
+      if (avgRate >= 70)
+        return { type: "Strong Over 1.5", confidence: "medium", rate: avgRate };
+      if (avgRate >= 55)
+        return {
+          type: "Moderate Over 1.5",
+          confidence: "medium",
+          rate: avgRate,
+        };
+      if (avgRate >= 40)
+        return { type: "Consider Over 0.5", confidence: "low", rate: avgRate };
+      return { type: "Low Scoring Expected", confidence: "low", rate: avgRate };
     }
 
     // If neither team has data, use league average
     const leagueAvg = (homeLeagueAvg + awayLeagueAvg) / 2;
-    if (leagueAvg >= 70) return { type: 'Strong Over 1.5', confidence: 'low', rate: leagueAvg };
-    if (leagueAvg >= 55) return { type: 'Moderate Over 1.5', confidence: 'low', rate: leagueAvg };
-    if (leagueAvg >= 40) return { type: 'Consider Over 0.5', confidence: 'low', rate: leagueAvg };
-    return { type: 'Low Scoring Expected', confidence: 'low', rate: leagueAvg };
+    console.log(
+      `No team data found. League averages: ${homeLeague} (${homeLeagueAvg}%), ${awayLeague} (${awayLeagueAvg}%), Avg: ${leagueAvg}%`
+    );
+    if (leagueAvg >= 70)
+      return { type: "Strong Over 1.5", confidence: "low", rate: leagueAvg };
+    if (leagueAvg >= 55)
+      return { type: "Moderate Over 1.5", confidence: "low", rate: leagueAvg };
+    if (leagueAvg >= 40)
+      return { type: "Consider Over 0.5", confidence: "low", rate: leagueAvg };
+    return { type: "Low Scoring Expected", confidence: "low", rate: leagueAvg };
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getHeadToHeadData = () => {
     const headToHeadMap = new Map();
 
@@ -4945,17 +5061,22 @@ function App() {
                           <td className="px-4 py-6">
                             {result.scoringRecommendation ? (
                               <div className="text-sm">
-                                <div className={`px-2 py-1 rounded text-xs font-medium ${
-                                  result.scoringRecommendation.confidence === 'high' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : result.scoringRecommendation.confidence === 'medium'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}>
+                                <div
+                                  className={`px-2 py-1 rounded text-xs font-medium ${
+                                    result.scoringRecommendation.confidence ===
+                                    "high"
+                                      ? "bg-green-100 text-green-800"
+                                      : result.scoringRecommendation
+                                          .confidence === "medium"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-gray-100 text-gray-800"
+                                  }`}
+                                >
                                   {result.scoringRecommendation.type}
                                 </div>
                                 <div className="text-xs text-gray-400 mt-1">
-                                  {result.scoringRecommendation.rate.toFixed(1)}% rate
+                                  {result.scoringRecommendation.rate.toFixed(1)}
+                                  % rate
                                 </div>
                               </div>
                             ) : (
@@ -6167,14 +6288,23 @@ function App() {
                     : "bg-blue-500 text-white hover:bg-blue-600"
                 }`}
               >
-                {scoringAnalysisLoading ? "🔄 Analyzing..." : "📊 Analyze Scoring Patterns"}
+                {scoringAnalysisLoading
+                  ? "🔄 Analyzing..."
+                  : "📊 Analyze Scoring Patterns"}
               </button>
             </div>
 
             {scoringAnalysis.length > 0 ? (
               <div className="space-y-4">
                 <div className="text-gray-300 mb-4">
-                  <p>📈 Team scoring patterns based on {bets.filter(bet => bet.HOME_SCORE && bet.AWAY_SCORE).length} games with scores</p>
+                  <p>
+                    📈 Team scoring patterns based on{" "}
+                    {
+                      bets.filter((bet) => bet.HOME_SCORE && bet.AWAY_SCORE)
+                        .length
+                    }{" "}
+                    games with scores
+                  </p>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -6206,8 +6336,12 @@ function App() {
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {scoringAnalysis
-                        .filter(stat => stat.totalGames >= 3) // Only show teams with 3+ games
-                        .sort((a, b) => parseFloat(b.over2_5Rate) - parseFloat(a.over2_5Rate))
+                        .filter((stat) => stat.totalGames >= 3) // Only show teams with 3+ games
+                        .sort(
+                          (a, b) =>
+                            parseFloat(b.over2_5Rate) -
+                            parseFloat(a.over2_5Rate)
+                        )
                         .slice(0, 50) // Show top 50 teams
                         .map((stat, index) => (
                           <tr
@@ -6249,7 +6383,8 @@ function App() {
                   📊 No Scoring Analysis Available
                 </div>
                 <p className="text-gray-500">
-                  Click "Analyze Scoring Patterns" to generate scoring analysis based on your historical data.
+                  Click "Analyze Scoring Patterns" to generate scoring analysis
+                  based on your historical data.
                 </p>
               </div>
             )}
