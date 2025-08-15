@@ -2328,12 +2328,12 @@ function App() {
         return;
       }
 
-      // Analyze by team and league
-      const teamLeagueMap = new Map();
-
+      // Deduplicate games first (same teams, same date = same game)
+      const uniqueGames = new Map();
       completedBetsWithScores.forEach((bet) => {
         const homeTeam = bet.HOME_TEAM?.trim();
         const awayTeam = bet.AWAY_TEAM?.trim();
+        const date = bet.DATE?.trim();
         const league = bet.LEAGUE?.trim();
         const country = bet.COUNTRY?.trim();
         const homeScore = parseInt(bet.HOME_SCORE);
@@ -2342,6 +2342,7 @@ function App() {
         if (
           !homeTeam ||
           !awayTeam ||
+          !date ||
           !league ||
           !country ||
           isNaN(homeScore) ||
@@ -2349,6 +2350,44 @@ function App() {
         ) {
           return;
         }
+
+        // Create unique game key: DATE + HOME_TEAM + AWAY_TEAM + COUNTRY + LEAGUE
+        const gameKey = `${date}_${homeTeam}_${awayTeam}_${country}_${league}`;
+
+        // Only add if this unique game doesn't exist yet
+        if (!uniqueGames.has(gameKey)) {
+          uniqueGames.set(gameKey, {
+            homeTeam,
+            awayTeam,
+            date,
+            league,
+            country,
+            homeScore,
+            awayScore,
+          });
+        }
+      });
+
+      console.log(
+        "Unique games found:",
+        uniqueGames.size,
+        "out of",
+        completedBetsWithScores.length,
+        "bets"
+      );
+
+      // Analyze by team and league using unique games only
+      const teamLeagueMap = new Map();
+
+      uniqueGames.forEach((game) => {
+        const homeTeam = game.homeTeam;
+        const awayTeam = game.awayTeam;
+        const league = game.league;
+        const country = game.country;
+        const homeScore = game.homeScore;
+        const awayScore = game.awayScore;
+
+        // No need to validate again - already validated when creating unique games
 
         const totalGoals = homeScore + awayScore;
         const hasOver1_5 = totalGoals > 1;
@@ -2413,8 +2452,8 @@ function App() {
       });
 
       // Calculate averages and rates
-      const analysisResults = Array.from(teamLeagueMap.values()).map(
-        (stats) => ({
+      const analysisResults = Array.from(teamLeagueMap.values())
+        .map((stats) => ({
           ...stats,
           avgGoals:
             stats.totalGames > 0
@@ -2432,8 +2471,8 @@ function App() {
             stats.totalGames > 0
               ? ((stats.over3_5Count / stats.totalGames) * 100).toFixed(1)
               : 0,
-        })
-      );
+        }))
+        .sort((a, b) => parseFloat(b.avgGoals) - parseFloat(a.avgGoals)); // Sort by average goals descending
 
       console.log("Scoring analysis results:", analysisResults);
       console.log("Sample team stats:", analysisResults[0]);
