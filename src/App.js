@@ -4676,10 +4676,10 @@ function App() {
                           Odds
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-80">
-                          🎯 Confidence
+                          Confidence
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-80">
-                          📊 Probability
+                          Probability
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Blacklist
@@ -4694,7 +4694,7 @@ function App() {
                           Recommendation
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-40">
-                          ⚽ Scoring
+                          Scoring
                         </th>
                       </tr>
                     </thead>
@@ -4767,39 +4767,20 @@ function App() {
                             <div className="text-sm">
                               <div className="mb-1">
                                 <span
-                                  className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${result.confidenceLabel.color}`}
+                                  className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${result.confidenceLabel.color} cursor-help`}
+                                  title={`${result.confidenceLabel.label}
+🏆 Team Performance: ${result.confidenceBreakdown.team}/10
+🏛️ League Experience: ${result.confidenceBreakdown.league}/10
+💰 Odds Value: ${result.confidenceBreakdown.odds}/10
+⚔️ Head-to-Head: ${result.confidenceBreakdown.matchup}/10
+📊 League Position: ${result.confidenceBreakdown.position}/10
+🏠 Home/Away: ${result.confidenceBreakdown.homeAway}/10`}
                                 >
                                   {result.confidenceLabel.emoji}{" "}
                                   {result.confidenceScore}/10
                                 </span>
                                 <div className="text-xs text-gray-400 mt-2">
                                   {result.confidenceLabel.label}
-                                </div>
-                              </div>
-                              <div className="text-xs text-gray-400 mt-2 mb-2">
-                                <div className="mb-1">
-                                  🏆 Team Performance:{" "}
-                                  {result.confidenceBreakdown.team}/10
-                                </div>
-                                <div className="mb-1">
-                                  🏛️ League Experience:{" "}
-                                  {result.confidenceBreakdown.league}/10
-                                </div>
-                                <div className="mb-1">
-                                  💰 Odds Value:{" "}
-                                  {result.confidenceBreakdown.odds}/10
-                                </div>
-                                <div className="mb-1">
-                                  ⚔️ Head-to-Head:{" "}
-                                  {result.confidenceBreakdown.matchup}/10
-                                </div>
-                                <div className="mb-1">
-                                  📊 League Position:{" "}
-                                  {result.confidenceBreakdown.position}/10
-                                </div>
-                                <div className="mb-1">
-                                  🏠 Home/Away:{" "}
-                                  {result.confidenceBreakdown.homeAway}/10
                                 </div>
                               </div>
 
