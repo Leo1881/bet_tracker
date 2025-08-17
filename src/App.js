@@ -2270,9 +2270,9 @@ function App() {
         const league = newBet.league;
 
         // Check if team is blacklisted (any country/league)
-        const isBlacklisted = blacklistedTeams.some(
+        const isBlacklisted = (blacklistedTeams || []).some(
           (blacklistedTeam) =>
-            blacklistedTeam.team_name.toLowerCase() === teamName.toLowerCase()
+            blacklistedTeam.team_name?.toLowerCase() === (teamName || "").toLowerCase()
         );
 
         // Get historical performance for this team (EXACT country + league match only)

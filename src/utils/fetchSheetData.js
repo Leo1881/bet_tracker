@@ -109,12 +109,15 @@ export const fetchBlacklistedTeams = async () => {
 export const fetchNewBets = async () => {
   try {
     // Try local server first
+    console.log("Attempting to fetch from local server...");
     const response = await fetch(NEW_BETS_URL);
     
     if (response.ok) {
       const data = await response.json();
       console.log("Successfully fetched new bets from database:", data.length);
       return data;
+    } else {
+      console.log("Local server responded but not OK, falling back to Google Sheets...");
     }
   } catch (error) {
     console.log("Local server unavailable, falling back to Google Sheets...");
