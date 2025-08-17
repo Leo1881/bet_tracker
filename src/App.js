@@ -1563,12 +1563,176 @@ function App() {
     }
   };
 
+  // Generate detailed reasoning for why a bet should be avoided
+  const getAvoidReasoning = (bet, confidenceBreakdown) => {
+    const reasons = [];
+
+    // Team confidence reasoning
+    if (confidenceBreakdown.team < 4) {
+      const teamBets = bets.filter(
+        (b) =>
+          b.TEAM_INCLUDED === bet.team_included &&
+          b.COUNTRY === bet.country &&
+          b.LEAGUE === bet.league &&
+          b.RESULT !== "" &&
+          b.RESULT !== "pending"
+      );
+
+      if (teamBets.length === 0) {
+        reasons.push("No historical data for this team in this league");
+      } else {
+        const wins = teamBets.filter((b) => b.RESULT === "win").length;
+        const winRate = (wins / teamBets.length) * 100;
+        reasons.push(
+          `Poor team performance: ${winRate.toFixed(1)}% win rate (${wins}/${
+            teamBets.length
+          } bets)`
+        );
+      }
+    }
+
+    // League confidence reasoning
+    if (confidenceBreakdown.league < 4) {
+      const leagueBets = bets.filter(
+        (b) =>
+          b.COUNTRY === bet.country &&
+          b.LEAGUE === bet.league &&
+          b.RESULT !== "" &&
+          b.RESULT !== "pending"
+      );
+
+      if (leagueBets.length === 0) {
+        reasons.push("No historical data for this league");
+      } else {
+        const wins = leagueBets.filter((b) => b.RESULT === "win").length;
+        const winRate = (wins / leagueBets.length) * 100;
+        reasons.push(
+          `Poor league performance: ${winRate.toFixed(1)}% win rate (${wins}/${
+            leagueBets.length
+          } bets)`
+        );
+      }
+    }
+
+    // Odds confidence reasoning
+    if (confidenceBreakdown.odds < 4) {
+      const similarBets = bets.filter(
+        (b) =>
+          b.BET_TYPE === bet.bet_type &&
+          b.RESULT !== "" &&
+          b.RESULT !== "pending" &&
+          (Math.abs(b.ODDS1 - bet.odds1) <= 0.5 ||
+            Math.abs(b.ODDS2 - bet.odds1) <= 0.5)
+      );
+
+      if (similarBets.length === 0) {
+        reasons.push("No historical data for similar odds in this bet type");
+      } else {
+        const wins = similarBets.filter((b) => b.RESULT === "win").length;
+        const winRate = (wins / similarBets.length) * 100;
+        reasons.push(
+          `Poor performance with similar odds: ${winRate.toFixed(
+            1
+          )}% win rate (${wins}/${similarBets.length} bets)`
+        );
+      }
+    }
+
+    // Matchup confidence reasoning
+    if (confidenceBreakdown.matchup < 4) {
+      const matchups = bets.filter(
+        (b) =>
+          ((b.HOME_TEAM === bet.home_team && b.AWAY_TEAM === bet.away_team) ||
+            (b.HOME_TEAM === bet.away_team && b.AWAY_TEAM === bet.home_team)) &&
+          b.COUNTRY === bet.country &&
+          b.LEAGUE === bet.league &&
+          b.RESULT !== "" &&
+          b.RESULT !== "pending"
+      );
+
+      if (matchups.length === 0) {
+        reasons.push("No historical head-to-head data for this matchup");
+      } else {
+        const wins = matchups.filter((b) => b.RESULT === "win").length;
+        const winRate = (wins / matchups.length) * 100;
+        reasons.push(
+          `Poor head-to-head performance: ${winRate.toFixed(
+            1
+          )}% win rate (${wins}/${matchups.length} matchups)`
+        );
+      }
+    }
+
+    // Position confidence reasoning
+    if (confidenceBreakdown.position < 4) {
+      if (
+        !bet.home_team_position ||
+        !bet.away_team_position ||
+        bet.home_team_position === "Cup" ||
+        bet.away_team_position === "Cup"
+      ) {
+        reasons.push("Cup game or missing position data - unpredictable");
+      } else {
+        const isBettingOnHomeTeam = bet.team_included
+          .toLowerCase()
+          .includes(bet.home_team.toLowerCase());
+        const bettingTeamPosition = isBettingOnHomeTeam
+          ? bet.home_team_position
+          : bet.away_team_position;
+        const opponentPosition = isBettingOnHomeTeam
+          ? bet.away_team_position
+          : bet.home_team_position;
+        reasons.push(
+          `Position disadvantage: ${bettingTeamPosition} vs ${opponentPosition}`
+        );
+      }
+    }
+
+    // Home/Away confidence reasoning
+    if (confidenceBreakdown.homeAway < 4) {
+      const isBettingOnHomeTeam = bet.team_included
+        .toLowerCase()
+        .includes(bet.home_team.toLowerCase());
+      const gameType = isBettingOnHomeTeam ? "home" : "away";
+
+      const homeAwayBets = bets.filter(
+        (b) =>
+          b.TEAM_INCLUDED === bet.team_included &&
+          b.COUNTRY === bet.country &&
+          b.LEAGUE === bet.league &&
+          b.RESULT !== "" &&
+          b.RESULT !== "pending"
+      );
+
+      if (homeAwayBets.length === 0) {
+        reasons.push(`No ${gameType} game data for this team`);
+      } else {
+        const wins = homeAwayBets.filter((b) => b.RESULT === "win").length;
+        const winRate = (wins / homeAwayBets.length) * 100;
+        reasons.push(
+          `Poor ${gameType} performance: ${winRate.toFixed(
+            1
+          )}% win rate (${wins}/${homeAwayBets.length} ${gameType} games)`
+        );
+      }
+    }
+
+    // If no specific reasons found, provide general reasoning
+    if (reasons.length === 0) {
+      reasons.push("Overall confidence score too low for a safe bet");
+    }
+
+    return reasons.join("; ");
+  };
+
   // Convert confidence score to betting recommendation
   const getConfidenceRecommendation = (
     confidenceScore,
     teamIncluded,
     homeTeam,
-    awayTeam
+    awayTeam,
+    confidenceBreakdown = null,
+    betData = null
   ) => {
     if (confidenceScore >= 7) {
       if (teamIncluded.toLowerCase().includes(homeTeam.toLowerCase())) {
@@ -1587,7 +1751,9 @@ function App() {
         return "Double Chance";
       }
     } else {
-      return "Avoid";
+      return confidenceBreakdown && betData
+        ? `Avoid (${getAvoidReasoning(betData, confidenceBreakdown)})`
+        : "Avoid";
     }
   };
 
@@ -2224,7 +2390,9 @@ function App() {
             confidenceScore,
             teamName,
             newBet.home_team,
-            newBet.away_team
+            newBet.away_team,
+            confidenceBreakdown,
+            newBet
           );
 
           // Set color based on recommendation
@@ -2232,7 +2400,7 @@ function App() {
             recommendationColor = "text-green-400";
           } else if (recommendation.includes("Double Chance")) {
             recommendationColor = "text-yellow-400";
-          } else if (recommendation === "Avoid") {
+          } else if (recommendation.includes("Avoid")) {
             recommendationColor = "text-red-400";
           }
         }
@@ -5211,8 +5379,8 @@ function App() {
                       <div className="text-gray-400">Avoid</div>
                       <div className="text-red-400 font-medium">
                         {
-                          analysisResults.filter(
-                            (r) => r.recommendation === "Avoid"
+                          analysisResults.filter((r) =>
+                            r.recommendation.includes("Avoid")
                           ).length
                         }
                       </div>
