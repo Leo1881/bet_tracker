@@ -1,5 +1,6 @@
 // API endpoints for database access
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:3001/api";
 
 const BETS_URL = `${API_BASE_URL}/bets`;
 const BLACKLIST_URL = `${API_BASE_URL}/blacklisted-teams`;
@@ -47,34 +48,60 @@ const convertSheetsDataToBets = (sheetsData) => {
 
     // Add an id for consistency
     bet.id = index + 1;
-    
+
     return bet;
   });
 };
 
-export const fetchSheetData = async () => {
-  try {
-    // Try local server first
-    const response = await fetch(BETS_URL);
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log("Successfully fetched bets from database:", data.length);
-      return data;
-    }
-  } catch (error) {
-    console.log("Local server unavailable, falling back to Google Sheets...");
-  }
+// Helper function to convert Google Sheets data to team notes format
+const convertSheetsDataToTeamNotes = (sheetsData) => {
+  if (!sheetsData || sheetsData.length === 0) return [];
 
-  // Fallback to Google Sheets
+  const headers = sheetsData[0];
+  const dataRows = sheetsData.slice(1);
+
+  return dataRows.map((row, index) => {
+    const teamNote = {};
+    headers.forEach((header, colIndex) => {
+      const value = row[colIndex] || "";
+      teamNote[header] = value;
+    });
+
+    // Add an id for consistency
+    teamNote.id = index + 1;
+
+    return teamNote;
+  });
+};
+
+export const fetchSheetData = async () => {
+  // For now, prioritize Google Sheets to get it working
   try {
     console.log("Fetching from Google Sheets...");
     const sheetsData = await fetchFromGoogleSheets(SHEETS_CONFIG.ranges.bets);
     const convertedData = convertSheetsDataToBets(sheetsData);
-    console.log("Successfully fetched bets from Google Sheets:", convertedData.length);
+    console.log(
+      "Successfully fetched bets from Google Sheets:",
+      convertedData.length
+    );
     return convertedData;
   } catch (error) {
     console.error("Error fetching data from Google Sheets:", error);
+
+    // Fallback to local server if Google Sheets fails
+    try {
+      console.log("Google Sheets failed, trying local server...");
+      const response = await fetch(BETS_URL);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Successfully fetched bets from database:", data.length);
+        return data;
+      }
+    } catch (dbError) {
+      console.log("Local server also unavailable");
+    }
+
     return [];
   }
 };
@@ -83,10 +110,13 @@ export const fetchBlacklistedTeams = async () => {
   try {
     // Try local server first
     const response = await fetch(BLACKLIST_URL);
-    
+
     if (response.ok) {
       const data = await response.json();
-      console.log("Successfully fetched blacklisted teams from database:", data.length);
+      console.log(
+        "Successfully fetched blacklisted teams from database:",
+        data.length
+      );
       return data;
     }
   } catch (error) {
@@ -96,9 +126,14 @@ export const fetchBlacklistedTeams = async () => {
   // Fallback to Google Sheets
   try {
     console.log("Fetching blacklist from Google Sheets...");
-    const sheetsData = await fetchFromGoogleSheets(SHEETS_CONFIG.ranges.blacklist);
+    const sheetsData = await fetchFromGoogleSheets(
+      SHEETS_CONFIG.ranges.blacklist
+    );
     const convertedData = convertSheetsDataToBets(sheetsData);
-    console.log("Successfully fetched blacklisted teams from Google Sheets:", convertedData.length);
+    console.log(
+      "Successfully fetched blacklisted teams from Google Sheets:",
+      convertedData.length
+    );
     return convertedData;
   } catch (error) {
     console.error("Error fetching blacklist from Google Sheets:", error);
@@ -107,31 +142,40 @@ export const fetchBlacklistedTeams = async () => {
 };
 
 export const fetchNewBets = async () => {
-  try {
-    // Try local server first
-    console.log("Attempting to fetch from local server...");
-    const response = await fetch(NEW_BETS_URL);
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log("Successfully fetched new bets from database:", data.length);
-      return data;
-    } else {
-      console.log("Local server responded but not OK, falling back to Google Sheets...");
-    }
-  } catch (error) {
-    console.log("Local server unavailable, falling back to Google Sheets...");
-  }
-
-  // Fallback to Google Sheets
+  // For now, prioritize Google Sheets to get it working
   try {
     console.log("Fetching new bets from Google Sheets...");
-    const sheetsData = await fetchFromGoogleSheets(SHEETS_CONFIG.ranges.newBets);
+    const sheetsData = await fetchFromGoogleSheets(
+      SHEETS_CONFIG.ranges.newBets
+    );
     const convertedData = convertSheetsDataToBets(sheetsData);
-    console.log("Successfully fetched new bets from Google Sheets:", convertedData.length);
+    console.log(
+      "Successfully fetched new bets from Google Sheets:",
+      convertedData.length
+    );
     return convertedData;
   } catch (error) {
     console.error("Error fetching new bets from Google Sheets:", error);
+
+    // Fallback to local server if Google Sheets fails
+    try {
+      console.log("Google Sheets failed, trying local server...");
+      const response = await fetch(NEW_BETS_URL);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(
+          "Successfully fetched new bets from database:",
+          data.length
+        );
+        return data;
+      }
+    } catch (dbError) {
+      console.log("Local server also unavailable");
+    }
+
+    // Return empty array instead of throwing error
+    console.log("No data sources available, returning empty array");
     return [];
   }
 };
@@ -140,10 +184,13 @@ export const fetchTeamNotes = async () => {
   try {
     // Try local server first
     const response = await fetch(TEAM_NOTES_URL);
-    
+
     if (response.ok) {
       const data = await response.json();
-      console.log("Successfully fetched team notes from database:", data.length);
+      console.log(
+        "Successfully fetched team notes from database:",
+        data.length
+      );
       return data;
     }
   } catch (error) {
@@ -153,9 +200,14 @@ export const fetchTeamNotes = async () => {
   // Fallback to Google Sheets
   try {
     console.log("Fetching team notes from Google Sheets...");
-    const sheetsData = await fetchFromGoogleSheets(SHEETS_CONFIG.ranges.teamNotes);
-    const convertedData = convertSheetsDataToBets(sheetsData);
-    console.log("Successfully fetched team notes from Google Sheets:", convertedData.length);
+    const sheetsData = await fetchFromGoogleSheets(
+      SHEETS_CONFIG.ranges.teamNotes
+    );
+    const convertedData = convertSheetsDataToTeamNotes(sheetsData);
+    console.log(
+      "Successfully fetched team notes from Google Sheets:",
+      convertedData.length
+    );
     return convertedData;
   } catch (error) {
     console.error("Error fetching team notes from Google Sheets:", error);

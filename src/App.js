@@ -161,7 +161,7 @@ function App() {
           ]);
         console.log("Fetched data:", data);
         console.log("Fetched blacklist:", blacklist);
-        console.log("Fetched team notes:", notes);
+        console.log("Fetched team notes:", notes.length);
         setBets(data);
         setFilteredBets(data);
         setBlacklistedTeams(blacklist);
@@ -592,14 +592,23 @@ function App() {
   };
 
   const getSortedTeamNotesData = () => {
-    if (!teamNotesSortConfig.key) return teamNotes;
+    // Handle old lowercase field names by converting them to uppercase
+    let sortKey = teamNotesSortConfig.key;
+    if (sortKey === "team_name") sortKey = "TEAM_NAME";
+    if (sortKey === "country") sortKey = "COUNTRY";
+    if (sortKey === "league") sortKey = "LEAGUE";
+    if (sortKey === "date_added") sortKey = "DATE_ADDED";
+
+    if (!sortKey) {
+      return teamNotes;
+    }
 
     return [...teamNotes].sort((a, b) => {
-      const aValue = a[teamNotesSortConfig.key];
-      const bValue = b[teamNotesSortConfig.key];
+      const aValue = a[sortKey] || "";
+      const bValue = b[sortKey] || "";
 
       // Handle date sorting
-      if (teamNotesSortConfig.key === "date_added") {
+      if (sortKey === "DATE_ADDED") {
         const aDate = new Date(aValue);
         const bDate = new Date(bValue);
         if (teamNotesSortConfig.direction === "asc") {
@@ -1446,16 +1455,16 @@ function App() {
       date: today,
       timestamp: new Date().toISOString(),
       games: analysisResults.map((result) => ({
-        home_team: result.home_team,
-        away_team: result.away_team,
-        country: result.country,
-        league: result.league,
-        team_included: result.team_included,
-        bet_type: result.bet_type,
-        bet_selection: result.bet_selection,
-        odds1: result.odds1,
-        odds2: result.odds2,
-        oddsX: result.oddsX,
+        home_team: result.HOME_TEAM,
+        away_team: result.AWAY_TEAM,
+        country: result.COUNTRY,
+        league: result.LEAGUE,
+        team_included: result.TEAM_INCLUDED,
+        bet_type: result.BET_TYPE,
+        bet_selection: result.BET_SELECTION,
+        odds1: result.ODDS1,
+        odds2: result.ODDS2,
+        oddsX: result.ODDSX,
         probabilities: result.probabilities,
         confidenceScore: result.confidenceScore,
         confidenceBreakdown: result.confidenceBreakdown,
@@ -1734,18 +1743,27 @@ function App() {
     confidenceBreakdown = null,
     betData = null
   ) => {
+    // Add safety checks for undefined values
+    const safeTeamIncluded = teamIncluded || "";
+    const safeHomeTeam = homeTeam || "";
+    const safeAwayTeam = awayTeam || "";
+
     if (confidenceScore >= 7) {
-      if (teamIncluded.toLowerCase().includes(homeTeam.toLowerCase())) {
+      if (safeTeamIncluded.toLowerCase().includes(safeHomeTeam.toLowerCase())) {
         return "Home Win";
-      } else if (teamIncluded.toLowerCase().includes(awayTeam.toLowerCase())) {
+      } else if (
+        safeTeamIncluded.toLowerCase().includes(safeAwayTeam.toLowerCase())
+      ) {
         return "Away Win";
       } else {
         return "Win";
       }
     } else if (confidenceScore >= 4) {
-      if (teamIncluded.toLowerCase().includes(homeTeam.toLowerCase())) {
+      if (safeTeamIncluded.toLowerCase().includes(safeHomeTeam.toLowerCase())) {
         return "Double Chance Home/Draw";
-      } else if (teamIncluded.toLowerCase().includes(awayTeam.toLowerCase())) {
+      } else if (
+        safeTeamIncluded.toLowerCase().includes(safeAwayTeam.toLowerCase())
+      ) {
         return "Double Chance Away/Draw";
       } else {
         return "Double Chance";
@@ -2252,7 +2270,8 @@ function App() {
       const fetchedNewBets = await fetchNewBets();
       setNewBets(fetchedNewBets);
 
-      if (fetchedNewBets.length === 0) {
+      if (!fetchedNewBets || fetchedNewBets.length === 0) {
+        console.log("No new bets found or fetch failed");
         setAnalysisResults([]);
         return;
       }
@@ -2265,14 +2284,15 @@ function App() {
 
       // Analyze each deduplicated new bet
       const results = deduplicatedNewBets.map((newBet) => {
-        const teamName = newBet.team_included;
-        const country = newBet.country;
-        const league = newBet.league;
+        const teamName = newBet.TEAM_INCLUDED;
+        const country = newBet.COUNTRY;
+        const league = newBet.LEAGUE;
 
         // Check if team is blacklisted (any country/league)
         const isBlacklisted = (blacklistedTeams || []).some(
           (blacklistedTeam) =>
-            blacklistedTeam.team_name?.toLowerCase() === (teamName || "").toLowerCase()
+            blacklistedTeam.team_name?.toLowerCase() ===
+            (teamName || "").toLowerCase()
         );
 
         // Get historical performance for this team (EXACT country + league match only)
@@ -2285,9 +2305,9 @@ function App() {
 
           // Match by exact team name, country, and league
           return (
-            betTeamIncluded === teamName.toLowerCase() &&
-            betCountry === country.toLowerCase() &&
-            betLeague === league.toLowerCase()
+            betTeamIncluded === (teamName || "").toLowerCase() &&
+            betCountry === (country || "").toLowerCase() &&
+            betLeague === (league || "").toLowerCase()
           );
         });
 
@@ -2327,53 +2347,64 @@ function App() {
 
         // Determine which odds to use based on the team you bet on
         let betOdds = 0;
-        const homeTeam = newBet.home_team;
-        const awayTeam = newBet.away_team;
+        const homeTeam = newBet.HOME_TEAM;
+        const awayTeam = newBet.AWAY_TEAM;
 
         // If you bet on the home team, use odds1
-        if (teamName.toLowerCase().includes(homeTeam.toLowerCase())) {
-          betOdds = newBet.odds1;
+        if (
+          (teamName || "")
+            .toLowerCase()
+            .includes((homeTeam || "").toLowerCase())
+        ) {
+          betOdds = parseFloat(newBet.ODDS1) || 0;
         }
         // If you bet on the away team, use odds2
-        else if (teamName.toLowerCase().includes(awayTeam.toLowerCase())) {
-          betOdds = newBet.odds2;
+        else if (
+          (teamName || "")
+            .toLowerCase()
+            .includes((awayTeam || "").toLowerCase())
+        ) {
+          betOdds = parseFloat(newBet.ODDS2) || 0;
         }
         // Fallback: use the higher odds
         else {
-          betOdds = Math.max(newBet.odds1, newBet.odds2);
+          betOdds = Math.max(
+            parseFloat(newBet.ODDS1) || 0,
+            parseFloat(newBet.ODDS2) || 0
+          );
         }
 
         // Check for previous matchups (same two teams)
         const previousMatchups = findPreviousMatchups(
-          newBet.home_team,
-          newBet.away_team,
-          newBet.country,
-          newBet.league
+          newBet.HOME_TEAM || "",
+          newBet.AWAY_TEAM || "",
+          newBet.COUNTRY || "",
+          newBet.LEAGUE || ""
         );
 
         // Calculate confidence score
         const confidenceScore = calculateConfidenceScore({
-          team_included: teamName,
-          country: country,
-          league: league,
-          odds1: newBet.odds1,
-          bet_type: newBet.bet_type,
-          home_team: newBet.home_team,
-          away_team: newBet.away_team,
-          home_team_position: newBet.home_team_position,
-          away_team_position: newBet.away_team_position,
+          team_included: teamName || "",
+          country: country || "",
+          league: league || "",
+          odds1: parseFloat(newBet.ODDS1) || 0,
+          bet_type: newBet.BET_TYPE || "",
+          home_team: newBet.HOME_TEAM || "",
+          away_team: newBet.AWAY_TEAM || "",
+          home_team_position: newBet.HOME_TEAM_POSITION || "",
+          away_team_position: newBet.AWAY_TEAM_POSITION || "",
         });
 
         const confidenceBreakdown = getConfidenceBreakdown({
-          team_included: teamName,
-          country: country,
-          league: league,
-          odds1: newBet.odds1,
-          bet_type: newBet.bet_type,
-          home_team: newBet.home_team,
-          away_team: newBet.away_team,
-          home_team_position: newBet.home_team_position,
-          away_team_position: newBet.away_team_position,
+          team_included: teamName || "",
+          country: country || "",
+          league: league || "",
+          odds1: parseFloat(newBet.ODDS1) || 0,
+          bet_type: newBet.BET_TYPE || "",
+          home_team: newBet.HOME_TEAM || "",
+          away_team: newBet.AWAY_TEAM || "",
+          home_team_position: newBet.HOME_TEAM_POSITION || "",
+          away_team_position: newBet.AWAY_TEAM_POSITION || "",
         });
 
         const confidenceLabel = getConfidenceLabel(confidenceScore);
@@ -2389,8 +2420,8 @@ function App() {
           recommendation = getConfidenceRecommendation(
             confidenceScore,
             teamName,
-            newBet.home_team,
-            newBet.away_team,
+            newBet.HOME_TEAM,
+            newBet.AWAY_TEAM,
             confidenceBreakdown,
             newBet
           );
@@ -2417,17 +2448,17 @@ function App() {
 
         // Calculate probabilities using the new ODDSX column
         const probabilities = calculateProbabilities(
-          newBet.odds1,
-          newBet.oddsX,
-          newBet.odds2
+          parseFloat(newBet.ODDS1) || 0,
+          parseFloat(newBet.ODDSX) || 0,
+          parseFloat(newBet.ODDS2) || 0
         );
 
         // Get scoring recommendation
         const scoringRecommendation = getScoringRecommendation(
-          newBet.home_team,
-          newBet.away_team,
-          newBet.league,
-          newBet.league,
+          newBet.HOME_TEAM || "",
+          newBet.AWAY_TEAM || "",
+          newBet.LEAGUE || "",
+          newBet.LEAGUE || "",
           scoringData
         );
 
@@ -2522,7 +2553,7 @@ function App() {
       setScoringAnalysisLoading(true);
 
       // Get completed historical bets with scores and results
-      const completedBetsWithScores = bets.filter(
+      const completedBetsWithScores = (bets || []).filter(
         (bet) =>
           bet.HOME_SCORE !== null &&
           bet.HOME_SCORE !== undefined &&
@@ -2534,11 +2565,11 @@ function App() {
             bet.RESULT.toLowerCase().includes("loss"))
       );
 
-      console.log("Total bets:", bets.length);
-      console.log("Sample bet fields:", Object.keys(bets[0] || {}));
+      console.log("Total bets:", (bets || []).length);
+      console.log("Sample bet fields:", Object.keys((bets || [])[0] || {}));
       console.log(
         "Sample bet with result:",
-        bets.find((bet) => bet.RESULT && bet.RESULT.trim() !== "")
+        (bets || []).find((bet) => bet.RESULT && bet.RESULT.trim() !== "")
       );
       console.log(
         "Completed bets with scores:",
@@ -3079,12 +3110,27 @@ function App() {
   };
 
   const getTeamNotesForTeam = (teamName, country, league) => {
-    return teamNotes.filter(
-      (note) =>
-        note.team_name === teamName &&
-        note.country === country &&
-        note.league === league
-    );
+    console.log("Looking for team notes for:", { teamName, country, league });
+    console.log("Available team notes:", teamNotes);
+
+    const filteredNotes = teamNotes.filter((note) => {
+      const matches =
+        note.TEAM_NAME === teamName &&
+        note.COUNTRY === country &&
+        note.LEAGUE === league;
+      console.log(
+        "Checking note:",
+        note.TEAM_NAME,
+        "vs",
+        teamName,
+        "=",
+        matches
+      );
+      return matches;
+    });
+
+    console.log("Found team notes:", filteredNotes);
+    return filteredNotes;
   };
 
   const isTeamInTop40 = (teamName) => {
@@ -3124,7 +3170,7 @@ function App() {
 
     newBets.forEach((bet) => {
       // Create a unique key based on the game details (excluding BET_ID)
-      const key = `${bet.date}_${bet.home_team}_${bet.away_team}_${bet.country}_${bet.league}_${bet.bet_type}_${bet.bet_selection}_${bet.team_included}`;
+      const key = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.COUNTRY}_${bet.LEAGUE}_${bet.BET_TYPE}_${bet.BET_SELECTION}_${bet.TEAM_INCLUDED}`;
 
       if (!uniqueBets.has(key)) {
         uniqueBets.set(key, bet);
@@ -4440,11 +4486,11 @@ function App() {
                   <tr>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
-                      onClick={() => handleBlacklistSort("country")}
+                      onClick={() => handleBlacklistSort("COUNTRY")}
                     >
                       <div className="flex items-center justify-between">
                         <span>Country</span>
-                        {blacklistSortConfig.key === "country" && (
+                        {blacklistSortConfig.key === "COUNTRY" && (
                           <span className="ml-2">
                             {blacklistSortConfig.direction === "asc"
                               ? "↑"
@@ -4455,7 +4501,7 @@ function App() {
                     </th>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
-                      onClick={() => handleBlacklistSort("league")}
+                      onClick={() => handleBlacklistSort("LEAGUE")}
                     >
                       <div className="flex items-center justify-between">
                         <span>League</span>
@@ -4470,11 +4516,11 @@ function App() {
                     </th>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
-                      onClick={() => handleBlacklistSort("team_name")}
+                      onClick={() => handleBlacklistSort("TEAM_NAME")}
                     >
                       <div className="flex items-center justify-between">
                         <span>Team Name</span>
-                        {blacklistSortConfig.key === "team_name" && (
+                        {blacklistSortConfig.key === "TEAM_NAME" && (
                           <span className="ml-2">
                             {blacklistSortConfig.direction === "asc"
                               ? "↑"
@@ -4508,13 +4554,13 @@ function App() {
                         className="hover:bg-white/5 transition-colors"
                       >
                         <td className="px-4 py-2 text-gray-200 font-medium capitalize">
-                          {team.country}
+                          {team.COUNTRY}
                         </td>
                         <td className="px-4 py-2 text-gray-200 font-medium capitalize">
-                          {team.league}
+                          {team.LEAGUE}
                         </td>
                         <td className="px-4 py-2 text-gray-200 font-medium capitalize">
-                          {team.team_name}
+                          {team.TEAM_NAME}
                         </td>
                         <td className="px-4 py-2">
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -4931,15 +4977,15 @@ function App() {
                           }`}
                         >
                           <td className="px-4 py-6 text-gray-300">
-                            {formatDate(result.date)}
+                            {formatDate(result.DATE)}
                           </td>
                           <td className="px-4 py-6 text-gray-300">
                             <div className="text-sm">
                               <div>
-                                {result.home_team} vs {result.away_team}
+                                {result.HOME_TEAM} vs {result.AWAY_TEAM}
                               </div>
                               <div className="text-gray-400 text-xs">
-                                {result.country} • {result.league}
+                                {result.COUNTRY} • {result.LEAGUE}
                               </div>
                             </div>
                           </td>
@@ -4947,10 +4993,10 @@ function App() {
                             <div className="text-sm">
                               {(() => {
                                 const homeBadge = getPositionBadge(
-                                  result.home_team_position
+                                  result.HOME_TEAM_POSITION
                                 );
                                 const awayBadge = getPositionBadge(
-                                  result.away_team_position
+                                  result.AWAY_TEAM_POSITION
                                 );
                                 return (
                                   <div>
@@ -4975,11 +5021,11 @@ function App() {
                           </td>
                           <td className="px-4 py-6 text-purple-300 font-medium">
                             <div>
-                              {result.team_included}
-                              {isTeamInTop40(result.team_included) && (
+                              {result.TEAM_INCLUDED}
+                              {isTeamInTop40(result.TEAM_INCLUDED) && (
                                 <div className="text-xs text-yellow-400 mt-1">
                                   Top 40: #
-                                  {getTop40Ranking(result.team_included)}
+                                  {getTop40Ranking(result.TEAM_INCLUDED)}
                                 </div>
                               )}
                             </div>
@@ -5012,9 +5058,9 @@ function App() {
                               {(() => {
                                 const betTypeAnalytics =
                                   getBetTypeAnalyticsForTeam(
-                                    result.team_included,
-                                    result.country,
-                                    result.league
+                                    result.TEAM_INCLUDED,
+                                    result.COUNTRY,
+                                    result.LEAGUE
                                   );
 
                                 if (
@@ -5067,14 +5113,14 @@ function App() {
                               {/* Team Notes Display */}
                               {(() => {
                                 const homeTeamNotes = getTeamNotesForTeam(
-                                  result.home_team,
-                                  result.country,
-                                  result.league
+                                  result.HOME_TEAM,
+                                  result.COUNTRY,
+                                  result.LEAGUE
                                 );
                                 const awayTeamNotes = getTeamNotesForTeam(
-                                  result.away_team,
-                                  result.country,
-                                  result.league
+                                  result.AWAY_TEAM,
+                                  result.COUNTRY,
+                                  result.LEAGUE
                                 );
 
                                 if (
@@ -5092,11 +5138,11 @@ function App() {
                                           className="text-xs text-orange-300 mb-1"
                                         >
                                           <span className="font-medium">
-                                            {result.home_team}:
+                                            {result.HOME_TEAM}:
                                           </span>{" "}
-                                          {note.note}
+                                          {note.NOTE}
                                           <span className="text-gray-400 ml-1">
-                                            ({note.date_added})
+                                            ({note.DATE_ADDED})
                                           </span>
                                         </div>
                                       ))}
@@ -5106,11 +5152,11 @@ function App() {
                                           className="text-xs text-orange-300 mb-1"
                                         >
                                           <span className="font-medium">
-                                            {result.away_team}:
+                                            {result.AWAY_TEAM}:
                                           </span>{" "}
-                                          {note.note}
+                                          {note.NOTE}
                                           <span className="text-gray-400 ml-1">
-                                            ({note.date_added})
+                                            ({note.DATE_ADDED})
                                           </span>
                                         </div>
                                       ))}
@@ -6094,11 +6140,11 @@ function App() {
                   <tr>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
-                      onClick={() => handleTeamNotesSort("country")}
+                      onClick={() => handleTeamNotesSort("COUNTRY")}
                     >
                       <div className="flex items-center">
                         Country
-                        {teamNotesSortConfig.key === "country" && (
+                        {teamNotesSortConfig.key === "COUNTRY" && (
                           <span className="ml-1">
                             {teamNotesSortConfig.direction === "asc"
                               ? "↑"
@@ -6109,11 +6155,11 @@ function App() {
                     </th>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
-                      onClick={() => handleTeamNotesSort("league")}
+                      onClick={() => handleTeamNotesSort("LEAGUE")}
                     >
                       <div className="flex items-center">
                         League
-                        {teamNotesSortConfig.key === "league" && (
+                        {teamNotesSortConfig.key === "LEAGUE" && (
                           <span className="ml-1">
                             {teamNotesSortConfig.direction === "asc"
                               ? "↑"
@@ -6124,11 +6170,11 @@ function App() {
                     </th>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
-                      onClick={() => handleTeamNotesSort("team_name")}
+                      onClick={() => handleTeamNotesSort("TEAM_NAME")}
                     >
                       <div className="flex items-center">
                         Team Name
-                        {teamNotesSortConfig.key === "team_name" && (
+                        {teamNotesSortConfig.key === "TEAM_NAME" && (
                           <span className="ml-1">
                             {teamNotesSortConfig.direction === "asc"
                               ? "↑"
@@ -6142,11 +6188,11 @@ function App() {
                     </th>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10"
-                      onClick={() => handleTeamNotesSort("date_added")}
+                      onClick={() => handleTeamNotesSort("DATE_ADDED")}
                     >
                       <div className="flex items-center">
                         Date Added
-                        {teamNotesSortConfig.key === "date_added" && (
+                        {teamNotesSortConfig.key === "DATE_ADDED" && (
                           <span className="ml-1">
                             {teamNotesSortConfig.direction === "asc"
                               ? "↑"
@@ -6166,15 +6212,15 @@ function App() {
                       }`}
                     >
                       <td className="px-4 py-4 text-gray-300">
-                        {note.country}
+                        {note.COUNTRY}
                       </td>
-                      <td className="px-4 py-4 text-gray-300">{note.league}</td>
+                      <td className="px-4 py-4 text-gray-300">{note.LEAGUE}</td>
                       <td className="px-4 py-4 text-purple-300 font-medium">
-                        {note.team_name}
+                        {note.TEAM_NAME}
                       </td>
-                      <td className="px-4 py-4 text-orange-300">{note.note}</td>
+                      <td className="px-4 py-4 text-orange-300">{note.NOTE}</td>
                       <td className="px-4 py-4 text-gray-400 text-sm">
-                        {note.date_added}
+                        {note.DATE_ADDED}
                       </td>
                     </tr>
                   ))}
