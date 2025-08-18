@@ -78,10 +78,11 @@ function App() {
   const [newBets, setNewBets] = useState([]);
   const [analysisResults, setAnalysisResults] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [betRecommendations, setBetRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', 'teamNotes', or 'betTypeAnalytics'
+  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', 'teamNotes', 'betTypeAnalytics', or 'recommendations'
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [leagueSortConfig, setLeagueSortConfig] = useState({
     key: "winRate",
@@ -1627,6 +1628,63 @@ function App() {
     }
   };
 
+  const generateBetRecommendations = (analysisResults) => {
+    if (!analysisResults || analysisResults.length === 0) return [];
+
+    // Filter out "Avoid" recommendations and sort by confidence
+    const validBets = analysisResults
+      .filter((result) => !result.recommendation.includes("Avoid"))
+      .sort((a, b) => b.confidenceScore - a.confidenceScore);
+
+    // Calculate recommendation scores (confidence + odds factor)
+    const recommendations = validBets.slice(0, 10).map((bet, index) => {
+      const odds = parseFloat(bet.ODDS1) || 2.0;
+      const confidence = bet.confidenceScore || 5.0;
+
+      // Calculate recommendation score (higher confidence + good odds = better score)
+      const recommendationScore = confidence * (odds > 1.5 ? 1.2 : 1.0);
+
+      // Determine over/under recommendation based on scoring analysis
+      let overUnderRecommendation = "";
+      let overUnderConfidence = 0;
+
+      if (bet.scoringRecommendation) {
+        const avgGoals = bet.scoringRecommendation.averageGoals || 0;
+        const typicalLine = 2.5; // Assume typical over/under line
+
+        if (avgGoals > typicalLine + 0.5) {
+          overUnderRecommendation = "OVER 2.5";
+          overUnderConfidence = Math.min(confidence + 0.5, 10);
+        } else if (avgGoals < typicalLine - 0.5) {
+          overUnderRecommendation = "UNDER 2.5";
+          overUnderConfidence = Math.min(confidence + 0.3, 10);
+        }
+      }
+
+      return {
+        rank: index + 1,
+        match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
+        league: bet.LEAGUE,
+        country: bet.COUNTRY,
+        recommendedBet: bet.TEAM_INCLUDED,
+        confidence: confidence,
+        odds: odds,
+        recommendationScore: recommendationScore,
+        overUnderRecommendation: overUnderRecommendation,
+        overUnderConfidence: overUnderConfidence,
+        reasoning: bet.recommendation,
+        riskLevel:
+          confidence >= 8 ? "Low" : confidence >= 6 ? "Medium" : "High",
+        combinedBet: overUnderRecommendation
+          ? `${bet.TEAM_INCLUDED} + ${overUnderRecommendation}`
+          : bet.TEAM_INCLUDED,
+      };
+    });
+
+    // Return all recommendations
+    return recommendations;
+  };
+
   // Generate detailed reasoning for why a bet should be avoided
   const getAvoidReasoning = (bet, confidenceBreakdown) => {
     const reasons = [];
@@ -2580,6 +2638,10 @@ function App() {
       });
 
       setAnalysisResults(results);
+
+      // Generate bet recommendations
+      const recommendations = generateBetRecommendations(results);
+      setBetRecommendations(recommendations);
 
       // Automatically store predictions
       if (results.length > 0) {
@@ -4082,6 +4144,16 @@ function App() {
           >
             Head to Head
           </button>
+          <button
+            onClick={() => setActiveTab("recommendations")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "recommendations"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Bet Recommendations
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -5538,6 +5610,71 @@ function App() {
                 <p className="text-gray-500">
                   Click the button above to fetch and analyze new bets from
                   Sheet3.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "recommendations" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">
+              🎯 Bet Recommendations
+            </h3>
+            <div className="text-gray-300 mb-6">
+              <p>
+                All betting recommendations based on confidence scores, odds
+                analysis, and scoring patterns. Run "Fetch & Analyze New Bets"
+                in the Bet Analysis tab to generate recommendations.
+              </p>
+            </div>
+
+            {betRecommendations.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-white/20">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-white font-semibold">
+                        Rank
+                      </th>
+                      <th className="px-4 py-2 text-left text-white font-semibold">
+                        Match
+                      </th>
+                      <th className="px-4 py-2 text-left text-white font-semibold">
+                        Recommendation
+                      </th>
+                      <th className="px-4 py-2 text-left text-white font-semibold">
+                        Reasoning
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {betRecommendations.map((rec, index) => (
+                      <tr key={index} className="hover:bg-white/5">
+                        <td className="px-4 py-3 text-white font-medium">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-3 text-gray-300">{rec.match}</td>
+                        <td className="px-4 py-3 text-white font-medium">
+                          Bet on: {rec.recommendedBet}
+                        </td>
+                        <td className="px-4 py-3 text-gray-300 text-sm">
+                          {rec.reasoning}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">🎯</div>
+                <h4 className="text-lg font-semibold text-white mb-2">
+                  No Recommendations Yet
+                </h4>
+                <p className="text-gray-300">
+                  Run "Fetch & Analyze New Bets" in the Bet Analysis tab to
+                  generate betting recommendations.
                 </p>
               </div>
             )}
