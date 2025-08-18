@@ -1343,23 +1343,39 @@ function App() {
     awayPosition,
     teamIncluded,
     homeTeam,
-    awayTeam
+    awayTeam,
+    betData
   ) => {
-    // If either position is "Cup" or missing, exclude from calculation
+    console.log("=== POSITION CONFIDENCE CALCULATION ===");
+    console.log("Bet Data:", betData);
+    console.log("League:", betData?.LEAGUE);
+    console.log("Home Position Number:", betData?.HOME_TEAM_POSITION_NUMBER);
+    console.log("Away Position Number:", betData?.AWAY_TEAM_POSITION_NUMBER);
+    console.log("Total Teams:", betData?.TOTAL_TEAMS_IN_LEAGUE);
+    console.log("Home Games Played:", betData?.HOME_TEAM_GAMES_PLAYED);
+    console.log("Away Games Played:", betData?.AWAY_TEAM_GAMES_PLAYED);
+
+    // If league is "CUP" or missing position data, exclude from calculation
     if (
-      !homePosition ||
-      !awayPosition ||
-      homePosition === "Cup" ||
-      awayPosition === "Cup"
+      !betData ||
+      betData.LEAGUE === "CUP" ||
+      !betData.HOME_TEAM_POSITION_NUMBER ||
+      !betData.AWAY_TEAM_POSITION_NUMBER ||
+      !betData.TOTAL_TEAMS_IN_LEAGUE
     ) {
+      console.log("Skipping position calculation - Cup game or missing data");
       return 5; // Neutral score for cup games or missing data
     }
 
-    // Define position hierarchy
-    const positionValues = { Top: 3, Mid: 2, Bottom: 1 };
+    const homePositionNum = parseInt(betData.HOME_TEAM_POSITION_NUMBER);
+    const awayPositionNum = parseInt(betData.AWAY_TEAM_POSITION_NUMBER);
+    const totalTeams = parseInt(betData.TOTAL_TEAMS_IN_LEAGUE);
+    const homeGamesPlayed = parseInt(betData.HOME_TEAM_GAMES_PLAYED) || 0;
+    const awayGamesPlayed = parseInt(betData.AWAY_TEAM_GAMES_PLAYED) || 0;
 
-    const homeValue = positionValues[homePosition] || 2;
-    const awayValue = positionValues[awayPosition] || 2;
+    // Calculate position percentages (lower percentage = better position)
+    const homePositionPercent = (homePositionNum / totalTeams) * 100;
+    const awayPositionPercent = (awayPositionNum / totalTeams) * 100;
 
     // Determine which team you're betting on
     const isBettingOnHomeTeam =
@@ -1371,27 +1387,66 @@ function App() {
       awayTeam &&
       teamIncluded.toLowerCase().includes(awayTeam.toLowerCase());
 
-    // Calculate advantage from the perspective of the team you're betting on
-    let advantage;
+    // Calculate position advantage from the perspective of the team you're betting on
+    let positionAdvantage;
     if (isBettingOnHomeTeam) {
-      // You're betting on home team, so advantage = homeValue - awayValue
-      advantage = homeValue - awayValue;
+      // You're betting on home team, so advantage = awayPositionPercent - homePositionPercent (positive = home team better)
+      positionAdvantage = awayPositionPercent - homePositionPercent;
     } else if (isBettingOnAwayTeam) {
-      // You're betting on away team, so advantage = awayValue - homeValue
-      advantage = awayValue - homeValue;
+      // You're betting on away team, so advantage = homePositionPercent - awayPositionPercent (positive = away team better)
+      positionAdvantage = homePositionPercent - awayPositionPercent;
     } else {
       // Fallback: use home team perspective
-      advantage = homeValue - awayValue;
+      positionAdvantage = awayPositionPercent - homePositionPercent;
     }
 
-    // Convert advantage to confidence score (0-10)
-    if (advantage >= 2) return 9; // Strong advantage
-    if (advantage === 1) return 7; // Moderate advantage
-    if (advantage === 0) return 5; // Even matchups
-    if (advantage === -1) return 3; // Moderate disadvantage
-    if (advantage <= -2) return 1; // Strong disadvantage
+    // Calculate games played confidence factor
+    const minGamesForFullConfidence = 10;
+    const homeGamesConfidence = Math.min(
+      homeGamesPlayed / minGamesForFullConfidence,
+      1
+    );
+    const awayGamesConfidence = Math.min(
+      awayGamesPlayed / minGamesForFullConfidence,
+      1
+    );
+    const gamesConfidence = (homeGamesConfidence + awayGamesConfidence) / 2;
 
-    return 5; // Default neutral score
+    // Calculate base position confidence (0-10)
+    let baseConfidence = 5; // Start neutral
+
+    if (positionAdvantage >= 20)
+      baseConfidence = 9; // Strong advantage (20%+ better position)
+    else if (positionAdvantage >= 10)
+      baseConfidence = 8; // Good advantage (10-20% better)
+    else if (positionAdvantage >= 5)
+      baseConfidence = 7; // Moderate advantage (5-10% better)
+    else if (positionAdvantage >= 2)
+      baseConfidence = 6; // Slight advantage (2-5% better)
+    else if (positionAdvantage >= -2)
+      baseConfidence = 5; // Even matchup (-2% to +2%)
+    else if (positionAdvantage >= -5)
+      baseConfidence = 4; // Slight disadvantage (-2% to -5%)
+    else if (positionAdvantage >= -10)
+      baseConfidence = 3; // Moderate disadvantage (-5% to -10%)
+    else if (positionAdvantage >= -20)
+      baseConfidence = 2; // Good disadvantage (-10% to -20%)
+    else baseConfidence = 1; // Strong disadvantage (-20%+ worse position)
+
+    // Apply games played confidence factor
+    const finalConfidence =
+      baseConfidence * gamesConfidence + 5 * (1 - gamesConfidence);
+
+    console.log("Position Advantage:", positionAdvantage);
+    console.log("Base Confidence:", baseConfidence);
+    console.log("Games Confidence:", gamesConfidence);
+    console.log(
+      "Final Position Confidence:",
+      Math.round(finalConfidence * 10) / 10
+    );
+    console.log("=== END POSITION CONFIDENCE ===\n");
+
+    return Math.round(finalConfidence * 10) / 10; // Round to 1 decimal place
   };
 
   const calculateHomeAwayConfidence = (
@@ -1673,35 +1728,48 @@ function App() {
     }
 
     // Position confidence reasoning
-    if (confidenceBreakdown.position < 4) {
-      if (
-        !bet.home_team_position ||
-        !bet.away_team_position ||
-        bet.home_team_position === "Cup" ||
-        bet.away_team_position === "Cup"
-      ) {
-        reasons.push("Cup game or missing position data - unpredictable");
+    if (confidenceBreakdown.position < 4 && bet.LEAGUE !== "CUP") {
+      if (bet.HOME_TEAM_POSITION_NUMBER && bet.AWAY_TEAM_POSITION_NUMBER) {
+        const homePos = parseInt(bet.HOME_TEAM_POSITION_NUMBER);
+        const awayPos = parseInt(bet.AWAY_TEAM_POSITION_NUMBER);
+        const totalTeams = parseInt(bet.TOTAL_TEAMS_IN_LEAGUE);
+
+        if (totalTeams > 0) {
+          const homePercent = (homePos / totalTeams) * 100;
+          const awayPercent = (awayPos / totalTeams) * 100;
+
+          // Determine which team is being bet on
+          const isBettingOnHomeTeam =
+            (bet.team_included || "") &&
+            (bet.home_team || "") &&
+            (bet.team_included || "")
+              .toLowerCase()
+              .includes((bet.home_team || "").toLowerCase());
+
+          if (isBettingOnHomeTeam && homePercent > 60) {
+            reasons.push(
+              `Poor league position: Home team in bottom ${(
+                100 - homePercent
+              ).toFixed(0)}% of league`
+            );
+          } else if (!isBettingOnHomeTeam && awayPercent > 60) {
+            reasons.push(
+              `Poor league position: Away team in bottom ${(
+                100 - awayPercent
+              ).toFixed(0)}% of league`
+            );
+          }
+        }
       } else {
-        const isBettingOnHomeTeam = bet.team_included
-          .toLowerCase()
-          .includes(bet.home_team.toLowerCase());
-        const bettingTeamPosition = isBettingOnHomeTeam
-          ? bet.home_team_position
-          : bet.away_team_position;
-        const opponentPosition = isBettingOnHomeTeam
-          ? bet.away_team_position
-          : bet.home_team_position;
-        reasons.push(
-          `Position disadvantage: ${bettingTeamPosition} vs ${opponentPosition}`
-        );
+        reasons.push("Missing league position data");
       }
     }
 
     // Home/Away confidence reasoning
     if (confidenceBreakdown.homeAway < 4) {
-      const isBettingOnHomeTeam = bet.team_included
+      const isBettingOnHomeTeam = (bet.team_included || "")
         .toLowerCase()
-        .includes(bet.home_team.toLowerCase());
+        .includes((bet.home_team || "").toLowerCase());
       const gameType = isBettingOnHomeTeam ? "home" : "away";
 
       const homeAwayBets = bets.filter(
@@ -1798,7 +1866,8 @@ function App() {
       bet.away_team_position,
       bet.team_included,
       bet.home_team,
-      bet.away_team
+      bet.away_team,
+      bet
     );
 
     // Determine if this is a home or away game for the team being bet on
@@ -1850,7 +1919,8 @@ function App() {
       bet.away_team_position,
       bet.team_included,
       bet.home_team,
-      bet.away_team
+      bet.away_team,
+      bet
     );
 
     // Determine if this is a home or away game for the team being bet on
@@ -2393,6 +2463,18 @@ function App() {
           away_team: newBet.AWAY_TEAM || "",
           home_team_position: newBet.HOME_TEAM_POSITION || "",
           away_team_position: newBet.AWAY_TEAM_POSITION || "",
+          HOME_TEAM_POSITION_NUMBER: newBet.HOME_TEAM_POSITION_NUMBER || "",
+          AWAY_TEAM_POSITION_NUMBER: newBet.AWAY_TEAM_POSITION_NUMBER || "",
+          HOME_TEAM_POINTS_FROM_TOP: newBet.HOME_TEAM_POINTS_FROM_TOP || "",
+          AWAY_TEAM_POINTS_FROM_TOP: newBet.AWAY_TEAM_POINTS_FROM_TOP || "",
+          HOME_TEAM_POINTS_FROM_BOTTOM:
+            newBet.HOME_TEAM_POINTS_FROM_BOTTOM || "",
+          AWAY_TEAM_POINTS_FROM_BOTTOM:
+            newBet.AWAY_TEAM_POINTS_FROM_BOTTOM || "",
+          TOTAL_TEAMS_IN_LEAGUE: newBet.TOTAL_TEAMS_IN_LEAGUE || "",
+          HOME_TEAM_GAMES_PLAYED: newBet.HOME_TEAM_GAMES_PLAYED || "",
+          AWAY_TEAM_GAMES_PLAYED: newBet.AWAY_TEAM_GAMES_PLAYED || "",
+          LEAGUE: newBet.LEAGUE || "",
         });
 
         const confidenceBreakdown = getConfidenceBreakdown({
@@ -2405,6 +2487,18 @@ function App() {
           away_team: newBet.AWAY_TEAM || "",
           home_team_position: newBet.HOME_TEAM_POSITION || "",
           away_team_position: newBet.AWAY_TEAM_POSITION || "",
+          HOME_TEAM_POSITION_NUMBER: newBet.HOME_TEAM_POSITION_NUMBER || "",
+          AWAY_TEAM_POSITION_NUMBER: newBet.AWAY_TEAM_POSITION_NUMBER || "",
+          HOME_TEAM_POINTS_FROM_TOP: newBet.HOME_TEAM_POINTS_FROM_TOP || "",
+          AWAY_TEAM_POINTS_FROM_TOP: newBet.AWAY_TEAM_POINTS_FROM_TOP || "",
+          HOME_TEAM_POINTS_FROM_BOTTOM:
+            newBet.HOME_TEAM_POINTS_FROM_BOTTOM || "",
+          AWAY_TEAM_POINTS_FROM_BOTTOM:
+            newBet.AWAY_TEAM_POINTS_FROM_BOTTOM || "",
+          TOTAL_TEAMS_IN_LEAGUE: newBet.TOTAL_TEAMS_IN_LEAGUE || "",
+          HOME_TEAM_GAMES_PLAYED: newBet.HOME_TEAM_GAMES_PLAYED || "",
+          AWAY_TEAM_GAMES_PLAYED: newBet.AWAY_TEAM_GAMES_PLAYED || "",
+          LEAGUE: newBet.LEAGUE || "",
         });
 
         const confidenceLabel = getConfidenceLabel(confidenceScore);
