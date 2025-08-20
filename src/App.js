@@ -1636,53 +1636,280 @@ function App() {
       .filter((result) => !result.recommendation.includes("Avoid"))
       .sort((a, b) => b.confidenceScore - a.confidenceScore);
 
-    // Calculate recommendation scores (confidence + odds factor)
-    const recommendations = validBets.slice(0, 10).map((bet, index) => {
+    // Generate comprehensive recommendations for each bet
+    const recommendations = validBets.slice(0, 40).map((bet, index) => {
       const odds = parseFloat(bet.ODDS1) || 2.0;
       const confidence = bet.confidenceScore || 5.0;
 
       // Calculate recommendation score (higher confidence + good odds = better score)
       const recommendationScore = confidence * (odds > 1.5 ? 1.2 : 1.0);
 
-      // Determine over/under recommendation based on scoring analysis
-      let overUnderRecommendation = "";
-      let overUnderConfidence = 0;
+      // Get team data for comprehensive analysis
+      const homeTeam = bet.HOME_TEAM;
+      const awayTeam = bet.AWAY_TEAM;
+      const country = bet.COUNTRY;
+      const league = bet.LEAGUE;
 
-      if (bet.scoringRecommendation) {
-        const avgGoals = bet.scoringRecommendation.averageGoals || 0;
-        const typicalLine = 2.5; // Assume typical over/under line
+      // Analyze straight win recommendation
+      const straightWinRecommendation = analyzeStraightWin(
+        homeTeam,
+        awayTeam,
+        country,
+        league,
+        bet
+      );
 
-        if (avgGoals > typicalLine + 0.5) {
-          overUnderRecommendation = "OVER 2.5";
-          overUnderConfidence = Math.min(confidence + 0.5, 10);
-        } else if (avgGoals < typicalLine - 0.5) {
-          overUnderRecommendation = "UNDER 2.5";
-          overUnderConfidence = Math.min(confidence + 0.3, 10);
-        }
-      }
+      // Analyze double chance recommendation
+      const doubleChanceRecommendation = analyzeDoubleChance(
+        homeTeam,
+        awayTeam,
+        country,
+        league,
+        bet
+      );
+
+      // Analyze over/under recommendation
+      const overUnderRecommendation = analyzeOverUnder(
+        homeTeam,
+        awayTeam,
+        country,
+        league,
+        bet
+      );
 
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
         league: bet.LEAGUE,
         country: bet.COUNTRY,
-        recommendedBet: bet.TEAM_INCLUDED,
+        straightWin: straightWinRecommendation,
+        doubleChance: doubleChanceRecommendation,
+        overUnder: overUnderRecommendation,
         confidence: confidence,
         odds: odds,
         recommendationScore: recommendationScore,
-        overUnderRecommendation: overUnderRecommendation,
-        overUnderConfidence: overUnderConfidence,
-        reasoning: bet.recommendation,
-        riskLevel:
-          confidence >= 8 ? "Low" : confidence >= 6 ? "Medium" : "High",
-        combinedBet: overUnderRecommendation
-          ? `${bet.TEAM_INCLUDED} + ${overUnderRecommendation}`
-          : bet.TEAM_INCLUDED,
       };
     });
 
     // Return all recommendations
     return recommendations;
+  };
+
+  const analyzeStraightWin = (homeTeam, awayTeam, country, league, betData) => {
+    // Get historical data for both teams
+    const homeTeamBets = (bets || []).filter(
+      (b) =>
+        b.TEAM_INCLUDED === homeTeam &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.BET_TYPE === "Win" &&
+        b.RESULT &&
+        b.RESULT.trim() !== ""
+    );
+
+    const awayTeamBets = (bets || []).filter(
+      (b) =>
+        b.TEAM_INCLUDED === awayTeam &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.BET_TYPE === "Win" &&
+        b.RESULT &&
+        b.RESULT.trim() !== ""
+    );
+
+    // Calculate win rates
+    const homeWins = homeTeamBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const homeWinRate =
+      homeTeamBets.length > 0 ? (homeWins / homeTeamBets.length) * 100 : 0;
+
+    const awayWins = awayTeamBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const awayWinRate =
+      awayTeamBets.length > 0 ? (awayWins / awayTeamBets.length) * 100 : 0;
+
+    // Determine recommendation
+    if (homeWinRate > awayWinRate + 10) {
+      return {
+        bet: homeTeam,
+        confidence: Math.min(homeWinRate / 10, 10),
+        winRate: homeWinRate,
+        totalBets: homeTeamBets.length,
+        reasoning: `${homeTeam} has ${homeWinRate.toFixed(
+          1
+        )}% win rate vs ${awayTeam}'s ${awayWinRate.toFixed(1)}%`,
+      };
+    } else if (awayWinRate > homeWinRate + 10) {
+      return {
+        bet: awayTeam,
+        confidence: Math.min(awayWinRate / 10, 10),
+        winRate: awayWinRate,
+        totalBets: awayTeamBets.length,
+        reasoning: `${awayTeam} has ${awayWinRate.toFixed(
+          1
+        )}% win rate vs ${homeTeam}'s ${homeWinRate.toFixed(1)}%`,
+      };
+    } else {
+      return {
+        bet: "No clear winner",
+        confidence: 5,
+        winRate: Math.max(homeWinRate, awayWinRate),
+        totalBets: homeTeamBets.length + awayTeamBets.length,
+        reasoning: "Teams have similar win rates",
+      };
+    }
+  };
+
+  const analyzeDoubleChance = (
+    homeTeam,
+    awayTeam,
+    country,
+    league,
+    betData
+  ) => {
+    // Get historical data for double chance bets
+    const homeTeamBets = (bets || []).filter(
+      (b) =>
+        b.TEAM_INCLUDED === homeTeam &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.BET_TYPE === "Double Chance" &&
+        b.RESULT &&
+        b.RESULT.trim() !== ""
+    );
+
+    const awayTeamBets = (bets || []).filter(
+      (b) =>
+        b.TEAM_INCLUDED === awayTeam &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.BET_TYPE === "Double Chance" &&
+        b.RESULT &&
+        b.RESULT.trim() !== ""
+    );
+
+    // Calculate double chance success rates
+    const homeSuccess = homeTeamBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const homeSuccessRate =
+      homeTeamBets.length > 0 ? (homeSuccess / homeTeamBets.length) * 100 : 0;
+
+    const awaySuccess = awayTeamBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const awaySuccessRate =
+      awayTeamBets.length > 0 ? (awaySuccess / awayTeamBets.length) * 100 : 0;
+
+    // Determine recommendation
+    if (homeSuccessRate > awaySuccessRate + 5) {
+      return {
+        bet: `${homeTeam} or Draw`,
+        confidence: Math.min(homeSuccessRate / 10, 10),
+        successRate: homeSuccessRate,
+        totalBets: homeTeamBets.length,
+        reasoning: `${homeTeam} has ${homeSuccessRate.toFixed(
+          1
+        )}% double chance success rate`,
+      };
+    } else if (awaySuccessRate > homeSuccessRate + 5) {
+      return {
+        bet: `${awayTeam} or Draw`,
+        confidence: Math.min(awaySuccessRate / 10, 10),
+        successRate: awaySuccessRate,
+        totalBets: awayTeamBets.length,
+        reasoning: `${awayTeam} has ${awaySuccessRate.toFixed(
+          1
+        )}% double chance success rate`,
+      };
+    } else {
+      return {
+        bet: "No clear advantage",
+        confidence: 5,
+        successRate: Math.max(homeSuccessRate, awaySuccessRate),
+        totalBets: homeTeamBets.length + awayTeamBets.length,
+        reasoning: "Teams have similar double chance rates",
+      };
+    }
+  };
+
+  const analyzeOverUnder = (homeTeam, awayTeam, country, league, betData) => {
+    // Get scoring data for both teams
+    const homeTeamGames = (bets || []).filter(
+      (b) =>
+        (b.HOME_TEAM === homeTeam || b.AWAY_TEAM === homeTeam) &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        b.RESULT &&
+        b.RESULT.trim() !== ""
+    );
+
+    const awayTeamGames = (bets || []).filter(
+      (b) =>
+        (b.HOME_TEAM === awayTeam || b.AWAY_TEAM === awayTeam) &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        b.RESULT &&
+        b.RESULT.trim() !== ""
+    );
+
+    // Calculate average goals
+    const homeTotalGoals = homeTeamGames.reduce(
+      (sum, b) => sum + parseInt(b.HOME_SCORE) + parseInt(b.AWAY_SCORE),
+      0
+    );
+    const homeAvgGoals =
+      homeTeamGames.length > 0 ? homeTotalGoals / homeTeamGames.length : 0;
+
+    const awayTotalGoals = awayTeamGames.reduce(
+      (sum, b) => sum + parseInt(b.HOME_SCORE) + parseInt(b.AWAY_SCORE),
+      0
+    );
+    const awayAvgGoals =
+      awayTeamGames.length > 0 ? awayTotalGoals / awayTeamGames.length : 0;
+
+    // Calculate combined average
+    const combinedAvgGoals = (homeAvgGoals + awayAvgGoals) / 2;
+    const typicalLine = 2.5;
+
+    // Determine recommendation
+    if (combinedAvgGoals > typicalLine + 0.3) {
+      return {
+        bet: "OVER 2.5",
+        confidence: Math.min((combinedAvgGoals / typicalLine) * 5, 10),
+        avgGoals: combinedAvgGoals,
+        totalGames: homeTeamGames.length + awayTeamGames.length,
+        reasoning: `Combined average: ${combinedAvgGoals.toFixed(
+          1
+        )} goals per game`,
+      };
+    } else if (combinedAvgGoals < typicalLine - 0.3) {
+      return {
+        bet: "UNDER 2.5",
+        confidence: Math.min((typicalLine / combinedAvgGoals) * 5, 10),
+        avgGoals: combinedAvgGoals,
+        totalGames: homeTeamGames.length + awayTeamGames.length,
+        reasoning: `Combined average: ${combinedAvgGoals.toFixed(
+          1
+        )} goals per game`,
+      };
+    } else {
+      return {
+        bet: "No clear trend",
+        confidence: 5,
+        avgGoals: combinedAvgGoals,
+        totalGames: homeTeamGames.length + awayTeamGames.length,
+        reasoning: `Combined average: ${combinedAvgGoals.toFixed(
+          1
+        )} goals per game`,
+      };
+    }
   };
 
   // Generate detailed reasoning for why a bet should be avoided
@@ -5619,7 +5846,13 @@ function App() {
                         Match
                       </th>
                       <th className="px-4 py-2 text-left text-white font-semibold">
-                        Recommendation
+                        Straight Win
+                      </th>
+                      <th className="px-4 py-2 text-left text-white font-semibold">
+                        Double Chance
+                      </th>
+                      <th className="px-4 py-2 text-left text-white font-semibold">
+                        Over/Under
                       </th>
                     </tr>
                   </thead>
@@ -5631,7 +5864,16 @@ function App() {
                         </td>
                         <td className="px-4 py-3 text-gray-300">{rec.match}</td>
                         <td className="px-4 py-3 text-white font-medium">
-                          Bet on: {rec.recommendedBet}
+                          {rec.straightWin.bet} (
+                          {rec.straightWin.confidence.toFixed(1)}/10)
+                        </td>
+                        <td className="px-4 py-3 text-white font-medium">
+                          {rec.doubleChance.bet} (
+                          {rec.doubleChance.confidence.toFixed(1)}/10)
+                        </td>
+                        <td className="px-4 py-3 text-white font-medium">
+                          {rec.overUnder.bet} (
+                          {rec.overUnder.confidence.toFixed(1)}/10)
                         </td>
                       </tr>
                     ))}
