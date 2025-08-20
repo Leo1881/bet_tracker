@@ -1631,10 +1631,10 @@ function App() {
   const generateBetRecommendations = (analysisResults) => {
     if (!analysisResults || analysisResults.length === 0) return [];
 
-    // Filter out "Avoid" recommendations and sort by confidence
-    const validBets = analysisResults
-      .filter((result) => !result.recommendation.includes("Avoid"))
-      .sort((a, b) => b.confidenceScore - a.confidenceScore);
+    // Include all bets (including "Avoid" ones) and sort by confidence
+    const validBets = analysisResults.sort(
+      (a, b) => b.confidenceScore - a.confidenceScore
+    );
 
     // Generate comprehensive recommendations for each bet
     const recommendations = validBets.slice(0, 40).map((bet, index) => {
@@ -1696,6 +1696,19 @@ function App() {
   };
 
   const analyzeStraightWin = (homeTeam, awayTeam, country, league, betData) => {
+    // Check if this is an "Avoid" bet
+    if (betData.recommendation && betData.recommendation.includes("Avoid")) {
+      return {
+        bet: "AVOID",
+        confidence: betData.confidenceScore || 5,
+        winRate: 0,
+        totalBets: 0,
+        reasoning: betData.recommendation
+          .replace("Avoid (", "")
+          .replace(")", ""),
+      };
+    }
+
     // Get historical data for both teams
     const homeTeamBets = (bets || []).filter(
       (b) =>
@@ -1769,6 +1782,19 @@ function App() {
     league,
     betData
   ) => {
+    // Check if this is an "Avoid" bet
+    if (betData.recommendation && betData.recommendation.includes("Avoid")) {
+      return {
+        bet: "AVOID",
+        confidence: betData.confidenceScore || 5,
+        successRate: 0,
+        totalBets: 0,
+        reasoning: betData.recommendation
+          .replace("Avoid (", "")
+          .replace(")", ""),
+      };
+    }
+
     // Get historical data for double chance bets
     const homeTeamBets = (bets || []).filter(
       (b) =>
@@ -1836,6 +1862,19 @@ function App() {
   };
 
   const analyzeOverUnder = (homeTeam, awayTeam, country, league, betData) => {
+    // Check if this is an "Avoid" bet
+    if (betData.recommendation && betData.recommendation.includes("Avoid")) {
+      return {
+        bet: "AVOID",
+        confidence: betData.confidenceScore || 5,
+        avgGoals: 0,
+        totalGames: 0,
+        reasoning: betData.recommendation
+          .replace("Avoid (", "")
+          .replace(")", ""),
+      };
+    }
+
     // Get scoring data for both teams
     const homeTeamGames = (bets || []).filter(
       (b) =>
@@ -5864,16 +5903,40 @@ function App() {
                         </td>
                         <td className="px-4 py-3 text-gray-300">{rec.match}</td>
                         <td className="px-4 py-3 text-white font-medium">
-                          {rec.straightWin.bet} (
-                          {rec.straightWin.confidence.toFixed(1)}/10)
+                          <span
+                            className={
+                              rec.straightWin.bet === "AVOID"
+                                ? "text-red-400"
+                                : ""
+                            }
+                          >
+                            {rec.straightWin.bet} (
+                            {rec.straightWin.confidence.toFixed(1)}/10)
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-white font-medium">
-                          {rec.doubleChance.bet} (
-                          {rec.doubleChance.confidence.toFixed(1)}/10)
+                          <span
+                            className={
+                              rec.doubleChance.bet === "AVOID"
+                                ? "text-red-400"
+                                : ""
+                            }
+                          >
+                            {rec.doubleChance.bet} (
+                            {rec.doubleChance.confidence.toFixed(1)}/10)
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-white font-medium">
-                          {rec.overUnder.bet} (
-                          {rec.overUnder.confidence.toFixed(1)}/10)
+                          <span
+                            className={
+                              rec.overUnder.bet === "AVOID"
+                                ? "text-red-400"
+                                : ""
+                            }
+                          >
+                            {rec.overUnder.bet} (
+                            {rec.overUnder.confidence.toFixed(1)}/10)
+                          </span>
                         </td>
                       </tr>
                     ))}
