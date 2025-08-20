@@ -4023,14 +4023,34 @@ function App() {
         {/* Tab Navigation */}
         <div className="flex space-x-1 mb-6 w-full">
           <button
-            onClick={() => setActiveTab("data")}
+            onClick={() => setActiveTab("betAnalysis")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "data"
+              activeTab === "betAnalysis"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            Data View
+            Bet Analysis
+          </button>
+          <button
+            onClick={() => setActiveTab("recommendations")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "recommendations"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Bet Recommendations
+          </button>
+          <button
+            onClick={() => setActiveTab("betSlips")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "betSlips"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Bet Slips
           </button>
           <button
             onClick={() => setActiveTab("analytics")}
@@ -4052,7 +4072,6 @@ function App() {
           >
             Performance
           </button>
-
           <button
             onClick={() => setActiveTab("topTeams")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
@@ -4062,26 +4081,6 @@ function App() {
             }`}
           >
             Top Teams
-          </button>
-          <button
-            onClick={() => setActiveTab("betSlips")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "betSlips"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Bet Slips
-          </button>
-          <button
-            onClick={() => setActiveTab("teamNotes")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "teamNotes"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Team Notes
           </button>
           <button
             onClick={() => setActiveTab("betTypeAnalytics")}
@@ -4104,27 +4103,6 @@ function App() {
             Daily Games
           </button>
           <button
-            onClick={() => setActiveTab("blacklist")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "blacklist"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Blacklist
-          </button>
-
-          <button
-            onClick={() => setActiveTab("betAnalysis")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "betAnalysis"
-                ? "bg-[#3982db] text-white"
-                : "bg-white/10 text-gray-300 hover:bg-white/20"
-            }`}
-          >
-            Bet Analysis
-          </button>
-          <button
             onClick={() => setActiveTab("scoringAnalysis")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "scoringAnalysis"
@@ -4145,14 +4123,14 @@ function App() {
             Head to Head
           </button>
           <button
-            onClick={() => setActiveTab("recommendations")}
+            onClick={() => setActiveTab("data")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
-              activeTab === "recommendations"
+              activeTab === "data"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
             }`}
           >
-            Bet Recommendations
+            Data View
           </button>
         </div>
 
@@ -5643,9 +5621,6 @@ function App() {
                       <th className="px-4 py-2 text-left text-white font-semibold">
                         Recommendation
                       </th>
-                      <th className="px-4 py-2 text-left text-white font-semibold">
-                        Reasoning
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
@@ -5657,9 +5632,6 @@ function App() {
                         <td className="px-4 py-3 text-gray-300">{rec.match}</td>
                         <td className="px-4 py-3 text-white font-medium">
                           Bet on: {rec.recommendedBet}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300 text-sm">
-                          {rec.reasoning}
                         </td>
                       </tr>
                     ))}
