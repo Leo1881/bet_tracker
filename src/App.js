@@ -79,6 +79,7 @@ function App() {
   const [analysisResults, setAnalysisResults] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [betRecommendations, setBetRecommendations] = useState([]);
+  const [showCompletedSlips, setShowCompletedSlips] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -525,6 +526,11 @@ function App() {
     // Apply status filter
     if (filters.status) {
       slipsData = slipsData.filter((slip) => slip.status === filters.status);
+    }
+
+    // Filter by completed slips checkbox
+    if (!showCompletedSlips) {
+      slipsData = slipsData.filter((slip) => slip.status !== "Complete");
     }
 
     if (!slipsSortConfig.key) return slipsData;
@@ -6255,9 +6261,26 @@ function App() {
 
         {activeTab === "betSlips" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-            <h3 className="text-lg font-bold text-white mb-4">
-              Bet Slips Performance
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">
+                Bet Slips Performance
+              </h3>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="showCompletedSlips"
+                  checked={showCompletedSlips}
+                  onChange={(e) => setShowCompletedSlips(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="showCompletedSlips"
+                  className="text-gray-300 text-sm"
+                >
+                  Show completed slips
+                </label>
+              </div>
+            </div>
 
             {/* Summary Cards */}
             {(() => {
