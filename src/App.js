@@ -3460,10 +3460,12 @@ function App() {
 
   const getTopTeams = () => {
     const teamStats = new Map();
+    const teamBets = new Map(); // Store all bets for each team to sort by date
 
     // Process deduplicated bets to calculate team statistics
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
 
+    // First pass: collect all bets for each team
     deduplicatedBets.forEach((bet) => {
       const teamIncluded = bet.TEAM_INCLUDED;
       const homeTeam = bet.HOME_TEAM;
@@ -3484,6 +3486,7 @@ function App() {
       // Create unique key for team + country + league combination
       const teamKey = `${teamToAnalyze.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
 
+      // Initialize team stats
       if (!teamStats.has(teamKey)) {
         teamStats.set(teamKey, {
           teamName: teamToAnalyze,
@@ -3500,28 +3503,51 @@ function App() {
         });
       }
 
+      // Store bet for later sorting
+      if (!teamBets.has(teamKey)) {
+        teamBets.set(teamKey, []);
+      }
+      teamBets.get(teamKey).push(bet);
+
       const team = teamStats.get(teamKey);
       team.totalBets++;
 
-      // Track recent performance (last 10 bets)
-      const betDate = new Date(bet.DATE);
-      if (!team.lastBetDate || betDate > team.lastBetDate) {
-        team.lastBetDate = betDate;
-      }
-
       if (bet.RESULT?.toLowerCase().includes("win")) {
         team.wins++;
-        team.recentWins++;
       } else if (bet.RESULT?.toLowerCase().includes("loss")) {
         team.losses++;
       }
 
-      team.recentBets++;
-      if (team.recentBets > 10) {
-        // Keep only last 10 bets for recent performance
-        team.recentBets = 10;
-        team.recentWins = Math.min(team.recentWins, 10);
+      // Track last bet date
+      const betDate = new Date(bet.DATE);
+      if (!team.lastBetDate || betDate > team.lastBetDate) {
+        team.lastBetDate = betDate;
       }
+    });
+
+    // Second pass: calculate recent performance from last 10 bets by date
+    teamBets.forEach((bets, teamKey) => {
+      const team = teamStats.get(teamKey);
+      if (!team) return;
+
+      // Sort bets by date (newest first) and take last 10
+      const sortedBets = bets
+        .sort((a, b) => new Date(b.DATE) - new Date(a.DATE))
+        .slice(0, 10);
+
+      // Calculate recent performance from last 10 bets
+      let recentWins = 0;
+      let recentBets = 0;
+
+      sortedBets.forEach((bet) => {
+        recentBets++;
+        if (bet.RESULT?.toLowerCase().includes("win")) {
+          recentWins++;
+        }
+      });
+
+      team.recentBets = recentBets;
+      team.recentWins = recentWins;
 
       // Calculate win rates
       const totalBetsWithResult = team.wins + team.losses;
