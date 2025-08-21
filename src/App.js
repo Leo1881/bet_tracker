@@ -5956,8 +5956,15 @@ function App() {
                                 : ""
                             }
                           >
-                            {rec.straightWin.bet} (
-                            {rec.straightWin.confidence.toFixed(1)}/10)
+                            {rec.straightWin.bet === "AVOID"
+                              ? `AVOID (${rec.straightWin.confidence.toFixed(
+                                  1
+                                )}/10) - ${rec.straightWin.reasoning}`
+                              : `${
+                                  rec.straightWin.bet
+                                } (${rec.straightWin.confidence.toFixed(
+                                  1
+                                )}/10)`}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-white font-medium">
@@ -5968,8 +5975,15 @@ function App() {
                                 : ""
                             }
                           >
-                            {rec.doubleChance.bet} (
-                            {rec.doubleChance.confidence.toFixed(1)}/10)
+                            {rec.doubleChance.bet === "AVOID"
+                              ? `AVOID (${rec.doubleChance.confidence.toFixed(
+                                  1
+                                )}/10) - ${rec.doubleChance.reasoning}`
+                              : `${
+                                  rec.doubleChance.bet
+                                } (${rec.doubleChance.confidence.toFixed(
+                                  1
+                                )}/10)`}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-white font-medium">
@@ -5980,8 +5994,13 @@ function App() {
                                 : ""
                             }
                           >
-                            {rec.overUnder.bet} (
-                            {rec.overUnder.confidence.toFixed(1)}/10)
+                            {rec.overUnder.bet === "AVOID"
+                              ? `AVOID (${rec.overUnder.confidence.toFixed(
+                                  1
+                                )}/10) - ${rec.overUnder.reasoning}`
+                              : `${
+                                  rec.overUnder.bet
+                                } (${rec.overUnder.confidence.toFixed(1)}/10)`}
                           </span>
                         </td>
                       </tr>
