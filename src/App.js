@@ -80,6 +80,10 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [betRecommendations, setBetRecommendations] = useState([]);
   const [showCompletedSlips, setShowCompletedSlips] = useState(false);
+  const [analysisSortConfig, setAnalysisSortConfig] = useState({
+    key: "DATE",
+    direction: "asc",
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -372,6 +376,17 @@ function App() {
     setSlipsSortConfig({ key, direction });
   };
 
+  const handleAnalysisSort = (key) => {
+    let direction = "asc";
+    if (
+      analysisSortConfig.key === key &&
+      analysisSortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setAnalysisSortConfig({ key, direction });
+  };
+
   const handleTeamNotesSort = (key) => {
     let direction = "asc";
     if (
@@ -517,6 +532,41 @@ function App() {
       } else {
         return aValue < bValue ? 1 : -1;
       }
+    });
+  };
+
+  const getSortedAnalysisResults = () => {
+    if (!analysisSortConfig.key) return analysisResults;
+
+    return [...analysisResults].sort((a, b) => {
+      const aValue = a[analysisSortConfig.key] || "";
+      const bValue = b[analysisSortConfig.key] || "";
+
+      // Handle date sorting
+      if (analysisSortConfig.key === "DATE") {
+        const aDate = new Date(aValue);
+        const bDate = new Date(bValue);
+        if (analysisSortConfig.direction === "asc") {
+          return aDate - bDate;
+        }
+        return bDate - aDate;
+      }
+
+      // Handle numeric sorting for confidence score
+      if (analysisSortConfig.key === "confidenceScore") {
+        const aNum = parseFloat(aValue) || 0;
+        const bNum = parseFloat(bValue) || 0;
+        if (analysisSortConfig.direction === "asc") {
+          return aNum - bNum;
+        }
+        return bNum - aNum;
+      }
+
+      // Default string sorting
+      if (analysisSortConfig.direction === "asc") {
+        return aValue.toString().localeCompare(bValue.toString());
+      }
+      return bValue.toString().localeCompare(aValue.toString());
     });
   };
 
@@ -5386,8 +5436,20 @@ function App() {
                   <table className="w-full">
                     <thead className="bg-white/20">
                       <tr>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-20">
-                          Date
+                        <th
+                          className="px-4 py-2 text-left text-white font-semibold w-20 cursor-pointer hover:bg-white/10"
+                          onClick={() => handleAnalysisSort("DATE")}
+                        >
+                          <div className="flex items-center">
+                            Date
+                            {analysisSortConfig.key === "DATE" && (
+                              <span className="ml-1">
+                                {analysisSortConfig.direction === "asc"
+                                  ? "↑"
+                                  : "↓"}
+                              </span>
+                            )}
+                          </div>
                         </th>
                         <th className="px-4 py-2 text-left text-white font-semibold w-32">
                           Match
@@ -5425,7 +5487,7 @@ function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {analysisResults.map((result, index) => (
+                      {getSortedAnalysisResults().map((result, index) => (
                         <tr
                           key={index}
                           className={`${
