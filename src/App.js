@@ -84,6 +84,7 @@ function App() {
     key: "DATE",
     direction: "asc",
   });
+  const [dataViewLoaded, setDataViewLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -1127,6 +1128,23 @@ function App() {
       `Deduplication: ${bets.length} original bets -> ${result.length} unique bets`
     );
     return result;
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return Object.values(filters).some((value) => value !== "");
+  };
+
+  // Handle filter changes and trigger data loading
+  const handleFilterChange = (filterType, value) => {
+    const newFilters = { ...filters, [filterType]: value };
+    setFilters(newFilters);
+
+    // Check if any filters are now active
+    const hasFilters = Object.values(newFilters).some((val) => val !== "");
+    if (hasFilters && !dataViewLoaded) {
+      setDataViewLoaded(true);
+    }
   };
 
   // Get deduplicated filtered bets for stats cards
@@ -4149,9 +4167,7 @@ function App() {
                 <label className="block text-gray-300 text-sm mb-2">Team</label>
                 <select
                   value={filters.team}
-                  onChange={(e) =>
-                    setFilters({ ...filters, team: e.target.value })
-                  }
+                  onChange={(e) => handleFilterChange("team", e.target.value)}
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Teams</option>
@@ -4170,7 +4186,7 @@ function App() {
                 <select
                   value={filters.betType}
                   onChange={(e) =>
-                    setFilters({ ...filters, betType: e.target.value })
+                    handleFilterChange("betType", e.target.value)
                   }
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
@@ -4190,7 +4206,7 @@ function App() {
                 <select
                   value={filters.betSelection}
                   onChange={(e) =>
-                    setFilters({ ...filters, betSelection: e.target.value })
+                    handleFilterChange("betSelection", e.target.value)
                   }
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
@@ -4210,7 +4226,7 @@ function App() {
                 <select
                   value={filters.country}
                   onChange={(e) =>
-                    setFilters({ ...filters, country: e.target.value })
+                    handleFilterChange("country", e.target.value)
                   }
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
@@ -4229,9 +4245,7 @@ function App() {
                 </label>
                 <select
                   value={filters.league}
-                  onChange={(e) =>
-                    setFilters({ ...filters, league: e.target.value })
-                  }
+                  onChange={(e) => handleFilterChange("league", e.target.value)}
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Leagues</option>
@@ -4249,9 +4263,7 @@ function App() {
                 </label>
                 <select
                   value={filters.result}
-                  onChange={(e) =>
-                    setFilters({ ...filters, result: e.target.value })
-                  }
+                  onChange={(e) => handleFilterChange("result", e.target.value)}
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                 >
                   <option value="">All Results</option>
@@ -4271,7 +4283,7 @@ function App() {
                   max="100"
                   value={filters.minWinRate}
                   onChange={(e) =>
-                    setFilters({ ...filters, minWinRate: e.target.value })
+                    handleFilterChange("minWinRate", e.target.value)
                   }
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                   placeholder="0"
@@ -4288,7 +4300,7 @@ function App() {
                   max="100"
                   value={filters.maxWinRate}
                   onChange={(e) =>
-                    setFilters({ ...filters, maxWinRate: e.target.value })
+                    handleFilterChange("maxWinRate", e.target.value)
                   }
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
                   placeholder="100"
@@ -4300,7 +4312,7 @@ function App() {
                   Clear Filters
                 </label>
                 <button
-                  onClick={() =>
+                  onClick={() => {
                     setFilters({
                       team: "",
                       betType: "",
@@ -4310,8 +4322,9 @@ function App() {
                       result: "",
                       minWinRate: "",
                       maxWinRate: "",
-                    })
-                  }
+                    });
+                    setDataViewLoaded(false);
+                  }}
                   className="w-full bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors"
                 >
                   Clear All
@@ -4499,73 +4512,89 @@ function App() {
         {/* Tab Content */}
         {activeTab === "data" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden max-w-full">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-full">
-                <thead className="bg-white/20">
-                  <tr>
-                    {getDeduplicatedFilteredBets()[0] &&
-                      Object.keys(getDeduplicatedFilteredBets()[0]).map(
-                        (key) => (
-                          <th
-                            key={key}
-                            className="px-3 py-4 text-left text-white font-semibold text-sm whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors"
-                            onClick={() => handleSort(key)}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span>{key}</span>
-                              {sortConfig.key === key && (
-                                <span className="ml-2">
-                                  {sortConfig.direction === "asc" ? "↑" : "↓"}
-                                </span>
-                              )}
-                            </div>
-                          </th>
-                        )
-                      )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {getSortedData().map((bet, index) => (
-                    <tr
-                      key={index}
-                      className="hover:bg-white/5 transition-colors"
-                    >
-                      {Object.entries(bet).map(([key, value], i) => (
-                        <td key={i} className="px-3 py-4 text-gray-200 text-sm">
-                          {key === "RESULT" ? (
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                                value
-                              )}`}
+            {!dataViewLoaded ? (
+              <div className="p-8 text-center">
+                <div className="text-4xl mb-4">🔍</div>
+                <h4 className="text-lg font-semibold text-white mb-2">
+                  Apply Filters to View Data
+                </h4>
+                <p className="text-gray-300">
+                  Use the filters above to load and view your betting data. This
+                  helps improve performance by only loading data when needed.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-full">
+                  <thead className="bg-white/20">
+                    <tr>
+                      {getDeduplicatedFilteredBets()[0] &&
+                        Object.keys(getDeduplicatedFilteredBets()[0]).map(
+                          (key) => (
+                            <th
+                              key={key}
+                              className="px-3 py-4 text-left text-white font-semibold text-sm whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors"
+                              onClick={() => handleSort(key)}
                             >
-                              {value || "Unknown"}
-                            </span>
-                          ) : key === "DATE" ? (
-                            <span className="text-blue-300 whitespace-nowrap">
-                              {formatDate(value)}
-                            </span>
-                          ) : key.includes("ODDS") ? (
-                            <span className="font-mono text-yellow-400 whitespace-nowrap">
-                              {value || "-"}
-                            </span>
-                          ) : key === "BET_TYPE" ||
-                            key === "BET_SELECTION" ||
-                            key === "TEAM_BET" ? (
-                            <span className="font-medium text-purple-300 whitespace-nowrap">
-                              {value || "-"}
-                            </span>
-                          ) : (
-                            <span className="whitespace-nowrap">
-                              {value || "-"}
-                            </span>
-                          )}
-                        </td>
-                      ))}
+                              <div className="flex items-center justify-between">
+                                <span>{key}</span>
+                                {sortConfig.key === key && (
+                                  <span className="ml-2">
+                                    {sortConfig.direction === "asc" ? "↑" : "↓"}
+                                  </span>
+                                )}
+                              </div>
+                            </th>
+                          )
+                        )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {getSortedData().map((bet, index) => (
+                      <tr
+                        key={index}
+                        className="hover:bg-white/5 transition-colors"
+                      >
+                        {Object.entries(bet).map(([key, value], i) => (
+                          <td
+                            key={i}
+                            className="px-3 py-4 text-gray-200 text-sm"
+                          >
+                            {key === "RESULT" ? (
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                                  value
+                                )}`}
+                              >
+                                {value || "Unknown"}
+                              </span>
+                            ) : key === "DATE" ? (
+                              <span className="text-blue-300 whitespace-nowrap">
+                                {formatDate(value)}
+                              </span>
+                            ) : key.includes("ODDS") ? (
+                              <span className="font-mono text-yellow-400 whitespace-nowrap">
+                                {value || "-"}
+                              </span>
+                            ) : key === "BET_TYPE" ||
+                              key === "BET_SELECTION" ||
+                              key === "TEAM_BET" ? (
+                              <span className="font-medium text-purple-300 whitespace-nowrap">
+                                {value || "-"}
+                              </span>
+                            ) : (
+                              <span className="whitespace-nowrap">
+                                {value || "-"}
+                              </span>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
