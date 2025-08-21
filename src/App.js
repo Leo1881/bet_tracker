@@ -1577,6 +1577,37 @@ function App() {
     return Math.min(10, Math.max(1, confidence));
   };
 
+  // Store recommendations for accuracy tracking
+  const storeRecommendations = async (analysisResults) => {
+    try {
+      // For now, we'll store recommendations in localStorage
+      // In a full implementation, this would update Google Sheets
+      const recommendations = analysisResults.map((result) => ({
+        BET_ID: result.BET_ID || "",
+        DATE: result.DATE || "",
+        HOME_TEAM: result.HOME_TEAM || "",
+        AWAY_TEAM: result.AWAY_TEAM || "",
+        BET_TYPE: result.BET_TYPE || "",
+        TEAM_INCLUDED: result.TEAM_INCLUDED || "",
+        SYSTEM_RECOMMENDATION: result.recommendation || "",
+        SYSTEM_CONFIDENCE: result.confidenceScore || 0,
+        PREDICTION_ACCURATE: "Pending",
+        RECOMMENDATION_FOLLOWED: "",
+      }));
+
+      localStorage.setItem(
+        "betRecommendations",
+        JSON.stringify(recommendations)
+      );
+      console.log(
+        "Stored recommendations for accuracy tracking:",
+        recommendations.length
+      );
+    } catch (error) {
+      console.error("Error storing recommendations:", error);
+    }
+  };
+
   // Store predictions from analysis
   const storePredictions = (analysisResults) => {
     const today = new Date().toISOString().split("T")[0];
@@ -1636,6 +1667,145 @@ function App() {
     }
 
     return null;
+  };
+
+  // Get prediction accuracy metrics
+  const getPredictionAccuracyMetrics = () => {
+    const betsWithResults = bets.filter(
+      (bet) => bet.RESULT && bet.RESULT.trim() !== ""
+    );
+    const betsWithRecommendations = betsWithResults.filter(
+      (bet) => bet.SYSTEM_RECOMMENDATION
+    );
+
+    if (betsWithRecommendations.length === 0) {
+      return {
+        totalPredictions: 0,
+        correctPredictions: 0,
+        overallAccuracy: 0,
+        byConfidence: {},
+        byBetType: {},
+        byRecommendationType: {},
+      };
+    }
+
+    let correctPredictions = 0;
+    const confidenceRanges = { "4-6": [], "6-8": [], "8-10": [] };
+    const betTypes = {};
+    const recommendationTypes = {};
+
+    betsWithRecommendations.forEach((bet) => {
+      // Use the PREDICTION_ACCURATE field from Google Sheets instead of calculating
+      const accuracy = bet.PREDICTION_ACCURATE || "Pending";
+      const confidence = parseFloat(bet.SYSTEM_CONFIDENCE) || 0;
+      const betType = bet.BET_TYPE || "Unknown";
+      const recommendation = bet.SYSTEM_RECOMMENDATION || "Unknown";
+
+      if (accuracy === "Yes") {
+        correctPredictions++;
+      }
+
+      // Group by confidence range
+      if (confidence >= 4 && confidence < 6)
+        confidenceRanges["4-6"].push(accuracy);
+      else if (confidence >= 6 && confidence < 8)
+        confidenceRanges["6-8"].push(accuracy);
+      else if (confidence >= 8 && confidence <= 10)
+        confidenceRanges["8-10"].push(accuracy);
+
+      // Group by bet type
+      if (!betTypes[betType]) betTypes[betType] = [];
+      betTypes[betType].push(accuracy);
+
+      // Group by recommendation type
+      const recType = recommendation.includes("AVOID")
+        ? "AVOID"
+        : recommendation.includes("WIN")
+        ? "WIN"
+        : recommendation.includes("OVER")
+        ? "OVER"
+        : recommendation.includes("UNDER")
+        ? "UNDER"
+        : "OTHER";
+      if (!recommendationTypes[recType]) recommendationTypes[recType] = [];
+      recommendationTypes[recType].push(accuracy);
+    });
+
+    // Calculate accuracy for each group
+    const calculateGroupAccuracy = (group) => {
+      const correct = group.filter((acc) => acc === "Yes").length;
+      return group.length > 0 ? (correct / group.length) * 100 : 0;
+    };
+
+    return {
+      totalPredictions: betsWithRecommendations.length,
+      correctPredictions,
+      overallAccuracy:
+        (correctPredictions / betsWithRecommendations.length) * 100,
+      byConfidence: {
+        "4-6": calculateGroupAccuracy(confidenceRanges["4-6"]),
+        "6-8": calculateGroupAccuracy(confidenceRanges["6-8"]),
+        "8-10": calculateGroupAccuracy(confidenceRanges["8-10"]),
+      },
+      byBetType: Object.fromEntries(
+        Object.entries(betTypes).map(([type, group]) => [
+          type,
+          calculateGroupAccuracy(group),
+        ])
+      ),
+      byRecommendationType: Object.fromEntries(
+        Object.entries(recommendationTypes).map(([type, group]) => [
+          type,
+          calculateGroupAccuracy(group),
+        ])
+      ),
+    };
+  };
+
+  // Calculate prediction accuracy
+  const calculatePredictionAccuracy = (bet) => {
+    if (!bet.SYSTEM_RECOMMENDATION || !bet.RESULT) {
+      return "Pending";
+    }
+
+    const recommendation = bet.SYSTEM_RECOMMENDATION.toLowerCase();
+    const result = bet.RESULT.toLowerCase();
+
+    // Handle different recommendation types
+    if (recommendation === "avoid") {
+      // If system said avoid and result was loss, it was accurate
+      return result.includes("loss") ? "Yes" : "No";
+    }
+
+    if (recommendation.includes("win")) {
+      return result.includes("win") ? "Yes" : "No";
+    }
+
+    if (recommendation.includes("over")) {
+      // For over/under, we need to check actual scores
+      if (bet.HOME_SCORE && bet.AWAY_SCORE) {
+        const totalGoals = parseInt(bet.HOME_SCORE) + parseInt(bet.AWAY_SCORE);
+        const goalLine = parseInt(recommendation.match(/\d+/)?.[0] || "2.5");
+        return totalGoals > goalLine ? "Yes" : "No";
+      }
+      return "Pending";
+    }
+
+    if (recommendation.includes("under")) {
+      if (bet.HOME_SCORE && bet.AWAY_SCORE) {
+        const totalGoals = parseInt(bet.HOME_SCORE) + parseInt(bet.AWAY_SCORE);
+        const goalLine = parseInt(recommendation.match(/\d+/)?.[0] || "2.5");
+        return totalGoals < goalLine ? "Yes" : "No";
+      }
+      return "Pending";
+    }
+
+    // For double chance recommendations
+    if (recommendation.includes("or draw")) {
+      return result.includes("win") || result.includes("draw") ? "Yes" : "No";
+    }
+
+    return "Pending";
   };
 
   // Check if betslip matches analysis
@@ -3027,6 +3197,9 @@ function App() {
       if (results.length > 0) {
         storePredictions(results);
       }
+
+      // Store recommendations for accuracy tracking
+      await storeRecommendations(results);
     } catch (error) {
       console.error("Error analyzing new bets:", error);
     } finally {
@@ -4522,6 +4695,16 @@ function App() {
             }`}
           >
             Head to Head
+          </button>
+          <button
+            onClick={() => setActiveTab("predictionAccuracy")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "predictionAccuracy"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Prediction Accuracy
           </button>
           <button
             onClick={() => setActiveTab("data")}
@@ -6137,6 +6320,153 @@ function App() {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "predictionAccuracy" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">
+              Prediction Accuracy Dashboard
+            </h3>
+            <div className="text-gray-300 mb-6">
+              <p>
+                Track how accurate the system's predictions are compared to
+                actual results.
+              </p>
+            </div>
+
+            {(() => {
+              const metrics = getPredictionAccuracyMetrics();
+              return (
+                <div className="space-y-6">
+                  {/* Overall Performance */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                      <div className="text-2xl font-bold text-white">
+                        {metrics.totalPredictions}
+                      </div>
+                      <div className="text-gray-300 text-sm">
+                        Total Predictions
+                      </div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                      <div className="text-2xl font-bold text-blue-400">
+                        {metrics.overallAccuracy.toFixed(1)}%
+                      </div>
+                      <div className="text-gray-300 text-sm">
+                        Overall Accuracy
+                      </div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                      <div className="text-2xl font-bold text-green-400">
+                        {metrics.correctPredictions}
+                      </div>
+                      <div className="text-gray-300 text-sm">
+                        Correct Predictions
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Accuracy by Confidence */}
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <h4 className="text-lg font-semibold text-white mb-4">
+                      Accuracy by Confidence Level
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-yellow-400">
+                          {metrics.byConfidence["4-6"]?.toFixed(1) || 0}%
+                        </div>
+                        <div className="text-gray-300 text-sm">
+                          Low Confidence (4-6)
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-orange-400">
+                          {metrics.byConfidence["6-8"]?.toFixed(1) || 0}%
+                        </div>
+                        <div className="text-gray-300 text-sm">
+                          Medium Confidence (6-8)
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-green-400">
+                          {metrics.byConfidence["8-10"]?.toFixed(1) || 0}%
+                        </div>
+                        <div className="text-gray-300 text-sm">
+                          High Confidence (8-10)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Accuracy by Bet Type */}
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <h4 className="text-lg font-semibold text-white mb-4">
+                      Accuracy by Bet Type
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {Object.entries(metrics.byBetType).map(
+                        ([betType, accuracy]) => (
+                          <div key={betType} className="text-center">
+                            <div className="text-xl font-bold text-purple-400">
+                              {accuracy.toFixed(1)}%
+                            </div>
+                            <div className="text-gray-300 text-sm">
+                              {betType}
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Accuracy by Recommendation Type */}
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <h4 className="text-lg font-semibold text-white mb-4">
+                      Accuracy by Recommendation Type
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      {Object.entries(metrics.byRecommendationType).map(
+                        ([recType, accuracy]) => (
+                          <div key={recType} className="text-center">
+                            <div
+                              className={`text-xl font-bold ${
+                                recType === "AVOID"
+                                  ? "text-red-400"
+                                  : recType === "WIN"
+                                  ? "text-green-400"
+                                  : recType === "OVER"
+                                  ? "text-blue-400"
+                                  : "text-gray-400"
+                              }`}
+                            >
+                              {accuracy.toFixed(1)}%
+                            </div>
+                            <div className="text-gray-300 text-sm">
+                              {recType}
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {metrics.totalPredictions === 0 && (
+                    <div className="text-center py-8">
+                      <div className="text-4xl mb-4">📊</div>
+                      <h4 className="text-lg font-semibold text-white mb-2">
+                        No Prediction Data Yet
+                      </h4>
+                      <p className="text-gray-300">
+                        Run "Fetch & Analyze New Bets" to generate predictions
+                        and track their accuracy.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
