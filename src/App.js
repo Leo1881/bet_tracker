@@ -1921,40 +1921,80 @@ function App() {
 
     // Calculate combined average
     const combinedAvgGoals = (homeAvgGoals + awayAvgGoals) / 2;
-    const typicalLine = 2.5;
+    const totalGames = homeTeamGames.length + awayTeamGames.length;
 
-    // Determine recommendation
-    if (combinedAvgGoals > typicalLine + 0.3) {
+    // If no data, return no clear trend
+    if (totalGames === 0) {
       return {
-        bet: "OVER 2.5",
-        confidence: Math.min((combinedAvgGoals / typicalLine) * 5, 10),
-        avgGoals: combinedAvgGoals,
-        totalGames: homeTeamGames.length + awayTeamGames.length,
-        reasoning: `Combined average: ${combinedAvgGoals.toFixed(
-          1
-        )} goals per game`,
+        bet: "No clear trend",
+        confidence: 5,
+        avgGoals: 0,
+        totalGames: 0,
+        reasoning: "No historical scoring data available",
       };
-    } else if (combinedAvgGoals < typicalLine - 0.3) {
-      return {
-        bet: "UNDER 2.5",
-        confidence: Math.min((typicalLine / combinedAvgGoals) * 5, 10),
-        avgGoals: combinedAvgGoals,
-        totalGames: homeTeamGames.length + awayTeamGames.length,
-        reasoning: `Combined average: ${combinedAvgGoals.toFixed(
-          1
-        )} goals per game`,
-      };
-    } else {
+    }
+
+    // Analyze multiple goal lines and find the best recommendation
+    const goalLines = [1.5, 2.5, 3.5, 4.5];
+    let bestRecommendation = null;
+    let highestConfidence = 0;
+
+    goalLines.forEach((line) => {
+      // Calculate confidence for OVER this line
+      if (combinedAvgGoals > line + 0.2) {
+        const overConfidence = Math.min(
+          ((combinedAvgGoals - line) / line) * 8 + 6,
+          10
+        );
+        if (overConfidence > highestConfidence) {
+          highestConfidence = overConfidence;
+          bestRecommendation = {
+            bet: `OVER ${line}`,
+            confidence: overConfidence,
+            avgGoals: combinedAvgGoals,
+            totalGames: totalGames,
+            reasoning: `Combined average: ${combinedAvgGoals.toFixed(
+              1
+            )} goals per game (${line} line)`,
+          };
+        }
+      }
+
+      // Calculate confidence for UNDER this line
+      if (combinedAvgGoals < line - 0.2) {
+        const underConfidence = Math.min(
+          ((line - combinedAvgGoals) / line) * 8 + 6,
+          10
+        );
+        if (underConfidence > highestConfidence) {
+          highestConfidence = underConfidence;
+          bestRecommendation = {
+            bet: `UNDER ${line}`,
+            confidence: underConfidence,
+            avgGoals: combinedAvgGoals,
+            totalGames: totalGames,
+            reasoning: `Combined average: ${combinedAvgGoals.toFixed(
+              1
+            )} goals per game (${line} line)`,
+          };
+        }
+      }
+    });
+
+    // If no clear recommendation found, return neutral
+    if (!bestRecommendation || highestConfidence < 6) {
       return {
         bet: "No clear trend",
         confidence: 5,
         avgGoals: combinedAvgGoals,
-        totalGames: homeTeamGames.length + awayTeamGames.length,
+        totalGames: totalGames,
         reasoning: `Combined average: ${combinedAvgGoals.toFixed(
           1
         )} goals per game`,
       };
     }
+
+    return bestRecommendation;
   };
 
   // Generate detailed reasoning for why a bet should be avoided
