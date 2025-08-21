@@ -1689,12 +1689,45 @@ function App() {
       };
     }
 
+    // Deduplicate by unique match (HOME_TEAM + AWAY_TEAM + DATE)
+    const uniqueMatches = new Map();
+
+    betsWithRecommendations.forEach((bet) => {
+      const matchKey = `${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.DATE}_${bet.BET_TYPE}`;
+
+      // Debug logging
+      console.log(
+        "Match Key:",
+        matchKey,
+        "Home:",
+        bet.HOME_TEAM,
+        "Away:",
+        bet.AWAY_TEAM,
+        "Date:",
+        bet.DATE,
+        "Bet Type:",
+        bet.BET_TYPE
+      );
+
+      if (!uniqueMatches.has(matchKey)) {
+        uniqueMatches.set(matchKey, bet);
+      }
+    });
+
+    console.log(
+      "Total bets with recommendations:",
+      betsWithRecommendations.length
+    );
+    console.log("Unique matches found:", uniqueMatches.size);
+
+    const deduplicatedBets = Array.from(uniqueMatches.values());
+
     let correctPredictions = 0;
     const confidenceRanges = { "4-6": [], "6-8": [], "8-10": [] };
     const betTypes = {};
     const recommendationTypes = {};
 
-    betsWithRecommendations.forEach((bet) => {
+    deduplicatedBets.forEach((bet) => {
       // Use the PREDICTION_ACCURATE field from Google Sheets instead of calculating
       const accuracy = bet.PREDICTION_ACCURATE || "Pending";
       const confidence = parseFloat(bet.SYSTEM_CONFIDENCE) || 0;
@@ -1738,10 +1771,9 @@ function App() {
     };
 
     return {
-      totalPredictions: betsWithRecommendations.length,
+      totalPredictions: deduplicatedBets.length,
       correctPredictions,
-      overallAccuracy:
-        (correctPredictions / betsWithRecommendations.length) * 100,
+      overallAccuracy: (correctPredictions / deduplicatedBets.length) * 100,
       byConfidence: {
         "4-6": calculateGroupAccuracy(confidenceRanges["4-6"]),
         "6-8": calculateGroupAccuracy(confidenceRanges["6-8"]),
