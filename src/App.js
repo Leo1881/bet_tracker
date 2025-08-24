@@ -2940,13 +2940,33 @@ function App() {
         });
       });
 
-      // Add matching teams to the set
+      // Add matching teams to the set with league and country info
+      const teamResults = new Map(); // Use Map to store unique team info
+
       matchingBets.forEach((bet) => {
         const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
-        if (teamName) filteredTeams.add(teamName);
+        if (teamName) {
+          const league = bet.LEAGUE || "Unknown";
+          const country = bet.COUNTRY || "Unknown";
+          const key = `${teamName}|${league}|${country}`;
+
+          if (!teamResults.has(key)) {
+            teamResults.set(key, {
+              team: teamName,
+              league: league,
+              country: country,
+            });
+          }
+        }
       });
 
-      const results = Array.from(filteredTeams).sort();
+      const results = Array.from(teamResults.values()).sort((a, b) => {
+        // Sort by team name first, then by country, then by league
+        if (a.team !== b.team) return a.team.localeCompare(b.team);
+        if (a.country !== b.country) return a.country.localeCompare(b.country);
+        return a.league.localeCompare(b.league);
+      });
+
       setQueryResults(results);
     } catch (error) {
       console.error("Query error:", error);
@@ -6648,12 +6668,17 @@ function App() {
                   Results ({queryResults.length} teams found):
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {queryResults.map((team, index) => (
+                  {queryResults.map((teamData, index) => (
                     <div
                       key={index}
-                      className="bg-white/10 rounded p-2 text-white"
+                      className="bg-white/10 rounded p-3 text-white"
                     >
-                      {team}
+                      <div className="font-medium text-blue-300">
+                        {teamData.team}
+                      </div>
+                      <div className="text-sm text-gray-300">
+                        {teamData.country} • {teamData.league}
+                      </div>
                     </div>
                   ))}
                 </div>
