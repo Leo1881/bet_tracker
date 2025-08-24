@@ -88,7 +88,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', 'teamNotes', 'betTypeAnalytics', or 'recommendations'
+  const [activeTab, setActiveTab] = useState("data"); // 'data', 'analytics', 'performance', 'blacklist', 'odds', 'betAnalysis', 'headToHead', 'topTeams', 'betSlips', 'teamNotes', 'betTypeAnalytics', 'recommendations', or 'query'
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [leagueSortConfig, setLeagueSortConfig] = useState({
     key: "winRate",
@@ -147,6 +147,19 @@ function App() {
     key: "totalGames",
     direction: "desc",
   });
+
+  // Query system state
+  const [queryFilters, setQueryFilters] = useState([
+    {
+      field: "",
+      value: "",
+      metric: "",
+      operator: "",
+      metricValue: "",
+    },
+  ]);
+  const [queryResults, setQueryResults] = useState([]);
+  const [isQuerying, setIsQuerying] = useState(false);
 
   useEffect(() => {
     const getData = async () => {
@@ -2735,6 +2748,227 @@ function App() {
     });
   };
 
+  // Query system functions
+  const getAvailableFields = () => {
+    return [
+      { value: "BET_TYPE", label: "Bet Type" },
+      { value: "BET_SELECTION", label: "Bet Selection" },
+      { value: "COUNTRY", label: "Country" },
+      { value: "LEAGUE", label: "League" },
+      { value: "TEAM_INCLUDED", label: "Team Included" },
+      { value: "HOME_TEAM", label: "Home Team" },
+      { value: "AWAY_TEAM", label: "Away Team" },
+      { value: "RESULT", label: "Result" },
+      { value: "ODDS1", label: "Odds 1" },
+      { value: "ODDS2", label: "Odds 2" },
+      { value: "ODDSX", label: "Odds X" },
+      { value: "HOME_SCORE", label: "Home Score" },
+      { value: "AWAY_SCORE", label: "Away Score" },
+      { value: "DATE", label: "Date" },
+      { value: "HOME_TEAM_POSITION_NUMBER", label: "Home Team Position" },
+      { value: "AWAY_TEAM_POSITION_NUMBER", label: "Away Team Position" },
+      { value: "TOTAL_TEAMS_IN_LEAGUE", label: "Total Teams in League" },
+      { value: "HOME_TEAM_GAMES_PLAYED", label: "Home Team Games Played" },
+      { value: "AWAY_TEAM_GAMES_PLAYED", label: "Away Team Games Played" },
+    ];
+  };
+
+  const getFieldValues = (field) => {
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+
+    // Special handling for certain fields
+    if (field === "HOME_TEAM" || field === "AWAY_TEAM") {
+      // For home/away team fields, add special options
+      const values = [
+        ...new Set(deduplicatedBets.map((bet) => bet[field]).filter(Boolean)),
+      ];
+      return values.sort();
+    }
+
+    const values = [
+      ...new Set(deduplicatedBets.map((bet) => bet[field]).filter(Boolean)),
+    ];
+    return values.sort();
+  };
+
+  const getAvailableMetrics = () => {
+    return [
+      { value: "wins", label: "Wins" },
+      { value: "losses", label: "Losses" },
+      { value: "winRate", label: "Win Rate" },
+      { value: "total", label: "Total Bets" },
+    ];
+  };
+
+  const getAvailableOperators = () => {
+    return [
+      { value: "equals", label: "Equals" },
+      { value: "greaterThan", label: "Greater Than" },
+      { value: "lessThan", label: "Less Than" },
+      { value: "contains", label: "Contains" },
+    ];
+  };
+
+  const addQueryFilter = () => {
+    setQueryFilters([
+      ...queryFilters,
+      {
+        field: "",
+        value: "",
+        metric: "",
+        operator: "",
+        metricValue: "",
+      },
+    ]);
+  };
+
+  const removeQueryFilter = (index) => {
+    const newFilters = queryFilters.filter((_, i) => i !== index);
+    setQueryFilters(newFilters);
+  };
+
+  const updateQueryFilter = (index, field, value) => {
+    const newFilters = [...queryFilters];
+    newFilters[index] = { ...newFilters[index], [field]: value };
+    setQueryFilters(newFilters);
+  };
+
+  const executeQuery = () => {
+    setIsQuerying(true);
+
+    try {
+      const deduplicatedBets = getDeduplicatedBetsForAnalysis();
+      let filteredTeams = new Set();
+
+      // Apply all filters (AND logic - all conditions must be met)
+      const matchingBets = deduplicatedBets.filter((bet) => {
+        // Check if this bet matches ALL filters
+        return queryFilters.every((filter) => {
+          if (!filter.field || !filter.value) return true; // Skip empty filters
+
+          const betValue = bet[filter.field];
+          if (!betValue) return false;
+
+          // Check if the bet matches the field value
+          let matchesField = false;
+
+          // Handle numeric fields differently
+          const numericFields = [
+            "ODDS1",
+            "ODDS2",
+            "ODDSX",
+            "HOME_SCORE",
+            "AWAY_SCORE",
+            "HOME_TEAM_POSITION_NUMBER",
+            "AWAY_TEAM_POSITION_NUMBER",
+            "TOTAL_TEAMS_IN_LEAGUE",
+            "HOME_TEAM_GAMES_PLAYED",
+            "AWAY_TEAM_GAMES_PLAYED",
+          ];
+
+          if (numericFields.includes(filter.field)) {
+            // For numeric fields, check if the value is greater than, less than, or equals
+            const betNum = parseFloat(betValue);
+            const filterNum = parseFloat(filter.value);
+
+            if (!isNaN(betNum) && !isNaN(filterNum)) {
+              if (filter.operator === "greaterThan") {
+                matchesField = betNum > filterNum;
+              } else if (filter.operator === "lessThan") {
+                matchesField = betNum < filterNum;
+              } else if (filter.operator === "equals") {
+                matchesField = betNum === filterNum;
+              } else {
+                // Default to contains for numeric fields
+                matchesField = betValue
+                  .toLowerCase()
+                  .includes(filter.value.toLowerCase());
+              }
+            } else {
+              // Fallback to string matching for non-numeric values
+              matchesField = betValue
+                .toLowerCase()
+                .includes(filter.value.toLowerCase());
+            }
+          } else {
+            // For non-numeric fields, use string matching
+            matchesField = betValue
+              .toLowerCase()
+              .includes(filter.value.toLowerCase());
+          }
+
+          if (!matchesField) return false;
+
+          // If no metric filter, just return true for this filter
+          if (!filter.metric || !filter.operator || filter.metricValue === "") {
+            return true;
+          }
+
+          // Get team analytics for metric filtering
+          const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
+          const teamAnalytics = getTeamAnalytics().find(
+            (t) => t.team === teamName
+          );
+
+          if (!teamAnalytics) return false;
+
+          // Get bet type specific metrics if filtering by bet type
+          let metricValue;
+          if (filter.field === "BET_TYPE") {
+            const betTypeData = teamAnalytics.betTypeBreakdown.find((bt) =>
+              bt.betType.toLowerCase().includes(filter.value.toLowerCase())
+            );
+            metricValue = betTypeData ? betTypeData[filter.metric] : 0;
+          } else {
+            metricValue = teamAnalytics[filter.metric] || 0;
+          }
+
+          // Apply operator
+          const targetValue = parseFloat(filter.metricValue);
+          switch (filter.operator) {
+            case "equals":
+              return metricValue === targetValue;
+            case "greaterThan":
+              return metricValue > targetValue;
+            case "lessThan":
+              return metricValue < targetValue;
+            case "contains":
+              return metricValue.toString().includes(filter.metricValue);
+            default:
+              return true;
+          }
+        });
+      });
+
+      // Add matching teams to the set
+      matchingBets.forEach((bet) => {
+        const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
+        if (teamName) filteredTeams.add(teamName);
+      });
+
+      const results = Array.from(filteredTeams).sort();
+      setQueryResults(results);
+    } catch (error) {
+      console.error("Query error:", error);
+      setQueryResults([]);
+    } finally {
+      setIsQuerying(false);
+    }
+  };
+
+  const clearQuery = () => {
+    setQueryFilters([
+      {
+        field: "",
+        value: "",
+        metric: "",
+        operator: "",
+        metricValue: "",
+      },
+    ]);
+    setQueryResults([]);
+  };
+
   const getLeagueAnalytics = () => {
     const leagues = {};
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
@@ -4649,6 +4883,16 @@ function App() {
             Bet Recommendations
           </button>
           <button
+            onClick={() => setActiveTab("query")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "query"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Query
+          </button>
+          <button
             onClick={() => setActiveTab("betSlips")}
             className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "betSlips"
@@ -6235,6 +6479,229 @@ function App() {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "query" && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-bold text-white mb-4">
+              🔍 Advanced Query Filter
+            </h3>
+            <div className="text-gray-300 mb-6">
+              <p>
+                Build custom queries to find teams that match specific criteria.
+                Get clean, deduplicated results instead of raw data rows.
+              </p>
+            </div>
+
+            {/* Query Filters */}
+            <div className="space-y-4 mb-6">
+              {queryFilters.map((filter, index) => (
+                <div
+                  key={index}
+                  className="bg-white/5 rounded-lg p-4 border border-white/10"
+                >
+                  <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex items-center space-x-2">
+                      <label className="text-white text-sm font-medium">
+                        Field:
+                      </label>
+                      <select
+                        value={filter.field}
+                        onChange={(e) =>
+                          updateQueryFilter(index, "field", e.target.value)
+                        }
+                        className="bg-white/20 border border-white/30 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select Field</option>
+                        {getAvailableFields().map((field) => (
+                          <option key={field.value} value={field.value}>
+                            {field.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <label className="text-white text-sm font-medium">
+                        Value:
+                      </label>
+                      <select
+                        value={filter.value}
+                        onChange={(e) =>
+                          updateQueryFilter(index, "value", e.target.value)
+                        }
+                        className="bg-white/20 border border-white/30 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!filter.field}
+                      >
+                        <option value="">Select Value</option>
+                        {filter.field &&
+                          getFieldValues(filter.field).map((value) => (
+                            <option key={value} value={value}>
+                              {value}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <label className="text-white text-sm font-medium">
+                        Metric:
+                      </label>
+                      <select
+                        value={filter.metric}
+                        onChange={(e) =>
+                          updateQueryFilter(index, "metric", e.target.value)
+                        }
+                        className="bg-white/20 border border-white/30 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select Metric (Optional)</option>
+                        {getAvailableMetrics().map((metric) => (
+                          <option key={metric.value} value={metric.value}>
+                            {metric.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <label className="text-white text-sm font-medium">
+                        Operator:
+                      </label>
+                      <select
+                        value={filter.operator}
+                        onChange={(e) =>
+                          updateQueryFilter(index, "operator", e.target.value)
+                        }
+                        className="bg-white/20 border border-white/30 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!filter.metric}
+                      >
+                        <option value="">Select Operator</option>
+                        {filter.metric &&
+                          getAvailableOperators().map((op) => (
+                            <option key={op.value} value={op.value}>
+                              {op.label}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <label className="text-white text-sm font-medium">
+                        Value:
+                      </label>
+                      <input
+                        type="text"
+                        value={filter.metricValue}
+                        onChange={(e) =>
+                          updateQueryFilter(
+                            index,
+                            "metricValue",
+                            e.target.value
+                          )
+                        }
+                        className="bg-white/20 border border-white/30 rounded px-3 py-1 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-20"
+                        placeholder="0"
+                        disabled={!filter.operator}
+                      />
+                    </div>
+
+                    {queryFilters.length > 1 && (
+                      <button
+                        onClick={() => removeQueryFilter(index)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex gap-4">
+                <button
+                  onClick={addQueryFilter}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Add Another Filter
+                </button>
+                <button
+                  onClick={clearQuery}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={executeQuery}
+                  disabled={isQuerying}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  {isQuerying ? "Running Query..." : "Run Query"}
+                </button>
+              </div>
+            </div>
+
+            {/* Query Results */}
+            {queryResults.length > 0 && (
+              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <h4 className="text-white font-semibold mb-3">
+                  Results ({queryResults.length} teams found):
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {queryResults.map((team, index) => (
+                    <div
+                      key={index}
+                      className="bg-white/10 rounded p-2 text-white"
+                    >
+                      {team}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Example Queries */}
+            <div className="mt-6 bg-white/5 rounded-lg p-4 border border-white/10">
+              <h4 className="text-white font-semibold mb-3">
+                Example Queries:
+              </h4>
+              <div className="text-gray-300 text-sm space-y-2">
+                <p>
+                  <strong>
+                    Teams with 0 Double Chance losses AND played home games:
+                  </strong>
+                  <br />
+                  Filter 1: Field: "Bet Type" → Value: "Double Chance" → Metric:
+                  "Losses" → Operator: "Equals" → Value: "0"
+                  <br />
+                  Filter 2: Field: "HOME_TEAM" → Value: [any team name]
+                </p>
+                <p>
+                  <strong>
+                    Teams with &gt;80% win rate in Premier League:
+                  </strong>
+                  <br />
+                  Filter 1: Field: "Team Included" → Value: [any team] → Metric:
+                  "Win Rate" → Operator: "Greater Than" → Value: "80"
+                  <br />
+                  Filter 2: Field: "League" → Value: "Premier League"
+                </p>
+                <p>
+                  <strong>Teams that won with odds &gt;2.0:</strong>
+                  <br />
+                  Filter 1: Field: "Result" → Value: "win"
+                  <br />
+                  Filter 2: Field: "ODDS1" → Value: [any odds] → Metric:
+                  "Greater Than" → Value: "2.0"
+                </p>
+                <p>
+                  <strong>Teams in top 5 league position:</strong>
+                  <br />
+                  Filter 1: Field: "HOME_TEAM_POSITION_NUMBER" → Value: [any
+                  position] → Metric: "Less Than" → Value: "6"
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
