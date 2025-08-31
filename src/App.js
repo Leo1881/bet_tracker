@@ -4594,7 +4594,18 @@ function App() {
       const result = bet.RESULT?.toLowerCase() || "";
       const isWin = result.includes("win");
       const isLoss = result.includes("loss");
-      const odds = parseFloat(bet.ODDS1) || 0;
+
+      // Determine the correct odds based on which team was bet on
+      let odds = 0;
+      if (teamIncluded === homeTeam) {
+        odds = parseFloat(bet.ODDS1) || 0;
+      } else if (teamIncluded === awayTeam) {
+        odds = parseFloat(bet.ODDS2) || 0;
+      } else {
+        // Fallback to ODDS1 if we can't determine
+        odds = parseFloat(bet.ODDS1) || 0;
+      }
+
       const league = `${bet.COUNTRY} ${bet.LEAGUE}`;
 
       // Use TEAM_INCLUDED if available, otherwise use HOME_TEAM or AWAY_TEAM
