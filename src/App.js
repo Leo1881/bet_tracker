@@ -2086,70 +2086,82 @@ function App() {
       };
     }
 
-    // Get historical data for double chance bets
-    const homeTeamBets = (bets || []).filter(
+    // First, get the Straight Win analysis to understand which team is stronger
+    const straightWinAnalysis = analyzeStraightWin(
+      homeTeam,
+      awayTeam,
+      country,
+      league,
+      betData
+    );
+
+    // Get all historical matches between these teams or in this league to calculate draw rate
+    const allMatches = (bets || []).filter(
       (b) =>
-        b.TEAM_INCLUDED === homeTeam &&
+        ((b.HOME_TEAM === homeTeam && b.AWAY_TEAM === awayTeam) ||
+          (b.HOME_TEAM === awayTeam && b.AWAY_TEAM === homeTeam)) &&
         b.COUNTRY === country &&
         b.LEAGUE === league &&
-        b.BET_TYPE === "Double Chance" &&
         b.RESULT &&
         b.RESULT.trim() !== ""
     );
 
-    const awayTeamBets = (bets || []).filter(
-      (b) =>
-        b.TEAM_INCLUDED === awayTeam &&
-        b.COUNTRY === country &&
-        b.LEAGUE === league &&
-        b.BET_TYPE === "Double Chance" &&
-        b.RESULT &&
-        b.RESULT.trim() !== ""
-    );
-
-    // Calculate double chance success rates
-    const homeSuccess = homeTeamBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
+    // Calculate draw rate from historical matches
+    const draws = allMatches.filter((b) =>
+      b.RESULT.toLowerCase().includes("draw")
     ).length;
-    const homeSuccessRate =
-      homeTeamBets.length > 0 ? (homeSuccess / homeTeamBets.length) * 100 : 0;
+    const drawRate =
+      allMatches.length > 0 ? (draws / allMatches.length) * 100 : 15; // Default 15% if no data
 
-    const awaySuccess = awayTeamBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
-    ).length;
-    const awaySuccessRate =
-      awayTeamBets.length > 0 ? (awaySuccess / awayTeamBets.length) * 100 : 0;
+    // Calculate Double Chance confidence based on Straight Win + Draw
+    let doubleChanceConfidence;
+    let recommendedTeam;
+    let reasoning;
 
-    // Determine recommendation
-    if (homeSuccessRate > awaySuccessRate + 5) {
-      return {
-        bet: `${homeTeam} or Draw`,
-        confidence: Math.min(homeSuccessRate / 10, 10),
-        successRate: homeSuccessRate,
-        totalBets: homeTeamBets.length,
-        reasoning: `${homeTeam} has ${homeSuccessRate.toFixed(
-          1
-        )}% double chance success rate`,
-      };
-    } else if (awaySuccessRate > homeSuccessRate + 5) {
-      return {
-        bet: `${awayTeam} or Draw`,
-        confidence: Math.min(awaySuccessRate / 10, 10),
-        successRate: awaySuccessRate,
-        totalBets: awayTeamBets.length,
-        reasoning: `${awayTeam} has ${awaySuccessRate.toFixed(
-          1
-        )}% double chance success rate`,
-      };
+    if (straightWinAnalysis.bet === homeTeam) {
+      recommendedTeam = homeTeam;
+      doubleChanceConfidence = (straightWinAnalysis.winRate + drawRate) / 10;
+      reasoning = `${homeTeam} has ${straightWinAnalysis.winRate.toFixed(
+        1
+      )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
+    } else if (straightWinAnalysis.bet === awayTeam) {
+      recommendedTeam = awayTeam;
+      doubleChanceConfidence = (straightWinAnalysis.winRate + drawRate) / 10;
+      reasoning = `${awayTeam} has ${straightWinAnalysis.winRate.toFixed(
+        1
+      )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
     } else {
-      return {
-        bet: "No clear advantage",
-        confidence: 5,
-        successRate: Math.max(homeSuccessRate, awaySuccessRate),
-        totalBets: homeTeamBets.length + awayTeamBets.length,
-        reasoning: "Teams have similar double chance rates",
-      };
+      // If no clear winner, use the team with higher win rate
+      const homeWinRate = straightWinAnalysis.winRate;
+      const awayWinRate = straightWinAnalysis.winRate;
+      if (homeWinRate >= awayWinRate) {
+        recommendedTeam = homeTeam;
+        doubleChanceConfidence = (homeWinRate + drawRate) / 10;
+        reasoning = `${homeTeam} has ${homeWinRate.toFixed(
+          1
+        )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
+      } else {
+        recommendedTeam = awayTeam;
+        doubleChanceConfidence = (awayWinRate + drawRate) / 10;
+        reasoning = `${awayTeam} has ${awayWinRate.toFixed(
+          1
+        )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
+      }
     }
+
+    // Ensure Double Chance confidence is at least as high as Straight Win (logical validation)
+    doubleChanceConfidence = Math.max(
+      doubleChanceConfidence,
+      straightWinAnalysis.confidence
+    );
+
+    return {
+      bet: `${recommendedTeam} or Draw`,
+      confidence: Math.min(doubleChanceConfidence, 10),
+      successRate: doubleChanceConfidence * 10,
+      totalBets: allMatches.length,
+      reasoning: reasoning,
+    };
   };
 
   const analyzeOverUnder = (homeTeam, awayTeam, country, league, betData) => {
