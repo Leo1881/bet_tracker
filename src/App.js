@@ -7061,23 +7061,23 @@ function App() {
                               <td className="px-4 py-2 text-gray-300">
                                 <div className="text-sm">
                                   <div className="font-medium text-purple-300">
-                                    {result.team_included}
+                                    {result.TEAM_INCLUDED}
                                   </div>
                                   <div className="text-xs text-gray-400">
-                                    {formatDate(result.date)}
+                                    {formatDate(result.DATE)}
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-2 text-gray-300">
-                                {result.country}
+                                {result.COUNTRY}
                               </td>
                               <td className="px-4 py-2 text-gray-300">
-                                {result.league}
+                                {result.LEAGUE}
                               </td>
                               <td className="px-4 py-2 text-gray-300">
                                 <div className="text-sm">
                                   <div>
-                                    {result.home_team} vs {result.away_team}
+                                    {result.HOME_TEAM} vs {result.AWAY_TEAM}
                                   </div>
                                 </div>
                               </td>
