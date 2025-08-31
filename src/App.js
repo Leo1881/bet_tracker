@@ -5,6 +5,8 @@ import {
   fetchNewBets,
   fetchTeamNotes,
 } from "./utils/fetchSheetData";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import "./App.css";
 
 // Helper function: factorial
@@ -2989,6 +2991,168 @@ function App() {
     setQueryResults([]);
   };
 
+  // PDF Report Generation
+  const generatePDFReport = async () => {
+    if (!analysisResults || analysisResults.length === 0) {
+      alert(
+        "No bet analysis data available. Please run 'Fetch & Analyze New Bets' first."
+      );
+      return;
+    }
+
+    try {
+      const pdf = new jsPDF("l", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - 2 * margin;
+
+      let yPosition = margin;
+      const lineHeight = 5;
+      const sectionGap = 15;
+
+      // Consolidated Bet Analysis Table
+      pdf.setFontSize(16);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Bet Analysis Report", margin, yPosition);
+      yPosition += lineHeight * 1.5;
+
+      // Table headers - 8 columns as requested
+      const tableHeaders = [
+        "Teams (Home v Away)",
+        "League",
+        "Confidence",
+        "Performance",
+        "Scoring Analysis",
+        "Straight Win",
+        "Double Chance",
+        "Over/Under",
+      ];
+      const columnWidths = [50, 30, 20, 20, 40, 20, 20, 30];
+      const startX = margin;
+
+      // Draw table headers
+      pdf.setFontSize(7);
+      pdf.setFont("helvetica", "bold");
+      let currentX = startX;
+      tableHeaders.forEach((header, index) => {
+        pdf.text(header, currentX, yPosition);
+        currentX += columnWidths[index];
+      });
+      yPosition += lineHeight;
+
+      // Draw header line
+      pdf.line(
+        startX,
+        yPosition,
+        startX + columnWidths.reduce((a, b) => a + b, 0),
+        yPosition
+      );
+      yPosition += lineHeight;
+
+      // Table data
+      pdf.setFontSize(6);
+      pdf.setFont("helvetica", "normal");
+
+      analysisResults.forEach((bet, index) => {
+        // Check if we need a new page
+        if (yPosition > pageHeight - 40) {
+          pdf.addPage();
+          yPosition = margin;
+        }
+
+        currentX = startX;
+
+        // Teams (Home v Away)
+        const matchText = `${bet.HOME_TEAM} v ${bet.AWAY_TEAM}`;
+        pdf.text(matchText, currentX, yPosition);
+        currentX += columnWidths[0];
+
+        // League
+        const leagueText = `${bet.COUNTRY} - ${bet.LEAGUE}`;
+        pdf.text(leagueText, currentX, yPosition);
+        currentX += columnWidths[1];
+
+        // Confidence
+        pdf.text(`${bet.confidenceScore}/10`, currentX, yPosition);
+        currentX += columnWidths[2];
+
+        // Historical Performance
+        pdf.text(
+          `${bet.historicalWins}W - ${bet.historicalLosses}L`,
+          currentX,
+          yPosition
+        );
+        currentX += columnWidths[3];
+
+        // Scoring Analysis
+        if (bet.scoringRecommendation && bet.scoringRecommendation.type) {
+          pdf.text(bet.scoringRecommendation.type, currentX, yPosition);
+        } else {
+          pdf.text("N/A", currentX, yPosition);
+        }
+        currentX += columnWidths[4];
+
+        // Find matching bet recommendation
+        const matchingRec = betRecommendations
+          ? betRecommendations.find(
+              (rec) =>
+                rec.match.includes(bet.HOME_TEAM) &&
+                rec.match.includes(bet.AWAY_TEAM)
+            )
+          : null;
+
+        // Straight Win
+        if (matchingRec) {
+          pdf.text(
+            `${matchingRec.straightWin.confidence.toFixed(1)}`,
+            currentX,
+            yPosition
+          );
+        } else {
+          pdf.text("N/A", currentX, yPosition);
+        }
+        currentX += columnWidths[5];
+
+        // Double Chance
+        if (matchingRec) {
+          pdf.text(
+            `${matchingRec.doubleChance.confidence.toFixed(1)}`,
+            currentX,
+            yPosition
+          );
+        } else {
+          pdf.text("N/A", currentX, yPosition);
+        }
+        currentX += columnWidths[6];
+
+        // Over/Under
+        if (matchingRec) {
+          pdf.text(
+            `${
+              matchingRec.overUnder.bet
+            } (${matchingRec.overUnder.confidence.toFixed(1)})`,
+            currentX,
+            yPosition
+          );
+        } else {
+          pdf.text("N/A", currentX, yPosition);
+        }
+
+        yPosition += lineHeight;
+      });
+
+      // Save the PDF
+      const fileName = `bet-analysis-report-${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Error generating PDF report. Please try again.");
+    }
+  };
+
   const getLeagueAnalytics = () => {
     const leagues = {};
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
@@ -5945,7 +6109,7 @@ function App() {
             </div>
 
             {/* Fetch and Analyze Button */}
-            <div className="mb-6">
+            <div className="mb-6 flex gap-4">
               <button
                 onClick={analyzeNewBets}
                 disabled={isAnalyzing}
@@ -5956,6 +6120,17 @@ function App() {
                 }`}
               >
                 {isAnalyzing ? "🔄 Analyzing..." : "Fetch & Analyze New Bets"}
+              </button>
+              <button
+                onClick={generatePDFReport}
+                disabled={!analysisResults || analysisResults.length === 0}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                  !analysisResults || analysisResults.length === 0
+                    ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+                    : "bg-green-500 text-white hover:bg-green-600"
+                }`}
+              >
+                📄 Generate PDF Report
               </button>
             </div>
 
