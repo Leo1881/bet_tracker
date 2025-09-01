@@ -1297,7 +1297,46 @@ function App() {
         bet.RESULT !== "pending"
     );
 
-    if (teamBets.length === 0) return 0;
+    if (teamBets.length === 0) {
+      // Fallback 1: Look for team performance across ALL leagues/countries
+      const allTeamBets = bets.filter(
+        (bet) =>
+          bet.TEAM_INCLUDED === teamName &&
+          bet.RESULT !== "" &&
+          bet.RESULT !== "pending"
+      );
+
+      if (allTeamBets.length > 0) {
+        const wins = allTeamBets.filter((bet) => bet.RESULT === "win").length;
+        const winRate = (wins / allTeamBets.length) * 100;
+
+        console.log(
+          `Fallback for ${teamName}: ${wins}W/${
+            allTeamBets.length
+          } total (${winRate.toFixed(1)}% win rate)`
+        );
+
+        // Calculate confidence based on overall team performance (with 70% weight for cross-league data)
+        let confidence = 0;
+        if (winRate >= 80) confidence = 6;
+        else if (winRate >= 70) confidence = 5.5;
+        else if (winRate >= 60) confidence = 5;
+        else if (winRate >= 50) confidence = 4.5;
+        else if (winRate >= 40) confidence = 4;
+        else confidence = 3.5;
+
+        // Sample size adjustment for cross-league data
+        if (allTeamBets.length >= 10) confidence += 1;
+        else if (allTeamBets.length >= 5) confidence += 0.5;
+
+        const finalConfidence = Math.min(8, Math.max(3, confidence));
+        console.log(`Fallback confidence for ${teamName}: ${finalConfidence}`);
+        return finalConfidence; // Cap at 8, minimum 3
+      }
+
+      // Fallback 2: If no team data at all, return neutral minimum
+      return 4;
+    }
 
     const wins = teamBets.filter((bet) => bet.RESULT === "win").length;
     const winRate = (wins / teamBets.length) * 100;
@@ -2511,22 +2550,32 @@ function App() {
   };
 
   const calculateConfidenceScore = (bet) => {
+    console.log(`=== CALCULATING CONFIDENCE FOR: ${bet.team_included} ===`);
+    console.log(`Bet object:`, bet);
+
     const teamConfidence = calculateTeamConfidence(
       bet.team_included,
       bet.country,
-      bet.league
+      bet.league,
+      bets
     );
-    const leagueConfidence = calculateLeagueConfidence(bet.country, bet.league);
+    const leagueConfidence = calculateLeagueConfidence(
+      bet.country,
+      bet.league,
+      bets
+    );
     const oddsConfidence = calculateOddsConfidence(
       bet.odds1,
       bet.bet_type,
-      bet.team_included
+      bet.team_included,
+      bets
     );
     const matchupConfidence = calculateMatchupConfidence(
       bet.home_team,
       bet.away_team,
       bet.country,
-      bet.league
+      bet.league,
+      bets
     );
     const positionConfidence = calculatePositionConfidence(
       bet.home_team_position,
@@ -2548,7 +2597,8 @@ function App() {
       bet.team_included,
       bet.country,
       bet.league,
-      isHomeGame
+      isHomeGame,
+      bets
     );
 
     // Weighted average: Team (30%), League (15%), Odds (15%), Matchup (15%), Position (10%), Home/Away (15%)
@@ -2560,7 +2610,72 @@ function App() {
       positionConfidence * 0.1 +
       homeAwayConfidence * 0.15;
 
-    return Math.round(weightedScore * 10) / 10; // Round to 1 decimal place
+    console.log(`Confidence breakdown for ${bet.team_included}:`);
+    console.log(`  Team: ${teamConfidence} (30%)`);
+    console.log(`  League: ${leagueConfidence} (15%)`);
+    console.log(`  Odds: ${oddsConfidence} (15%)`);
+    console.log(`  Matchup: ${matchupConfidence} (15%)`);
+    console.log(`  Position: ${positionConfidence} (10%)`);
+    console.log(`  Home/Away: ${homeAwayConfidence} (15%)`);
+    console.log(`  Weighted Score: ${weightedScore}`);
+
+    // Excellence bonus: Ensure teams with excellent performance get appropriate minimum scores
+    let finalScore = weightedScore;
+
+    // Get team's actual win rate for excellence bonus calculation
+    const teamBets = bets.filter(
+      (betData) =>
+        betData.TEAM_INCLUDED === bet.team_included &&
+        betData.COUNTRY === bet.country &&
+        betData.LEAGUE === bet.league &&
+        betData.RESULT !== "" &&
+        betData.RESULT !== "pending"
+    );
+
+    console.log(`Excellence bonus filter for ${bet.team_included}:`);
+    console.log(
+      `  Looking for: "${bet.team_included}" in "${bet.country}" "${bet.league}"`
+    );
+    console.log(`  Found ${teamBets.length} exact matches`);
+    if (teamBets.length === 0) {
+      // Check if there are any team matches at all
+      const anyTeamMatches = bets.filter(
+        (betData) => betData.TEAM_INCLUDED === bet.team_included
+      );
+      console.log(`  But found ${anyTeamMatches.length} total team matches`);
+    }
+
+    if (teamBets.length > 0) {
+      console.log("TEAM BETS FOUND:", teamBets.length);
+      const wins = teamBets.filter(
+        (betData) => betData.RESULT === "Win"
+      ).length;
+      const winRate = (wins / teamBets.length) * 100;
+
+      // Debug: Check what RESULT values we actually have
+      const resultValues = [
+        ...new Set(teamBets.map((betData) => betData.RESULT)),
+      ];
+      console.log(`Result values found:`, resultValues);
+      console.log(`Wins found: ${wins} out of ${teamBets.length} bets`);
+
+      // Apply excellence bonus based on win rate
+      console.log(
+        `Excellence bonus check for ${bet.team_included}: winRate=${winRate}%, bets=${teamBets.length}, current score=${weightedScore}`
+      );
+      if (winRate >= 90 && teamBets.length >= 3) {
+        finalScore = Math.max(finalScore, 7.0); // Minimum 7/10 for 90%+ win rate
+        console.log(`Applied 90%+ bonus: ${finalScore}`);
+      } else if (winRate >= 80 && teamBets.length >= 3) {
+        finalScore = Math.max(finalScore, 6.0); // Minimum 6/10 for 80%+ win rate
+        console.log(`Applied 80%+ bonus: ${finalScore}`);
+      } else if (winRate >= 70 && teamBets.length >= 5) {
+        finalScore = Math.max(finalScore, 5.5); // Minimum 5.5/10 for 70%+ win rate
+        console.log(`Applied 70%+ bonus: ${finalScore}`);
+      }
+    }
+
+    return Math.round(finalScore * 10) / 10; // Round to 1 decimal place
   };
 
   const getConfidenceBreakdown = (bet) => {
@@ -3568,6 +3683,7 @@ function App() {
         );
 
         // Calculate confidence score
+        console.log("ABOUT TO CALL calculateConfidenceScore for:", teamName);
         const confidenceScore = calculateConfidenceScore({
           team_included: teamName || "",
           country: country || "",
