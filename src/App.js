@@ -2672,6 +2672,8 @@ function App() {
           losses: 0,
           pending: 0,
           betTypes: {},
+          country: bet.COUNTRY || "Unknown",
+          league: bet.LEAGUE || "Unknown",
         };
       }
 
@@ -2720,6 +2722,8 @@ function App() {
               ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)
               : 0,
           betTypeBreakdown,
+          country: stats.country,
+          league: stats.league,
         };
       })
       .sort((a, b) => {
@@ -2742,6 +2746,10 @@ function App() {
       switch (key) {
         case "team":
           return multiplier * a.team.localeCompare(b.team);
+        case "country":
+          return multiplier * a.country.localeCompare(b.country);
+        case "league":
+          return multiplier * a.league.localeCompare(b.league);
         case "total":
           return multiplier * (a.total - b.total);
         case "wins":
@@ -4246,7 +4254,7 @@ function App() {
         };
       })
       .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0))
-      .slice(0, 40); // Top 40 teams
+      .slice(0, 70); // Top 70 teams
 
     return teamsArray || [];
   };
@@ -5352,6 +5360,36 @@ function App() {
                     </th>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                      onClick={() => handleAnalyticsSort("country")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Country</span>
+                        {analyticsSortConfig.key === "country" && (
+                          <span className="ml-2">
+                            {analyticsSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                      onClick={() => handleAnalyticsSort("league")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>League</span>
+                        {analyticsSortConfig.key === "league" && (
+                          <span className="ml-2">
+                            {analyticsSortConfig.direction === "asc"
+                              ? "↑"
+                              : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
                       onClick={() => handleAnalyticsSort("total")}
                     >
                       <div className="flex items-center justify-between">
@@ -5421,6 +5459,12 @@ function App() {
                       <tr className="hover:bg-white/5 transition-colors">
                         <td className="px-4 py-2 text-gray-200">{team.team}</td>
                         <td className="px-4 py-2 text-gray-200">
+                          {team.country}
+                        </td>
+                        <td className="px-4 py-2 text-gray-200">
+                          {team.league}
+                        </td>
+                        <td className="px-4 py-2 text-gray-200">
                           {team.total}
                         </td>
                         <td className="px-4 py-2 text-green-400">
@@ -5456,7 +5500,7 @@ function App() {
                       {expandedAnalyticsTeams.has(team.team) &&
                         team.betTypeBreakdown.length > 0 && (
                           <tr>
-                            <td colSpan="6" className="px-4 py-2 bg-white/5">
+                            <td colSpan="8" className="px-4 py-2 bg-white/5">
                               <div className="ml-4">
                                 <h4 className="text-white font-medium mb-2">
                                   Bet Type Breakdown:
@@ -7398,7 +7442,7 @@ function App() {
         {activeTab === "topTeams" && (
           <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
             <h3 className="text-lg font-bold text-white mb-4">
-              Top 40 Teams Ranking
+              Top 70 Teams Ranking
             </h3>
             <div className="text-gray-300 mb-6">
               <p>
