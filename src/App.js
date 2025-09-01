@@ -3475,8 +3475,9 @@ function App() {
         // Check if team is blacklisted (any country/league)
         const isBlacklisted = (blacklistedTeams || []).some(
           (blacklistedTeam) =>
-            blacklistedTeam.team_name?.toLowerCase() ===
-            (teamName || "").toLowerCase()
+            (
+              blacklistedTeam.TEAM_NAME || blacklistedTeam.team_name
+            )?.toLowerCase() === (teamName || "").toLowerCase()
         );
 
         // Get historical performance for this team (EXACT country + league match only)
@@ -4657,6 +4658,11 @@ function App() {
 
       if (!teamToAnalyze) return; // Skip bets without any team
 
+      // Exclude teams named "Over 1.5" and "Over 0.5"
+      if (teamToAnalyze === "Over 1.5" || teamToAnalyze === "Over 0.5") {
+        return;
+      }
+
       if (!teamGroups[teamToAnalyze]) {
         teamGroups[teamToAnalyze] = {
           team: teamToAnalyze,
@@ -4776,9 +4782,31 @@ function App() {
         };
       });
 
-    // Sort by win rate descending
-    return analytics.sort(
-      (a, b) => parseFloat(b.winRate) - parseFloat(a.winRate)
+    // Calculate composite score for better ranking
+    const analyticsWithScore = analytics.map((team) => {
+      // Composite score: Win Rate (60%) + Sample Size Bonus (40%)
+      const winRateScore = parseFloat(team.winRate) * 0.6;
+
+      // Sample size bonus: More bets = higher reliability score
+      let sampleSizeScore = 0;
+      if (team.total >= 20) sampleSizeScore = 40; // 20+ bets = max score
+      else if (team.total >= 15) sampleSizeScore = 35; // 15-19 bets
+      else if (team.total >= 10) sampleSizeScore = 30; // 10-14 bets
+      else if (team.total >= 8) sampleSizeScore = 25; // 8-9 bets
+      else if (team.total >= 5) sampleSizeScore = 20; // 5-7 bets (minimum threshold)
+
+      const compositeScore = winRateScore + sampleSizeScore;
+
+      return {
+        ...team,
+        compositeScore,
+        sampleSizeScore,
+      };
+    });
+
+    // Sort by composite score descending
+    return analyticsWithScore.sort(
+      (a, b) => b.compositeScore - a.compositeScore
     );
   };
 
@@ -6358,6 +6386,11 @@ function App() {
                                   {getTop40Ranking(result.TEAM_INCLUDED)}
                                 </div>
                               )}
+                              {result.isBlacklisted && (
+                                <div className="text-xs text-red-400 mt-1 font-medium">
+                                  🚫 Blacklisted
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-6 text-yellow-400 font-mono">
@@ -6549,11 +6582,11 @@ function App() {
                           </td>
                           <td className="px-4 py-6">
                             {result.isBlacklisted ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">
                                 🚫 Blacklisted
                               </span>
                             ) : (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
                                 ✅ Safe
                               </span>
                             )}
@@ -8086,6 +8119,13 @@ function App() {
             <h3 className="text-lg font-bold text-white mb-4">
               Team Analytics
             </h3>
+            <div className="text-gray-300 mb-6">
+              <p>
+                Teams ranked by composite score: Win Rate (60%) + Sample Size
+                Bonus (40%). Higher sample sizes = more reliable performance
+                data.
+              </p>
+            </div>
 
             {getTeamBetTypeAnalytics().length === 0 ? (
               <div className="text-center py-8">
@@ -8113,6 +8153,9 @@ function App() {
                         </span>
                         <span className="text-yellow-400 text-sm">
                           Avg Odds: {team.avgOdds}
+                        </span>
+                        <span className="text-blue-400 text-sm font-medium">
+                          Score: {team.compositeScore?.toFixed(1) || "N/A"}
                         </span>
                       </div>
                       <span className="text-gray-400">
@@ -8177,6 +8220,28 @@ function App() {
                             </div>
                           </div>
                         )}
+
+                        {/* Score Breakdown */}
+                        <div>
+                          <h4 className="text-white font-medium mb-2">
+                            Score Breakdown:
+                          </h4>
+                          <div className="text-sm text-gray-300 ml-4 space-y-1">
+                            <div>
+                              • Win Rate Score:{" "}
+                              {(parseFloat(team.winRate) * 0.6).toFixed(1)} (60%
+                              of {team.winRate}%)
+                            </div>
+                            <div>
+                              • Sample Size Bonus: {team.sampleSizeScore} (based
+                              on {team.total} bets)
+                            </div>
+                            <div>
+                              • Composite Score:{" "}
+                              {team.compositeScore?.toFixed(1) || "N/A"}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
