@@ -2918,39 +2918,9 @@ function App() {
             return true;
           }
 
-          // Get team analytics for metric filtering
-          const teamName = bet.TEAM_INCLUDED || bet.HOME_TEAM || bet.AWAY_TEAM;
-          const teamAnalytics = getTeamAnalytics().find(
-            (t) => t.team === teamName
-          );
-
-          if (!teamAnalytics) return false;
-
-          // Get bet type specific metrics if filtering by bet type
-          let metricValue;
-          if (filter.field === "BET_TYPE") {
-            const betTypeData = teamAnalytics.betTypeBreakdown.find((bt) =>
-              bt.betType.toLowerCase().includes(filter.value.toLowerCase())
-            );
-            metricValue = betTypeData ? betTypeData[filter.metric] : 0;
-          } else {
-            metricValue = teamAnalytics[filter.metric] || 0;
-          }
-
-          // Apply operator
-          const targetValue = parseFloat(filter.metricValue);
-          switch (filter.operator) {
-            case "equals":
-              return metricValue === targetValue;
-            case "greaterThan":
-              return metricValue > targetValue;
-            case "lessThan":
-              return metricValue < targetValue;
-            case "contains":
-              return metricValue.toString().includes(filter.metricValue);
-            default:
-              return true;
-          }
+          // For metric filtering, we need to check team-level data
+          // This will be handled after we collect all matching bets
+          return true;
         });
       });
 
@@ -2974,7 +2944,73 @@ function App() {
         }
       });
 
-      const results = Array.from(teamResults.values()).sort((a, b) => {
+      // Apply metric filters to the collected teams
+      let finalResults = Array.from(teamResults.values());
+
+      // Check if any filters have metric conditions
+      const metricFilters = queryFilters.filter(
+        (filter) =>
+          filter.metric && filter.operator && filter.metricValue !== ""
+      );
+
+      if (metricFilters.length > 0) {
+        finalResults = finalResults.filter((teamData) => {
+          // Get team analytics for this team
+          const teamAnalytics = getTeamAnalytics().find(
+            (t) => t.team === teamData.team
+          );
+
+          if (!teamAnalytics) return false;
+
+          // Check if team meets ALL metric filter conditions
+          return metricFilters.every((filter) => {
+            let metricValue;
+
+            // Special handling for "no losses" filter
+            if (
+              filter.field === "BET_TYPE" &&
+              filter.value.toLowerCase().includes("double chance") &&
+              filter.metric === "losses" &&
+              filter.operator === "equals" &&
+              filter.metricValue === "0"
+            ) {
+              // Find Double Chance bet type data
+              const betTypeData = teamAnalytics.betTypeBreakdown.find((bt) =>
+                bt.betType.toLowerCase().includes("double chance")
+              );
+              // Return true if no Double Chance losses (losses === 0)
+              return betTypeData ? betTypeData.losses === 0 : false;
+            }
+
+            // Get bet type specific metrics if filtering by bet type
+            if (filter.field === "BET_TYPE") {
+              const betTypeData = teamAnalytics.betTypeBreakdown.find((bt) =>
+                bt.betType.toLowerCase().includes(filter.value.toLowerCase())
+              );
+              metricValue = betTypeData ? betTypeData[filter.metric] : 0;
+            } else {
+              metricValue = teamAnalytics[filter.metric] || 0;
+            }
+
+            // Apply operator
+            const targetValue = parseFloat(filter.metricValue);
+            switch (filter.operator) {
+              case "equals":
+                return metricValue === targetValue;
+              case "greaterThan":
+                return metricValue > targetValue;
+              case "lessThan":
+                return metricValue < targetValue;
+              case "contains":
+                return metricValue.toString().includes(filter.metricValue);
+              default:
+                return true;
+            }
+          });
+        });
+      }
+
+      const results = finalResults.sort((a, b) => {
         // Sort by team name first, then by country, then by league
         if (a.team !== b.team) return a.team.localeCompare(b.team);
         if (a.country !== b.country) return a.country.localeCompare(b.country);
