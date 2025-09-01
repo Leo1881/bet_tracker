@@ -2007,17 +2007,66 @@ function App() {
         bet
       );
 
+      // Create array of all bet recommendations with their types
+      const allBets = [
+        {
+          type: "Straight Win",
+          recommendation: straightWinRecommendation,
+          riskLevel: "High",
+        },
+        {
+          type: "Double Chance",
+          recommendation: doubleChanceRecommendation,
+          riskLevel: "Medium",
+        },
+        {
+          type: "Over/Under",
+          recommendation: overUnderRecommendation,
+          riskLevel: "Medium",
+        },
+      ];
+
+      // Calculate risk-adjusted scores for ranking
+      const rankedBets = allBets.map((bet) => {
+        let adjustedScore = bet.recommendation.confidence;
+
+        // Apply risk adjustments
+        if (bet.type === "Double Chance") {
+          adjustedScore *= 0.9; // Slightly lower score for safer bet
+        } else if (bet.type === "Over/Under") {
+          adjustedScore *= 0.95; // Medium risk adjustment
+        }
+        // Straight Win keeps base score (highest risk/reward)
+
+        return {
+          ...bet,
+          adjustedScore: adjustedScore,
+        };
+      });
+
+      // Sort by adjusted score (highest first)
+      rankedBets.sort((a, b) => b.adjustedScore - a.adjustedScore);
+
+      // Assign rankings
+      const primary = rankedBets[0];
+      const secondary = rankedBets[1];
+      const tertiary = rankedBets[2];
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
         league: bet.LEAGUE,
         country: bet.COUNTRY,
-        straightWin: straightWinRecommendation,
-        doubleChance: doubleChanceRecommendation,
-        overUnder: overUnderRecommendation,
+        primary: primary,
+        secondary: secondary,
+        tertiary: tertiary,
         confidence: confidence,
         odds: odds,
         recommendationScore: recommendationScore,
+        // Keep original recommendations for backward compatibility
+        straightWin: straightWinRecommendation,
+        doubleChance: doubleChanceRecommendation,
+        overUnder: overUnderRecommendation,
       };
     });
 
@@ -7164,100 +7213,172 @@ function App() {
             </h3>
             <div className="text-gray-300 mb-6">
               <p>
-                All betting recommendations based on confidence scores, odds
-                analysis, and scoring patterns. Run "Fetch & Analyze New Bets"
-                in the Bet Analysis tab to generate recommendations.
+                Betting recommendations ranked by risk-adjusted confidence
+                scores. Each match shows:
+              </p>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>
+                  <span className="text-yellow-300">🥇 PRIMARY</span> - Best bet
+                  with highest confidence
+                </li>
+                <li>
+                  <span className="text-gray-300">🥈 SECONDARY</span> - Second
+                  best option
+                </li>
+                <li>
+                  <span className="text-orange-300">🥉 TERTIARY</span> - Third
+                  option or AVOID if low confidence
+                </li>
+              </ul>
+              <p className="mt-2">
+                Run "Fetch & Analyze New Bets" in the Bet Analysis tab to
+                generate recommendations.
               </p>
             </div>
 
             {betRecommendations.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-white/20">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-white font-semibold">
-                        Rank
-                      </th>
-                      <th className="px-4 py-2 text-left text-white font-semibold">
-                        Match
-                      </th>
-                      <th className="px-4 py-2 text-left text-white font-semibold">
-                        Straight Win
-                      </th>
-                      <th className="px-4 py-2 text-left text-white font-semibold">
-                        Double Chance
-                      </th>
-                      <th className="px-4 py-2 text-left text-white font-semibold">
-                        Over/Under
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {betRecommendations.map((rec, index) => (
-                      <tr key={index} className="hover:bg-white/5">
-                        <td className="px-4 py-3 text-white font-medium">
-                          {index + 1}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300">{rec.match}</td>
-                        <td className="px-4 py-3 text-white font-medium">
-                          <span
-                            className={
-                              rec.straightWin.bet === "AVOID"
-                                ? "text-red-400"
-                                : ""
-                            }
-                          >
-                            {rec.straightWin.bet === "AVOID"
-                              ? `AVOID (${rec.straightWin.confidence.toFixed(
-                                  1
-                                )}/10) - ${rec.straightWin.reasoning}`
-                              : `${
-                                  rec.straightWin.bet
-                                } (${rec.straightWin.confidence.toFixed(
-                                  1
-                                )}/10)`}
+              <div className="space-y-6">
+                {betRecommendations.map((rec, index) => (
+                  <div
+                    key={index}
+                    className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-6"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-lg font-bold text-white">
+                          {rec.match}
+                        </h4>
+                        <p className="text-gray-400 text-sm">
+                          {rec.country} - {rec.league}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-blue-400 font-medium">
+                          Overall Confidence: {rec.confidence.toFixed(1)}/10
+                        </span>
+                        <p className="text-gray-400 text-sm">
+                          Odds: {rec.odds}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Primary Recommendation */}
+                      <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/30 rounded-lg p-4">
+                        <div className="flex items-center mb-2">
+                          <span className="text-2xl mr-2">🥇</span>
+                          <span className="text-yellow-300 font-bold">
+                            PRIMARY
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-white font-medium">
-                          <span
-                            className={
-                              rec.doubleChance.bet === "AVOID"
-                                ? "text-red-400"
-                                : ""
-                            }
-                          >
-                            {rec.doubleChance.bet === "AVOID"
-                              ? `AVOID (${rec.doubleChance.confidence.toFixed(
-                                  1
-                                )}/10) - ${rec.doubleChance.reasoning}`
-                              : `${
-                                  rec.doubleChance.bet
-                                } (${rec.doubleChance.confidence.toFixed(
-                                  1
-                                )}/10)`}
+                        </div>
+                        <div className="text-white font-medium mb-1">
+                          {rec.primary.type}
+                        </div>
+                        <div
+                          className={`text-sm ${
+                            rec.primary.recommendation.bet === "AVOID"
+                              ? "text-red-400"
+                              : "text-green-400"
+                          }`}
+                        >
+                          {rec.primary.recommendation.bet === "AVOID"
+                            ? `AVOID (${rec.primary.recommendation.confidence.toFixed(
+                                1
+                              )}/10)`
+                            : `${
+                                rec.primary.recommendation.bet
+                              } (${rec.primary.recommendation.confidence.toFixed(
+                                1
+                              )}/10)`}
+                        </div>
+                        {rec.primary.recommendation.bet === "AVOID" && (
+                          <div className="text-red-300 text-xs mt-1">
+                            {rec.primary.recommendation.reasoning}
+                          </div>
+                        )}
+                        <div className="text-gray-400 text-xs mt-1">
+                          Risk: {rec.primary.riskLevel}
+                        </div>
+                      </div>
+
+                      {/* Secondary Recommendation */}
+                      <div className="bg-gradient-to-br from-gray-500/20 to-gray-600/20 border border-gray-400/30 rounded-lg p-4">
+                        <div className="flex items-center mb-2">
+                          <span className="text-2xl mr-2">🥈</span>
+                          <span className="text-gray-300 font-bold">
+                            SECONDARY
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-white font-medium">
-                          <span
-                            className={
-                              rec.overUnder.bet === "AVOID"
-                                ? "text-red-400"
-                                : ""
-                            }
-                          >
-                            {rec.overUnder.bet === "AVOID"
-                              ? `AVOID (${rec.overUnder.confidence.toFixed(
-                                  1
-                                )}/10) - ${rec.overUnder.reasoning}`
-                              : `${
-                                  rec.overUnder.bet
-                                } (${rec.overUnder.confidence.toFixed(1)}/10)`}
+                        </div>
+                        <div className="text-white font-medium mb-1">
+                          {rec.secondary.type}
+                        </div>
+                        <div
+                          className={`text-sm ${
+                            rec.secondary.recommendation.bet === "AVOID"
+                              ? "text-red-400"
+                              : "text-blue-400"
+                          }`}
+                        >
+                          {rec.secondary.recommendation.bet === "AVOID"
+                            ? `AVOID (${rec.secondary.recommendation.confidence.toFixed(
+                                1
+                              )}/10)`
+                            : `${
+                                rec.secondary.recommendation.bet
+                              } (${rec.secondary.recommendation.confidence.toFixed(
+                                1
+                              )}/10)`}
+                        </div>
+                        {rec.secondary.recommendation.bet === "AVOID" && (
+                          <div className="text-red-300 text-xs mt-1">
+                            {rec.secondary.recommendation.reasoning}
+                          </div>
+                        )}
+                        <div className="text-gray-400 text-xs mt-1">
+                          Risk: {rec.secondary.riskLevel}
+                        </div>
+                      </div>
+
+                      {/* Tertiary Recommendation */}
+                      <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-400/30 rounded-lg p-4">
+                        <div className="flex items-center mb-2">
+                          <span className="text-2xl mr-2">🥉</span>
+                          <span className="text-orange-300 font-bold">
+                            TERTIARY
                           </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                        <div className="text-white font-medium mb-1">
+                          {rec.tertiary.type}
+                        </div>
+                        <div
+                          className={`text-sm ${
+                            rec.tertiary.recommendation.bet === "AVOID"
+                              ? "text-red-400"
+                              : "text-orange-400"
+                          }`}
+                        >
+                          {rec.tertiary.recommendation.bet === "AVOID"
+                            ? `AVOID (${rec.tertiary.recommendation.confidence.toFixed(
+                                1
+                              )}/10)`
+                            : `${
+                                rec.tertiary.recommendation.bet
+                              } (${rec.tertiary.recommendation.confidence.toFixed(
+                                1
+                              )}/10)`}
+                        </div>
+                        {rec.tertiary.recommendation.bet === "AVOID" && (
+                          <div className="text-red-300 text-xs mt-1">
+                            {rec.tertiary.recommendation.reasoning}
+                          </div>
+                        )}
+                        <div className="text-gray-400 text-xs mt-1">
+                          Risk: {rec.tertiary.riskLevel}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="text-center py-8">
