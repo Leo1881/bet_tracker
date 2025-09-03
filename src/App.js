@@ -1153,6 +1153,12 @@ function App() {
   // Handle filter changes and trigger data loading
   const handleFilterChange = (filterType, value) => {
     const newFilters = { ...filters, [filterType]: value };
+
+    // Clear league filter when country changes
+    if (filterType === "country") {
+      newFilters.league = "";
+    }
+
     setFilters(newFilters);
 
     // Check if any filters are now active
@@ -1246,11 +1252,19 @@ function App() {
     );
   };
 
-  const getUniqueValues = (field) => {
+  const getUniqueValues = (field, context = {}) => {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis();
-    const values = deduplicatedBets.map((bet) => bet[field]).filter(Boolean);
+    let values = deduplicatedBets.map((bet) => bet[field]).filter(Boolean);
 
-    console.log(`Getting unique values for field: ${field}`);
+    // Apply context filtering
+    if (context.country && field === "LEAGUE") {
+      values = deduplicatedBets
+        .filter((bet) => bet.COUNTRY === context.country)
+        .map((bet) => bet[field])
+        .filter(Boolean);
+    }
+
+    console.log(`Getting unique values for field: ${field}`, context);
     console.log(`Raw values:`, values);
 
     // Filter out header row data
@@ -5156,13 +5170,21 @@ function App() {
                   value={filters.league}
                   onChange={(e) => handleFilterChange("league", e.target.value)}
                   className="w-full bg-white/20 text-white rounded-lg px-3 py-2 pr-16 border border-white/20"
+                  disabled={!filters.country}
                 >
-                  <option value="">All Leagues</option>
-                  {getUniqueValues("LEAGUE").map((league) => (
-                    <option key={league} value={league}>
-                      {league}
-                    </option>
-                  ))}
+                  <option value="">
+                    {filters.country
+                      ? "All Leagues in " + filters.country
+                      : "Select Country First"}
+                  </option>
+                  {filters.country &&
+                    getUniqueValues("LEAGUE", { country: filters.country }).map(
+                      (league) => (
+                        <option key={league} value={league}>
+                          {league}
+                        </option>
+                      )
+                    )}
                 </select>
               </div>
 
