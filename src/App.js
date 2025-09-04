@@ -5378,10 +5378,10 @@ function App() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-6 w-full">
+        <div className="flex space-x-1 mb-6 w-full overflow-x-auto pb-2">
           <button
             onClick={() => setActiveTab("betAnalysis")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "betAnalysis"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5391,7 +5391,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("recommendations")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "recommendations"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5401,7 +5401,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("query")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "query"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5411,7 +5411,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("betSlips")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "betSlips"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5421,7 +5421,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("analytics")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "analytics"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5431,7 +5431,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("performance")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "performance"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5441,7 +5441,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("odds")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "odds"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5451,7 +5451,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("topTeams")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "topTeams"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5461,7 +5461,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("betTypeAnalytics")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "betTypeAnalytics"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5471,7 +5471,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("dailyGames")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "dailyGames"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5481,7 +5481,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("scoringAnalysis")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "scoringAnalysis"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5491,7 +5491,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("headToHead")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "headToHead"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5501,7 +5501,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("predictionAccuracy")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "predictionAccuracy"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
@@ -5511,7 +5511,7 @@ function App() {
           </button>
           <button
             onClick={() => setActiveTab("data")}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-colors min-w-[120px] ${
               activeTab === "data"
                 ? "bg-[#3982db] text-white"
                 : "bg-white/10 text-gray-300 hover:bg-white/20"
