@@ -3251,18 +3251,18 @@ function App() {
       pdf.text("Bet Analysis Report", margin, yPosition);
       yPosition += lineHeight * 1.5;
 
-      // Table headers - 8 columns as requested
+      // Table headers - 8 columns with bet recommendations
       const tableHeaders = [
         "Teams (Home v Away)",
         "League",
         "Confidence",
         "Performance",
+        "Primary Rec",
+        "Secondary Rec",
+        "Tertiary Rec",
         "Scoring Analysis",
-        "Straight Win",
-        "Double Chance",
-        "Over/Under",
       ];
-      const columnWidths = [50, 30, 20, 20, 40, 20, 20, 30];
+      const columnWidths = [50, 30, 20, 20, 35, 35, 35, 30];
       const startX = margin;
 
       // Draw table headers
@@ -3319,27 +3319,70 @@ function App() {
         );
         currentX += columnWidths[3];
 
-        // Scoring Analysis
-        if (bet.scoringRecommendation && bet.scoringRecommendation.type) {
-          pdf.text(bet.scoringRecommendation.type, currentX, yPosition);
+        // Find matching bet recommendation
+        const matchingRec = betRecommendations
+          ? betRecommendations.find((rec) => {
+              // More flexible matching - check if either team name appears in the match string
+              const homeMatch = rec.match
+                .toLowerCase()
+                .includes(bet.HOME_TEAM.toLowerCase());
+              const awayMatch = rec.match
+                .toLowerCase()
+                .includes(bet.AWAY_TEAM.toLowerCase());
+              return homeMatch && awayMatch;
+            })
+          : null;
+
+        // Debug: Log the recommendation structure and matching process
+        console.log(
+          "Looking for match:",
+          `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`
+        );
+        console.log(
+          "Available recommendations:",
+          betRecommendations.map((r) => r.match)
+        );
+        if (matchingRec) {
+          console.log("Found matching recommendation:", matchingRec);
+          console.log("Primary:", matchingRec.primary);
+          console.log("Secondary:", matchingRec.secondary);
+          console.log("Tertiary:", matchingRec.tertiary);
+        } else {
+          console.log("No matching recommendation found");
+        }
+
+        // Primary Recommendation
+        if (
+          matchingRec &&
+          matchingRec.primary &&
+          matchingRec.primary.recommendation &&
+          matchingRec.primary.recommendation.confidence
+        ) {
+          pdf.text(
+            `${
+              matchingRec.primary.type || "N/A"
+            } @ ${matchingRec.primary.recommendation.confidence.toFixed(1)}/10`,
+            currentX,
+            yPosition
+          );
         } else {
           pdf.text("N/A", currentX, yPosition);
         }
         currentX += columnWidths[4];
 
-        // Find matching bet recommendation
-        const matchingRec = betRecommendations
-          ? betRecommendations.find(
-              (rec) =>
-                rec.match.includes(bet.HOME_TEAM) &&
-                rec.match.includes(bet.AWAY_TEAM)
-            )
-          : null;
-
-        // Straight Win
-        if (matchingRec) {
+        // Secondary Recommendation
+        if (
+          matchingRec &&
+          matchingRec.secondary &&
+          matchingRec.secondary.recommendation &&
+          matchingRec.secondary.recommendation.confidence
+        ) {
           pdf.text(
-            `${matchingRec.straightWin.confidence.toFixed(1)}`,
+            `${
+              matchingRec.secondary.type || "N/A"
+            } @ ${matchingRec.secondary.recommendation.confidence.toFixed(
+              1
+            )}/10`,
             currentX,
             yPosition
           );
@@ -3348,10 +3391,19 @@ function App() {
         }
         currentX += columnWidths[5];
 
-        // Double Chance
-        if (matchingRec) {
+        // Tertiary Recommendation
+        if (
+          matchingRec &&
+          matchingRec.tertiary &&
+          matchingRec.tertiary.recommendation &&
+          matchingRec.tertiary.recommendation.confidence
+        ) {
           pdf.text(
-            `${matchingRec.doubleChance.confidence.toFixed(1)}`,
+            `${
+              matchingRec.tertiary.type || "N/A"
+            } @ ${matchingRec.tertiary.recommendation.confidence.toFixed(
+              1
+            )}/10`,
             currentX,
             yPosition
           );
@@ -3360,15 +3412,9 @@ function App() {
         }
         currentX += columnWidths[6];
 
-        // Over/Under
-        if (matchingRec) {
-          pdf.text(
-            `${
-              matchingRec.overUnder.bet
-            } (${matchingRec.overUnder.confidence.toFixed(1)})`,
-            currentX,
-            yPosition
-          );
+        // Scoring Analysis
+        if (bet.scoringRecommendation && bet.scoringRecommendation.type) {
+          pdf.text(bet.scoringRecommendation.type, currentX, yPosition);
         } else {
           pdf.text("N/A", currentX, yPosition);
         }
