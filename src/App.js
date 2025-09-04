@@ -4517,9 +4517,14 @@ function App() {
     const totalLosses = slips.reduce((sum, slip) => sum + slip.losses, 0);
     const totalWithResult = totalWins + totalLosses;
 
-    const bestSlip = slips.reduce((best, slip) =>
-      slip.winRate > best.winRate ? slip : best
-    );
+    // Filter for completed slips only when calculating best performing slip
+    const completedSlips = slips.filter((slip) => slip.status === "Complete");
+    const bestSlip =
+      completedSlips.length > 0
+        ? completedSlips.reduce((best, slip) =>
+            slip.winRate > best.winRate ? slip : best
+          )
+        : null;
 
     return {
       totalSlips: slips.length,
@@ -5387,6 +5392,16 @@ function App() {
             }`}
           >
             Performance
+          </button>
+          <button
+            onClick={() => setActiveTab("odds")}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-colors ${
+              activeTab === "odds"
+                ? "bg-[#3982db] text-white"
+                : "bg-white/10 text-gray-300 hover:bg-white/20"
+            }`}
+          >
+            Odds Analytics
           </button>
           <button
             onClick={() => setActiveTab("topTeams")}
