@@ -167,20 +167,28 @@ function App() {
     const getData = async () => {
       try {
         setLoading(true);
-        const [data, blacklist, notes, attachedPredictionsData] =
-          await Promise.all([
-            fetchSheetData(),
-            fetchBlacklistedTeams(),
-            fetchTeamNotes(),
-            fetch("/api/attached-predictions", {
+        const [data, blacklist, notes] = await Promise.all([
+          fetchSheetData(),
+          fetchBlacklistedTeams(),
+          fetchTeamNotes(),
+        ]);
+
+        // For production (GitHub Pages), skip API calls
+        let attachedPredictionsData = [];
+        if (process.env.NODE_ENV === "development") {
+          try {
+            const response = await fetch("/api/attached-predictions", {
               headers: {
                 "Cache-Control": "no-cache",
                 Pragma: "no-cache",
               },
-            })
-              .then((res) => res.json())
-              .catch(() => []),
-          ]);
+            });
+            attachedPredictionsData = await response.json();
+          } catch (error) {
+            console.log("API not available in production, using empty data");
+            attachedPredictionsData = [];
+          }
+        }
         console.log("Fetched data:", data);
         console.log("Fetched blacklist:", blacklist);
         console.log("Fetched team notes:", notes.length);
@@ -1949,26 +1957,41 @@ function App() {
   // Attach predictions to betslip
   const attachPredictionsToBetslip = async (betslipId, predictions) => {
     try {
-      // Save to database
-      const response = await fetch("/api/attached-predictions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ betslipId, predictions }),
-      });
+      // For production (GitHub Pages), only update local state
+      if (process.env.NODE_ENV === "development") {
+        // Save to database only in development
+        const response = await fetch("/api/attached-predictions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ betslipId, predictions }),
+        });
 
-      if (response.ok) {
-        // Update local state using original betslip ID
+        if (response.ok) {
+          // Update local state using original betslip ID
+          setAttachedPredictions((prev) => ({
+            ...prev,
+            [betslipId]: predictions,
+          }));
+        } else {
+          console.error("Failed to save predictions to database");
+        }
+      } else {
+        // In production, just update local state
         setAttachedPredictions((prev) => ({
           ...prev,
           [betslipId]: predictions,
         }));
-      } else {
-        console.error("Failed to save predictions to database");
+        console.log("Predictions saved to local state (production mode)");
       }
     } catch (error) {
       console.error("Error saving predictions:", error);
+      // Fallback: update local state even if API fails
+      setAttachedPredictions((prev) => ({
+        ...prev,
+        [betslipId]: predictions,
+      }));
     }
   };
 
