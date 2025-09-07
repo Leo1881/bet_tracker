@@ -604,7 +604,18 @@ function App() {
 
     // Filter by completed slips checkbox
     if (!showCompletedSlips) {
-      slipsData = slipsData.filter((slip) => slip.status !== "Complete");
+      slipsData = slipsData.filter((slip) => {
+        // Hide completed slips
+        if (slip.status === "Complete") {
+          return false;
+        }
+        // Hide pending slips with any losses
+        if (slip.status === "Pending" && slip.losses > 0) {
+          return false;
+        }
+        // Only show pending slips with 0 losses
+        return slip.status === "Pending" && slip.losses === 0;
+      });
     }
 
     if (!slipsSortConfig.key) return slipsData;
