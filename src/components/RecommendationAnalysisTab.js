@@ -92,6 +92,64 @@ const RecommendationAnalysisTab = ({
                 rec.recommendation.toLowerCase().includes("win");
             }
 
+            // Generate detailed failure analysis
+            let failureReason = "";
+            let confidenceAnalysis = {};
+
+            if (
+              !isCorrect &&
+              rec.actual_result &&
+              rec.actual_result.trim() !== ""
+            ) {
+              const prediction = rec.recommendation.toLowerCase();
+              const result = rec.actual_result.toLowerCase();
+
+              // Basic failure reason
+              if (prediction.includes("win")) {
+                failureReason = "Predicted win but got loss/draw";
+              } else if (prediction.includes("avoid")) {
+                failureReason = "Predicted avoid but team won";
+              } else if (prediction.includes("double chance")) {
+                failureReason = "Predicted double chance but got loss";
+              } else {
+                failureReason = "Prediction did not match actual result";
+              }
+
+              // Add detailed confidence analysis
+              const breakdown = rec.confidence_breakdown || {};
+
+              if (breakdown.team >= 7) {
+                confidenceAnalysis.team = {
+                  wasHigh: true,
+                  issue:
+                    "High team confidence but team lost - possibly poor recent form not captured",
+                };
+              }
+
+              if (breakdown.homeAway >= 7) {
+                confidenceAnalysis.homeAway = {
+                  wasHigh: true,
+                  issue:
+                    "High home/away confidence but advantage didn't matter",
+                };
+              }
+
+              if (breakdown.league >= 7) {
+                confidenceAnalysis.league = {
+                  wasHigh: true,
+                  issue:
+                    "High league confidence but league trends didn't apply",
+                };
+              }
+
+              if (breakdown.odds >= 7) {
+                confidenceAnalysis.odds = {
+                  wasHigh: true,
+                  issue: "High odds confidence but market was wrong",
+                };
+              }
+            }
+
             return {
               bet_id: rec.bet_id,
               game_id: rec.game_id,
@@ -104,12 +162,8 @@ const RecommendationAnalysisTab = ({
               prediction_accurate: rec.prediction_accurate,
               analysis: {
                 isCorrect: isCorrect,
-                failureReason:
-                  !isCorrect &&
-                  rec.actual_result &&
-                  rec.actual_result.trim() !== ""
-                    ? `Predicted ${rec.recommendation} but got ${rec.actual_result}`
-                    : null,
+                failureReason: failureReason || null,
+                confidenceAnalysis: confidenceAnalysis,
               },
             };
           });
@@ -169,6 +223,64 @@ const RecommendationAnalysisTab = ({
                 rec.recommendation.toLowerCase().includes("win");
             }
 
+            // Generate detailed failure analysis
+            let failureReason = "";
+            let confidenceAnalysis = {};
+
+            if (
+              !isCorrect &&
+              rec.actual_result &&
+              rec.actual_result.trim() !== ""
+            ) {
+              const prediction = rec.recommendation.toLowerCase();
+              const result = rec.actual_result.toLowerCase();
+
+              // Basic failure reason
+              if (prediction.includes("win")) {
+                failureReason = "Predicted win but got loss/draw";
+              } else if (prediction.includes("avoid")) {
+                failureReason = "Predicted avoid but team won";
+              } else if (prediction.includes("double chance")) {
+                failureReason = "Predicted double chance but got loss";
+              } else {
+                failureReason = "Prediction did not match actual result";
+              }
+
+              // Add detailed confidence analysis
+              const breakdown = rec.confidence_breakdown || {};
+
+              if (breakdown.team >= 7) {
+                confidenceAnalysis.team = {
+                  wasHigh: true,
+                  issue:
+                    "High team confidence but team lost - possibly poor recent form not captured",
+                };
+              }
+
+              if (breakdown.homeAway >= 7) {
+                confidenceAnalysis.homeAway = {
+                  wasHigh: true,
+                  issue:
+                    "High home/away confidence but advantage didn't matter",
+                };
+              }
+
+              if (breakdown.league >= 7) {
+                confidenceAnalysis.league = {
+                  wasHigh: true,
+                  issue:
+                    "High league confidence but league trends didn't apply",
+                };
+              }
+
+              if (breakdown.odds >= 7) {
+                confidenceAnalysis.odds = {
+                  wasHigh: true,
+                  issue: "High odds confidence but market was wrong",
+                };
+              }
+            }
+
             return {
               bet_id: rec.bet_id,
               game_id: rec.game_id,
@@ -181,12 +293,8 @@ const RecommendationAnalysisTab = ({
               prediction_accurate: rec.prediction_accurate,
               analysis: {
                 isCorrect: isCorrect,
-                failureReason:
-                  !isCorrect &&
-                  rec.actual_result &&
-                  rec.actual_result.trim() !== ""
-                    ? "Prediction did not match actual result"
-                    : null,
+                failureReason: failureReason || null,
+                confidenceAnalysis: confidenceAnalysis,
               },
             };
           });
@@ -498,7 +606,7 @@ const RecommendationAnalysisTab = ({
                       {match.recommendation}
                     </td>
                     <td className="py-3 px-2 text-white">
-                      {match.actualResult || "Pending"}
+                      {match.actual_result || "Pending"}
                     </td>
                     <td className="py-3 px-2 text-center">
                       <span
