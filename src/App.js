@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { fetchNewBets } from "./utils/fetchSheetData";
+import { fetchNewBets, fetchSheetData } from "./utils/fetchSheetData";
 import { applyFilters } from "./utils/dataProcessingUtils";
 import { useAppState } from "./hooks/useAppState";
 import { useAnalytics } from "./hooks/useAnalytics";
@@ -33,6 +33,7 @@ import ScoringAnalysisTab from "./components/ScoringAnalysisTab";
 import HeadToHeadTab from "./components/HeadToHeadTab";
 import PredictionAccuracyTab from "./components/PredictionAccuracyTab";
 import TeamNotesTab from "./components/TeamNotesTab";
+import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
 
 function App() {
   // Use custom hook for state management
@@ -116,6 +117,9 @@ function App() {
   } = useAppState();
   // Additional state not covered by useAppState
   const [storedPredictions, setStoredPredictions] = useState([]);
+  const [isUpdatingDatabase, setIsUpdatingDatabase] = useState(false);
+  const [comparisonResults, setComparisonResults] = useState(null);
+  const [isComparing, setIsComparing] = useState(false);
   // eslint-disable-next-line no-unused-vars
   const [scoringSortConfig, setScoringSortConfig] = useState({
     key: "totalGames",
@@ -1766,6 +1770,589 @@ function App() {
     }
   };
 
+  // Update database with recommendations
+  const updateDatabase = async () => {
+    try {
+      setIsUpdatingDatabase(true);
+
+      if (!analysisResults || analysisResults.length === 0) {
+        console.log("No analysis results to save");
+        return;
+      }
+
+      // Generate a unique betslip ID for this analysis session
+      const betslipId = `analysis_${
+        new Date().toISOString().split("T")[0]
+      }_${Date.now()}`;
+
+      // Debug: Check if BET_ID is available in analysisResults
+      console.log("Sample analysis result:", analysisResults[0]);
+      console.log("BET_ID in first result:", analysisResults[0]?.BET_ID);
+
+      // Prepare recommendations data for database storage
+      const recommendations = analysisResults.map((result) => ({
+        bet_id: result.BET_ID, // Add the original BET_ID from Google Sheets
+        date: result.DATE,
+        home_team: result.HOME_TEAM,
+        away_team: result.AWAY_TEAM,
+        team_included: result.TEAM_INCLUDED,
+        bet_type: result.BET_TYPE,
+        bet_selection: result.BET_SELECTION,
+        odds1: result.ODDS1,
+        odds2: result.ODDS2,
+        oddsX: result.ODDSX,
+        recommendation: result.recommendation,
+        confidence_score: result.confidenceScore,
+        confidence_breakdown: result.confidenceBreakdown,
+        reasoning: result.recommendation, // Using recommendation as reasoning for now
+        historical_data: {
+          historicalBets: result.historicalBets,
+          historicalWins: result.historicalWins,
+          historicalLosses: result.historicalLosses,
+          winRate: result.winRate,
+          winDetails: result.winDetails,
+          lossDetails: result.lossDetails,
+          previousMatchups: result.previousMatchups,
+          competitions: result.competitions,
+        },
+        probabilities: result.probabilities,
+      }));
+
+      // Debug: Check what's being sent to database
+      console.log("First recommendation being sent to DB:", recommendations[0]);
+      console.log(
+        "BET_ID in first recommendation:",
+        recommendations[0]?.bet_id
+      );
+
+      // Send to database
+      const response = await fetch("/api/recommendations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          betslipId,
+          recommendations,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(
+          `Successfully stored ${result.stored} recommendations to database`
+        );
+        alert(
+          `✅ Successfully saved ${result.stored} recommendations to database!`
+        );
+      } else {
+        throw new Error("Failed to save recommendations");
+      }
+    } catch (error) {
+      console.error("Error updating database:", error);
+      alert(`❌ Error saving recommendations: ${error.message}`);
+    } finally {
+      setIsUpdatingDatabase(false);
+    }
+  };
+
+  // Compare stored recommendations with Google Sheets results
+  const compareRecommendationsWithResults = async () => {
+    try {
+      setIsComparing(true);
+      console.log("Starting recommendation comparison...");
+
+      // Fetch stored recommendations from database
+      const recommendationsResponse = await fetch("/api/recommendations");
+      if (!recommendationsResponse.ok) {
+        throw new Error("Failed to fetch recommendations from database");
+      }
+      const storedRecommendations = await recommendationsResponse.json();
+
+      if (storedRecommendations.length === 0) {
+        console.log("No stored recommendations found");
+        return { matched: [], unmatched: [], analysis: null };
+      }
+
+      // Fetch current bets data from Google Sheets (which includes results)
+      console.log("Fetching current bets from Google Sheets...");
+      const currentBets = await fetchSheetData();
+      console.log(
+        "Fetched current bets:",
+        currentBets ? currentBets.length : 0,
+        "records"
+      );
+
+      if (!currentBets || currentBets.length === 0) {
+        throw new Error("Failed to fetch current bets from Google Sheets");
+      }
+
+      console.log(
+        `Found ${storedRecommendations.length} stored recommendations`
+      );
+      console.log(`Found ${currentBets.length} current bets with results`);
+
+      // Simple test - just log the first few items
+      console.log("=== DEBUG INFO ===");
+      console.log(
+        "First stored recommendation date:",
+        storedRecommendations[0]?.date
+      );
+      console.log("First current bet date:", currentBets[0]?.DATE);
+      console.log(
+        "First stored recommendation teams:",
+        storedRecommendations[0]?.home_team,
+        "vs",
+        storedRecommendations[0]?.away_team
+      );
+      console.log(
+        "First current bet teams:",
+        currentBets[0]?.HOME_TEAM,
+        "vs",
+        currentBets[0]?.AWAY_TEAM
+      );
+
+      // Check date ranges (moved after normalizeDate function definition)
+
+      // Debug: Show first stored recommendation
+      if (storedRecommendations.length > 0) {
+        console.log("First stored recommendation:", storedRecommendations[0]);
+        console.log(
+          "BET_ID in stored recommendation:",
+          storedRecommendations[0]?.bet_id
+        );
+      }
+
+      // Debug: Show first current bet
+      if (currentBets.length > 0) {
+        console.log("First current bet:", currentBets[0]);
+      }
+
+      // Debug: Show raw Google Sheets data structure
+      console.log("=== RAW GOOGLE SHEETS DATA ===");
+      console.log("Total bets fetched:", currentBets.length);
+      console.log("First 5 raw bets:", currentBets.slice(0, 5));
+      console.log(
+        "All unique dates in Google Sheets:",
+        [...new Set(currentBets.map((bet) => bet.DATE))].slice(0, 10)
+      );
+
+      // Function to normalize dates for matching
+      const normalizeDate = (dateStr) => {
+        if (!dateStr) return "";
+        // If it's already in ISO format, extract just the date part
+        if (dateStr.includes("T")) {
+          return dateStr.split("T")[0];
+        }
+        // If it's in DD-MMM format, convert to YYYY-MM-DD
+        if (dateStr.includes("-") && dateStr.length <= 6) {
+          const [day, month] = dateStr.split("-");
+          const monthMap = {
+            Jan: "01",
+            Feb: "02",
+            Mar: "03",
+            Apr: "04",
+            May: "05",
+            Jun: "06",
+            Jul: "07",
+            Aug: "08",
+            Sep: "09",
+            Oct: "10",
+            Nov: "11",
+            Dec: "12",
+          };
+          const currentYear = new Date().getFullYear();
+          return `${currentYear}-${monthMap[month] || "01"}-${day.padStart(
+            2,
+            "0"
+          )}`;
+        }
+        return dateStr;
+      };
+
+      // Create a lookup map for faster matching (only games with results)
+      // Use team names as the key for simpler matching
+      const betsLookup = new Map();
+      currentBets.forEach((bet) => {
+        // Only include games that have results
+        if (bet.RESULT && bet.RESULT.trim() !== "") {
+          // Create a simple key using team names
+          const teamKey = `${bet.HOME_TEAM}_vs_${bet.AWAY_TEAM}`.replace(
+            /\s+/g,
+            "_"
+          );
+          betsLookup.set(teamKey, bet);
+        }
+      });
+
+      console.log(
+        `Created lookup map with ${betsLookup.size} games that have results`
+      );
+
+      // Debug: Show sample results from Google Sheets
+      const gamesWithResults = currentBets.filter(
+        (bet) => bet.RESULT && bet.RESULT.trim() !== ""
+      );
+      console.log(
+        "Sample games with results:",
+        gamesWithResults.slice(0, 5).map((bet) => ({
+          date: bet.DATE,
+          home: bet.HOME_TEAM,
+          away: bet.AWAY_TEAM,
+          result: bet.RESULT,
+        }))
+      );
+
+      // Show unique result values
+      const uniqueResults = [
+        ...new Set(gamesWithResults.map((bet) => bet.RESULT)),
+      ];
+      console.log("Unique result values in Google Sheets:", uniqueResults);
+
+      // Debug: Show a few examples of the Google Sheets date format
+      console.log(
+        "Sample Google Sheets dates:",
+        currentBets.slice(0, 3).map((bet) => bet.DATE)
+      );
+      console.log(
+        "Sample normalized Google Sheets dates:",
+        currentBets.slice(0, 3).map((bet) => normalizeDate(bet.DATE))
+      );
+      console.log(
+        "Sample Google Sheets game IDs:",
+        currentBets.slice(0, 3).map((bet) => {
+          const normalizedDate = normalizeDate(bet.DATE);
+          return `${normalizedDate}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}`.replace(
+            /\s+/g,
+            "_"
+          );
+        })
+      );
+
+      // Debug: Show August games specifically
+      const augustGames = currentBets.filter((bet) => {
+        const normalizedDate = normalizeDate(bet.DATE);
+        return normalizedDate.startsWith("2025-08-");
+      });
+      console.log(`Found ${augustGames.length} August games in Google Sheets`);
+      console.log(
+        "Sample August games:",
+        augustGames.slice(0, 3).map((bet) => ({
+          date: bet.DATE,
+          normalized: normalizeDate(bet.DATE),
+          home: bet.HOME_TEAM,
+          away: bet.AWAY_TEAM,
+          result: bet.RESULT,
+        }))
+      );
+
+      // Debug: Show all unique team combinations in Google Sheets
+      const teamCombinations = [
+        ...new Set(
+          currentBets.map((bet) => `${bet.HOME_TEAM}_vs_${bet.AWAY_TEAM}`)
+        ),
+      ];
+      console.log(
+        "Sample team combinations in Google Sheets:",
+        teamCombinations.slice(0, 10)
+      );
+
+      // Debug: Show first few keys in the lookup map
+      const lookupKeys = Array.from(betsLookup.keys()).slice(0, 5);
+      console.log("First 5 lookup map keys:", lookupKeys);
+
+      // Check date ranges
+      const storedDates = storedRecommendations
+        .map((r) => normalizeDate(r.date))
+        .sort();
+      const currentDates = currentBets.map((b) => normalizeDate(b.DATE)).sort();
+      console.log(
+        "Stored recommendations date range:",
+        storedDates[0],
+        "to",
+        storedDates[storedDates.length - 1]
+      );
+      console.log(
+        "Current bets date range:",
+        currentDates[0],
+        "to",
+        currentDates[currentDates.length - 1]
+      );
+
+      // Filter stored recommendations to only include games that have results in Google Sheets
+      const recommendationsWithResults = storedRecommendations.filter(
+        (recommendation) => {
+          // Create a simple key using team names
+          const teamKey =
+            `${recommendation.home_team}_vs_${recommendation.away_team}`.replace(
+              /\s+/g,
+              "_"
+            );
+
+          // Debug: Show what we're looking for vs what's available
+          if (storedRecommendations.indexOf(recommendation) < 3) {
+            // Only show first 3
+            console.log(`=== MATCHING DEBUG ===`);
+            console.log(`Looking for team key: ${teamKey}`);
+            console.log(`Found in lookup: ${betsLookup.has(teamKey)}`);
+            if (betsLookup.has(teamKey)) {
+              console.log(
+                `✅ MATCH FOUND! Result: ${betsLookup.get(teamKey).RESULT}`
+              );
+            } else {
+              console.log(`❌ NO MATCH - checking similar keys...`);
+              const similarKeys = Array.from(betsLookup.keys()).filter(
+                (key) =>
+                  key.includes(recommendation.home_team) ||
+                  key.includes(recommendation.away_team)
+              );
+              console.log(`Similar keys:`, similarKeys.slice(0, 3));
+            }
+          }
+
+          return betsLookup.has(teamKey);
+        }
+      );
+
+      console.log(
+        `Found ${recommendationsWithResults.length} stored recommendations that have results in Google Sheets`
+      );
+
+      // Match recommendations with results
+      const matched = [];
+      const unmatched = [];
+
+      for (const recommendation of recommendationsWithResults) {
+        // Debug: Check if recommendation has database id
+        if (!recommendation.id) {
+          console.error("Recommendation missing database id:", recommendation);
+        }
+
+        // Create team key for matching (same as above)
+        const teamKey =
+          `${recommendation.home_team}_vs_${recommendation.away_team}`.replace(
+            /\s+/g,
+            "_"
+          );
+
+        // Find matching bet using the lookup map
+        const matchingBet = betsLookup.get(teamKey);
+
+        // Debug logging
+        console.log(`Looking for team key: ${teamKey}`);
+        console.log(`Found match:`, matchingBet ? "Yes" : "No");
+        if (matchingBet) {
+          console.log(`Result: "${matchingBet.RESULT}"`);
+        }
+
+        if (
+          matchingBet &&
+          matchingBet.RESULT &&
+          matchingBet.RESULT.trim() !== ""
+        ) {
+          // We have a match with results
+          const analysis = analyzeRecommendationFailure(
+            recommendation,
+            matchingBet
+          );
+          matched.push({
+            ...recommendation,
+            actual_result: matchingBet.RESULT,
+            actual_home_score: matchingBet.HOME_SCORE,
+            actual_away_score: matchingBet.AWAY_SCORE,
+            analysis,
+          });
+        } else {
+          // No match or no results yet
+          unmatched.push(recommendation);
+        }
+      }
+
+      // Generate overall analysis
+      const analysis = generateOverallAnalysis(matched);
+
+      // Update database records with actual results and accuracy
+      if (matched.length > 0) {
+        console.log("Updating database records with actual results...");
+        console.log("Sample match data:", matched[0]);
+        try {
+          const updatePromises = matched.map(async (match) => {
+            console.log(`Updating match:`, {
+              id: match.id,
+              bet_id: match.bet_id,
+              actual_result: match.actual_result,
+              isCorrect: match.analysis.isCorrect,
+            });
+
+            const updateData = {
+              actual_result: match.actual_result,
+              prediction_accurate: match.analysis.isCorrect,
+              result_updated_at: new Date().toISOString(),
+            };
+
+            const response = await fetch(`/api/recommendations/${match.id}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(updateData),
+            });
+
+            if (!response.ok) {
+              console.error(
+                `Failed to update record ${match.id}:`,
+                response.statusText
+              );
+            } else {
+              console.log(`Successfully updated record ${match.id}`);
+            }
+          });
+
+          await Promise.all(updatePromises);
+          console.log("Database records updated successfully");
+        } catch (error) {
+          console.error("Error updating database records:", error);
+        }
+      } else {
+        console.log("No matched records to update");
+      }
+
+      console.log(`Matched: ${matched.length}, Unmatched: ${unmatched.length}`);
+      return { matched, unmatched, analysis };
+    } catch (error) {
+      console.error("Error comparing recommendations:", error);
+      throw error;
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
+  // Analyze why a specific recommendation failed
+  const analyzeRecommendationFailure = (recommendation, actualBet) => {
+    const prediction = recommendation.recommendation.toLowerCase();
+    const result = actualBet.RESULT.toLowerCase();
+
+    // Determine if prediction was correct
+    let isCorrect = false;
+    let failureReason = "";
+
+    if (prediction.includes("win")) {
+      isCorrect = result.includes("win");
+      if (!isCorrect) {
+        failureReason = "Predicted win but got loss/draw";
+      }
+    } else if (prediction.includes("avoid")) {
+      isCorrect = result.includes("loss");
+      if (!isCorrect) {
+        failureReason = "Predicted avoid but team won";
+      }
+    } else if (prediction.includes("double chance")) {
+      isCorrect = result.includes("win") || result.includes("draw");
+      if (!isCorrect) {
+        failureReason = "Predicted double chance but got loss";
+      }
+    }
+
+    // Analyze confidence factors that may have been wrong
+    const confidenceAnalysis = analyzeConfidenceFactors(
+      recommendation,
+      actualBet,
+      isCorrect
+    );
+
+    return {
+      isCorrect,
+      failureReason,
+      confidenceAnalysis,
+      prediction,
+      actualResult: result,
+    };
+  };
+
+  // Analyze which confidence factors were wrong
+  const analyzeConfidenceFactors = (recommendation, actualBet, isCorrect) => {
+    const breakdown = recommendation.confidence_breakdown || {};
+    const analysis = {};
+
+    // Team confidence analysis
+    if (breakdown.team >= 7 && !isCorrect) {
+      analysis.team = {
+        wasHigh: true,
+        issue:
+          "High team confidence but team lost - possibly poor recent form not captured",
+      };
+    }
+
+    // Home/Away confidence analysis
+    if (breakdown.homeAway >= 7 && !isCorrect) {
+      analysis.homeAway = {
+        wasHigh: true,
+        issue: "High home/away confidence but advantage didn't matter",
+      };
+    }
+
+    // League confidence analysis
+    if (breakdown.league >= 7 && !isCorrect) {
+      analysis.league = {
+        wasHigh: true,
+        issue: "High league confidence but league trends didn't apply",
+      };
+    }
+
+    // Odds confidence analysis
+    if (breakdown.odds >= 7 && !isCorrect) {
+      analysis.odds = {
+        wasHigh: true,
+        issue: "High odds confidence but market was wrong",
+      };
+    }
+
+    return analysis;
+  };
+
+  // Generate overall analysis of all matched recommendations
+  const generateOverallAnalysis = (matchedRecommendations) => {
+    if (matchedRecommendations.length === 0) {
+      return null;
+    }
+
+    const total = matchedRecommendations.length;
+    const correct = matchedRecommendations.filter(
+      (m) => m.analysis.isCorrect
+    ).length;
+    const wrong = total - correct;
+    const accuracy = (correct / total) * 100;
+
+    // Analyze confidence factor failures
+    const confidenceFailures = {
+      team: 0,
+      homeAway: 0,
+      league: 0,
+      odds: 0,
+      matchup: 0,
+      position: 0,
+    };
+
+    matchedRecommendations.forEach((match) => {
+      if (!match.analysis.isCorrect && match.analysis.confidenceAnalysis) {
+        Object.keys(match.analysis.confidenceAnalysis).forEach((factor) => {
+          if (match.analysis.confidenceAnalysis[factor]?.wasHigh) {
+            confidenceFailures[factor]++;
+          }
+        });
+      }
+    });
+
+    return {
+      total,
+      correct,
+      wrong,
+      accuracy: Math.round(accuracy * 10) / 10,
+      confidenceFailures,
+      recommendations: matchedRecommendations,
+    };
+  };
+
   const findPreviousMatchups = (homeTeam, awayTeam, country, league) => {
     return findPreviousMatchupsService(homeTeam, awayTeam, country, league);
   };
@@ -2480,6 +3067,8 @@ function App() {
             analyzeNewBets={analyzeNewBets}
             isAnalyzing={isAnalyzing}
             generatePDFReport={generatePDFReport}
+            updateDatabase={updateDatabase}
+            isUpdatingDatabase={isUpdatingDatabase}
             analysisResults={analysisResults}
             handleAnalysisSort={handleAnalysisSort}
             analysisSortConfig={analysisSortConfig}
@@ -3137,6 +3726,17 @@ function App() {
         {activeTab === "predictionAccuracy" && (
           <PredictionAccuracyTab
             getPredictionAccuracyMetrics={getPredictionAccuracyMetrics}
+          />
+        )}
+
+        {activeTab === "recommendationAnalysis" && (
+          <RecommendationAnalysisTab
+            compareRecommendationsWithResults={
+              compareRecommendationsWithResults
+            }
+            isComparing={isComparing}
+            comparisonResults={comparisonResults}
+            setComparisonResults={setComparisonResults}
           />
         )}
 

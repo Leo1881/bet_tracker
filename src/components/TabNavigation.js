@@ -15,6 +15,7 @@ const TabNavigation = ({ activeTab, setActiveTab }) => {
     { id: "scoringAnalysis", label: "Scoring Analysis" },
     { id: "headToHead", label: "Head to Head" },
     { id: "predictionAccuracy", label: "Prediction Accuracy" },
+    { id: "recommendationAnalysis", label: "Recommendation Analysis" },
     { id: "data", label: "Data View" },
   ];
 

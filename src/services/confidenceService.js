@@ -163,11 +163,11 @@ export const getConfidenceRecommendation = (
     }
   } else if (confidenceScore >= 4) {
     if (safeTeamIncluded.toLowerCase().includes(safeHomeTeam.toLowerCase())) {
-      return "Double Chance Home/Draw";
+      return "Double Chance Home";
     } else if (
       safeTeamIncluded.toLowerCase().includes(safeAwayTeam.toLowerCase())
     ) {
-      return "Double Chance Away/Draw";
+      return "Double Chance Away";
     } else {
       return "Double Chance";
     }

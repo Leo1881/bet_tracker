@@ -4,6 +4,8 @@ const BetAnalysisTab = ({
   analyzeNewBets,
   isAnalyzing,
   generatePDFReport,
+  updateDatabase,
+  isUpdatingDatabase,
   analysisResults,
   handleAnalysisSort,
   analysisSortConfig,
@@ -77,6 +79,23 @@ const BetAnalysisTab = ({
           }`}
         >
           📄 Generate PDF Report
+        </button>
+        <button
+          onClick={updateDatabase}
+          disabled={
+            !analysisResults ||
+            analysisResults.length === 0 ||
+            isUpdatingDatabase
+          }
+          className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            !analysisResults ||
+            analysisResults.length === 0 ||
+            isUpdatingDatabase
+              ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+              : "bg-purple-500 text-white hover:bg-purple-600"
+          }`}
+        >
+          {isUpdatingDatabase ? "💾 Saving..." : "💾 Update Database"}
         </button>
       </div>
 

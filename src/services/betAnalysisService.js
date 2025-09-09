@@ -56,6 +56,12 @@ export const analyzeNewBets = async (
 
     // Analyze each deduplicated new bet
     const results = deduplicatedNewBets.map((newBet) => {
+      // Debug: Check if BET_ID is in the newBet object
+      if (deduplicatedNewBets.indexOf(newBet) === 0) {
+        console.log("First newBet object:", newBet);
+        console.log("BET_ID in newBet:", newBet.BET_ID);
+      }
+
       const teamName = newBet.TEAM_INCLUDED;
       const country = newBet.COUNTRY;
       const league = newBet.LEAGUE;
