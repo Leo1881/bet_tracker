@@ -144,40 +144,50 @@ const AnalyticsTab = ({
                     </button>
                   </td>
                 </tr>
-                {expandedAnalyticsTeams.has(team.team) &&
-                  team.betTypeBreakdown.length > 0 && (
-                    <tr>
-                      <td colSpan="8" className="px-4 py-2 bg-white/5">
-                        <div className="ml-4">
-                          <h4 className="text-white font-medium mb-2">
-                            Bet Type Breakdown:
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {team.betTypeBreakdown.map((betType, idx) => (
-                              <div
-                                key={idx}
-                                className="text-sm bg-white/10 rounded p-2"
-                              >
-                                <div className="font-medium text-gray-200">
-                                  {betType.betType}
+                {expandedAnalyticsTeams.has(team.team) && (
+                  <tr>
+                    <td colSpan="8" className="px-4 py-2 bg-white/5">
+                      <div className="ml-4">
+                        {team.betTypeBreakdown &&
+                        team.betTypeBreakdown.length > 0 ? (
+                          <>
+                            <h4 className="text-white font-medium mb-2">
+                              Bet Type Breakdown:
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {team.betTypeBreakdown.map((betType, idx) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm bg-white/10 rounded p-2"
+                                >
+                                  <div className="font-medium text-gray-200">
+                                    {betType.betType}
+                                  </div>
+                                  <div className="text-green-400">
+                                    {betType.wins}W
+                                  </div>
+                                  <div className="text-red-400">
+                                    {betType.losses}L
+                                  </div>
+                                  <div className="text-gray-300">
+                                    {betType.winRate}% (
+                                    {betType.totalWithResult} completed,{" "}
+                                    {betType.total} total)
+                                  </div>
                                 </div>
-                                <div className="text-green-400">
-                                  {betType.wins}W
-                                </div>
-                                <div className="text-red-400">
-                                  {betType.losses}L
-                                </div>
-                                <div className="text-gray-300">
-                                  {betType.winRate}% ({betType.totalWithResult}{" "}
-                                  completed, {betType.total} total)
-                                </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-gray-400 text-sm">
+                            No detailed bet type breakdown available for this
+                            team.
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </React.Fragment>
             ))}
           </tbody>

@@ -1,6 +1,81 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
+  const [metrics, setMetrics] = useState({
+    totalPredictions: 0,
+    correctPredictions: 0,
+    overallAccuracy: 0,
+    byConfidence: {},
+    byBetType: {},
+    byRecommendationType: {},
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await getPredictionAccuracyMetrics();
+        setMetrics(result);
+      } catch (err) {
+        console.error("Error fetching metrics:", err);
+        setError("Failed to load prediction accuracy data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMetrics();
+  }, [getPredictionAccuracyMetrics]);
+
+  // Force refresh when component mounts or when refresh button is clicked
+  const forceRefresh = () => {
+    const fetchMetrics = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await getPredictionAccuracyMetrics();
+        setMetrics(result);
+      } catch (err) {
+        console.error("Error fetching metrics:", err);
+        setError("Failed to load prediction accuracy data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMetrics();
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+        <h3 className="text-lg font-bold text-white mb-4">
+          Prediction Accuracy Dashboard
+        </h3>
+        <div className="text-center py-8">
+          <div className="text-4xl mb-4">⏳</div>
+          <p className="text-gray-300">Loading prediction accuracy data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+        <h3 className="text-lg font-bold text-white mb-4">
+          Prediction Accuracy Dashboard
+        </h3>
+        <div className="text-center py-8">
+          <div className="text-4xl mb-4">❌</div>
+          <p className="text-red-400">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
@@ -9,12 +84,12 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
       <div className="text-gray-300 mb-6">
         <p>
           Track how accurate the system's predictions are compared to actual
-          results.
+          results. Data includes both database recommendations and Google Sheets
+          data.
         </p>
       </div>
 
       {(() => {
-        const metrics = getPredictionAccuracyMetrics();
         return (
           <div className="space-y-6">
             {/* Overall Performance */}
@@ -132,6 +207,16 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
                 </p>
               </div>
             )}
+
+            {/* Refresh Button */}
+            <div className="text-center pt-4">
+              <button
+                onClick={forceRefresh}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                🔄 Refresh Data
+              </button>
+            </div>
           </div>
         );
       })()}

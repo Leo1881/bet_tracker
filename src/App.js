@@ -740,128 +740,519 @@ function App() {
   };
 
   // Get prediction accuracy metrics
-  const getPredictionAccuracyMetrics = () => {
-    const betsWithResults = bets.filter(
-      (bet) => bet.RESULT && bet.RESULT.trim() !== ""
-    );
-    const betsWithRecommendations = betsWithResults.filter(
-      (bet) => bet.SYSTEM_RECOMMENDATION
-    );
+  const getPredictionAccuracyMetrics = async () => {
+    try {
+      // Fetch database recommendations first
+      const dbResponse = await fetch(
+        "http://localhost:3000/api/recommendations"
+      );
+      const dbRecommendations = dbResponse.ok ? await dbResponse.json() : [];
 
-    if (betsWithRecommendations.length === 0) {
-      return {
-        totalPredictions: 0,
-        correctPredictions: 0,
-        overallAccuracy: 0,
-        byConfidence: {},
-        byBetType: {},
-        byRecommendationType: {},
-      };
-    }
-
-    // Deduplicate by unique match (HOME_TEAM + AWAY_TEAM + DATE)
-    const uniqueMatches = new Map();
-
-    betsWithRecommendations.forEach((bet) => {
-      const matchKey = `${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.DATE}_${bet.BET_TYPE}`;
-
-      // Debug logging
       console.log(
-        "Match Key:",
-        matchKey,
-        "Home:",
-        bet.HOME_TEAM,
-        "Away:",
-        bet.AWAY_TEAM,
-        "Date:",
-        bet.DATE,
-        "Bet Type:",
-        bet.BET_TYPE
+        "Database recommendations fetched:",
+        dbRecommendations.length
       );
 
-      if (!uniqueMatches.has(matchKey)) {
-        uniqueMatches.set(matchKey, bet);
+      // Filter database recommendations that have actual results
+      const dbWithResults = dbRecommendations.filter(
+        (rec) => rec.actual_result && rec.actual_result.trim() !== ""
+      );
+
+      console.log(
+        "Database recommendations with results:",
+        dbWithResults.length
+      );
+
+      // Fallback to Google Sheets data
+      const betsWithResults = bets.filter(
+        (bet) => bet.RESULT && bet.RESULT.trim() !== ""
+      );
+      const betsWithRecommendations = betsWithResults.filter(
+        (bet) => bet.SYSTEM_RECOMMENDATION
+      );
+
+      // Combine both data sources, prioritizing database results
+      const allRecommendations = [];
+
+      // Add database recommendations
+      dbWithResults.forEach((rec) => {
+        // Infer bet type from recommendation text
+        let betType = "Unknown";
+        const recTypeText = rec.recommendation.toLowerCase();
+
+        if (
+          recTypeText.includes("home win") ||
+          recTypeText.includes("away win")
+        ) {
+          betType = "Win";
+        } else if (
+          recTypeText.includes("double chance home") ||
+          recTypeText.includes("double chance away")
+        ) {
+          betType = "Double Chance";
+        } else if (
+          recTypeText.includes("over") ||
+          recTypeText.includes("under") ||
+          recTypeText.includes("o/u")
+        ) {
+          betType = "Over/Under";
+        } else if (recTypeText.includes("avoid")) {
+          betType = "Avoid";
+        }
+
+        // Calculate accuracy based on recommendation vs actual result
+        let accuracy = "Pending";
+        console.log(
+          "DEBUG - rec.actual_result:",
+          rec.actual_result,
+          "for recommendation:",
+          rec.recommendation
+        );
+        if (rec.actual_result) {
+          const recTypeText = rec.recommendation.toLowerCase();
+          const result = rec.actual_result.toLowerCase();
+
+          if (
+            recTypeText.includes("home win") ||
+            recTypeText.includes("away win")
+          ) {
+            // WIN recommendation is correct if result is a win
+            accuracy = result.includes("win") ? "Yes" : "No";
+          } else if (recTypeText.includes("double chance home")) {
+            // DOUBLE CHANCE HOME is correct if result is win (home team won)
+            accuracy = result.includes("win") ? "Yes" : "No";
+          } else if (recTypeText.includes("double chance away")) {
+            // DOUBLE CHANCE AWAY is correct if result is win (away team won)
+            accuracy = result.includes("win") ? "Yes" : "No";
+          } else if (
+            recTypeText.includes("over") ||
+            recTypeText.includes("under")
+          ) {
+            // OVER/UNDER recommendation is correct if result matches
+            if (recTypeText.includes("over") && result.includes("over"))
+              accuracy = "Yes";
+            else if (recTypeText.includes("under") && result.includes("under"))
+              accuracy = "Yes";
+            else accuracy = "No";
+          } else if (recTypeText.includes("avoid")) {
+            // AVOID recommendation is correct if result is a loss
+            accuracy = result.includes("loss") ? "Yes" : "No";
+          }
+        }
+
+        // Debug logging
+        console.log(
+          "Database recommendation:",
+          rec.recommendation,
+          "→ Bet Type:",
+          betType,
+          "→ Accuracy:",
+          accuracy
+        );
+
+        allRecommendations.push({
+          source: "database",
+          matchKey: `${rec.home_team}_${rec.away_team}_${rec.date}`,
+          recommendation: rec.recommendation,
+          confidence: rec.confidence_score,
+          betType: betType,
+          accuracy: accuracy,
+          date: rec.date,
+          homeTeam: rec.home_team,
+          awayTeam: rec.away_team,
+        });
+      });
+
+      // Add Google Sheets recommendations (avoid duplicates)
+      const existingKeys = new Set(
+        dbWithResults.map(
+          (rec) => `${rec.home_team}_${rec.away_team}_${rec.date}`
+        )
+      );
+
+      betsWithRecommendations.forEach((bet) => {
+        const matchKey = `${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.DATE}`;
+        if (!existingKeys.has(matchKey)) {
+          // Infer bet type from recommendation text (same logic as database)
+          let betType = "Unknown";
+          const recTypeText = bet.SYSTEM_RECOMMENDATION.toLowerCase();
+
+          if (
+            recTypeText.includes("win") ||
+            recTypeText.includes("straight win")
+          ) {
+            betType = "Win";
+          } else if (
+            recTypeText.includes("double chance") ||
+            recTypeText.includes("double")
+          ) {
+            betType = "Double Chance";
+          } else if (
+            recTypeText.includes("over") ||
+            recTypeText.includes("under") ||
+            recTypeText.includes("o/u")
+          ) {
+            betType = "Over/Under";
+          } else if (recTypeText.includes("avoid")) {
+            betType = "Avoid";
+          }
+
+          // Calculate accuracy based on recommendation vs actual result
+          let accuracy = "Pending";
+          console.log(
+            "DEBUG - bet.RESULT:",
+            bet.RESULT,
+            "for recommendation:",
+            bet.SYSTEM_RECOMMENDATION
+          );
+          if (bet.RESULT) {
+            const recTypeText = bet.SYSTEM_RECOMMENDATION.toLowerCase();
+            const result = bet.RESULT.toLowerCase();
+
+            if (
+              recTypeText.includes("home win") ||
+              recTypeText.includes("away win")
+            ) {
+              // WIN recommendation is correct if result is a win
+              accuracy = result.includes("win") ? "Yes" : "No";
+            } else if (recTypeText.includes("double chance home")) {
+              // DOUBLE CHANCE HOME is correct if result is win (home team won)
+              accuracy = result.includes("win") ? "Yes" : "No";
+            } else if (recTypeText.includes("double chance away")) {
+              // DOUBLE CHANCE AWAY is correct if result is win (away team won)
+              accuracy = result.includes("win") ? "Yes" : "No";
+            } else if (
+              recTypeText.includes("over") ||
+              recTypeText.includes("under")
+            ) {
+              // OVER/UNDER recommendation is correct if result matches
+              if (recTypeText.includes("over") && result.includes("over"))
+                accuracy = "Yes";
+              else if (
+                recTypeText.includes("under") &&
+                result.includes("under")
+              )
+                accuracy = "Yes";
+              else accuracy = "No";
+            } else if (recTypeText.includes("avoid")) {
+              // AVOID recommendation is correct if result is a loss
+              accuracy = result.includes("loss") ? "Yes" : "No";
+            }
+          }
+
+          // Debug logging for Google Sheets
+          console.log(
+            "Sheets recommendation:",
+            bet.SYSTEM_RECOMMENDATION,
+            "→ Bet Type:",
+            betType,
+            "→ Accuracy:",
+            accuracy,
+            "(was:",
+            bet.BET_TYPE,
+            ")"
+          );
+
+          allRecommendations.push({
+            source: "sheets",
+            matchKey: matchKey,
+            recommendation: bet.SYSTEM_RECOMMENDATION,
+            confidence: parseFloat(bet.SYSTEM_CONFIDENCE) || 0,
+            betType: betType,
+            accuracy: accuracy,
+            date: bet.DATE,
+            homeTeam: bet.HOME_TEAM,
+            awayTeam: bet.AWAY_TEAM,
+          });
+        }
+      });
+
+      console.log("Total combined recommendations:", allRecommendations.length);
+      console.log(
+        "Database:",
+        allRecommendations.filter((r) => r.source === "database").length
+      );
+      console.log(
+        "Sheets:",
+        allRecommendations.filter((r) => r.source === "sheets").length
+      );
+
+      if (allRecommendations.length === 0) {
+        return {
+          totalPredictions: 0,
+          correctPredictions: 0,
+          overallAccuracy: 0,
+          byConfidence: {},
+          byBetType: {},
+          byRecommendationType: {},
+        };
       }
-    });
 
-    console.log(
-      "Total bets with recommendations:",
-      betsWithRecommendations.length
-    );
-    console.log("Unique matches found:", uniqueMatches.size);
+      // Deduplicate by unique match (HOME_TEAM + AWAY_TEAM + DATE)
+      const uniqueMatches = new Map();
 
-    const deduplicatedBets = Array.from(uniqueMatches.values());
+      allRecommendations.forEach((rec) => {
+        const matchKey = `${rec.homeTeam}_${rec.awayTeam}_${rec.date}`;
 
-    let correctPredictions = 0;
-    const confidenceRanges = { "4-6": [], "6-8": [], "8-10": [] };
-    const betTypes = {};
-    const recommendationTypes = {};
+        if (!uniqueMatches.has(matchKey)) {
+          uniqueMatches.set(matchKey, rec);
+        }
+      });
 
-    deduplicatedBets.forEach((bet) => {
-      // Use the PREDICTION_ACCURATE field from Google Sheets instead of calculating
-      const accuracy = bet.PREDICTION_ACCURATE || "Pending";
-      const confidence = parseFloat(bet.SYSTEM_CONFIDENCE) || 0;
-      const betType = bet.BET_TYPE || "Unknown";
-      const recommendation = bet.SYSTEM_RECOMMENDATION || "Unknown";
+      console.log("Total combined recommendations:", allRecommendations.length);
+      console.log("Unique matches found:", uniqueMatches.size);
 
-      if (accuracy === "Yes") {
-        correctPredictions++;
+      const deduplicatedRecommendations = Array.from(uniqueMatches.values());
+
+      let correctPredictions = 0;
+      const confidenceRanges = { "4-6": [], "6-8": [], "8-10": [] };
+      const betTypes = {};
+      const recommendationTypes = {};
+
+      deduplicatedRecommendations.forEach((rec) => {
+        const accuracy = rec.accuracy;
+        const confidence = rec.confidence;
+        const betType = rec.betType;
+        const recommendation = rec.recommendation;
+
+        if (accuracy === "Yes") {
+          correctPredictions++;
+        }
+
+        // Group by confidence range
+        if (confidence >= 4 && confidence < 6)
+          confidenceRanges["4-6"].push(accuracy);
+        else if (confidence >= 6 && confidence < 8)
+          confidenceRanges["6-8"].push(accuracy);
+        else if (confidence >= 8 && confidence <= 10)
+          confidenceRanges["8-10"].push(accuracy);
+
+        // Group by bet type
+        if (!betTypes[betType]) betTypes[betType] = [];
+        betTypes[betType].push(accuracy);
+
+        // Group by recommendation type (same logic as bet type)
+        const recTypeText = recommendation.toLowerCase();
+        const recType = recTypeText.includes("avoid")
+          ? "AVOID"
+          : recTypeText.includes("win") || recTypeText.includes("straight win")
+          ? "WIN"
+          : recTypeText.includes("double chance") ||
+            recTypeText.includes("double")
+          ? "DOUBLE_CHANCE"
+          : recTypeText.includes("over") ||
+            recTypeText.includes("under") ||
+            recTypeText.includes("o/u")
+          ? "OVER_UNDER"
+          : "OTHER";
+        if (!recommendationTypes[recType]) recommendationTypes[recType] = [];
+        recommendationTypes[recType].push(accuracy);
+      });
+
+      // Calculate accuracy for each group
+      const calculateGroupAccuracy = (group) => {
+        const correct = group.filter((acc) => acc === "Yes").length;
+        return group.length > 0 ? (correct / group.length) * 100 : 0;
+      };
+
+      const byConfidence = {};
+      Object.keys(confidenceRanges).forEach((range) => {
+        byConfidence[range] = calculateGroupAccuracy(confidenceRanges[range]);
+      });
+
+      const byBetType = {};
+      Object.keys(betTypes).forEach((type) => {
+        byBetType[type] = calculateGroupAccuracy(betTypes[type]);
+      });
+
+      const byRecommendationType = {};
+      Object.keys(recommendationTypes).forEach((type) => {
+        byRecommendationType[type] = calculateGroupAccuracy(
+          recommendationTypes[type]
+        );
+      });
+
+      const overallAccuracy =
+        deduplicatedRecommendations.length > 0
+          ? (correctPredictions / deduplicatedRecommendations.length) * 100
+          : 0;
+
+      return {
+        totalPredictions: deduplicatedRecommendations.length,
+        correctPredictions,
+        overallAccuracy,
+        byConfidence,
+        byBetType,
+        byRecommendationType,
+      };
+    } catch (error) {
+      console.error("Error fetching prediction accuracy metrics:", error);
+
+      // Fallback to original Google Sheets logic
+      const betsWithResults = bets.filter(
+        (bet) => bet.RESULT && bet.RESULT.trim() !== ""
+      );
+      const betsWithRecommendations = betsWithResults.filter(
+        (bet) => bet.SYSTEM_RECOMMENDATION
+      );
+
+      if (betsWithRecommendations.length === 0) {
+        return {
+          totalPredictions: 0,
+          correctPredictions: 0,
+          overallAccuracy: 0,
+          byConfidence: {},
+          byBetType: {},
+          byRecommendationType: {},
+        };
       }
 
-      // Group by confidence range
-      if (confidence >= 4 && confidence < 6)
-        confidenceRanges["4-6"].push(accuracy);
-      else if (confidence >= 6 && confidence < 8)
-        confidenceRanges["6-8"].push(accuracy);
-      else if (confidence >= 8 && confidence <= 10)
-        confidenceRanges["8-10"].push(accuracy);
+      // Original logic as fallback
+      const uniqueMatches = new Map();
+      betsWithRecommendations.forEach((bet) => {
+        const matchKey = `${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.DATE}_${bet.BET_TYPE}`;
+        if (!uniqueMatches.has(matchKey)) {
+          uniqueMatches.set(matchKey, bet);
+        }
+      });
 
-      // Group by bet type
-      if (!betTypes[betType]) betTypes[betType] = [];
-      betTypes[betType].push(accuracy);
+      const deduplicatedBets = Array.from(uniqueMatches.values());
+      let correctPredictions = 0;
+      const confidenceRanges = { "4-6": [], "6-8": [], "8-10": [] };
+      const betTypes = {};
+      const recommendationTypes = {};
 
-      // Group by recommendation type
-      const recType = recommendation.includes("AVOID")
-        ? "AVOID"
-        : recommendation.includes("WIN")
-        ? "WIN"
-        : recommendation.includes("OVER")
-        ? "OVER"
-        : recommendation.includes("UNDER")
-        ? "UNDER"
-        : "OTHER";
-      if (!recommendationTypes[recType]) recommendationTypes[recType] = [];
-      recommendationTypes[recType].push(accuracy);
-    });
+      deduplicatedBets.forEach((bet) => {
+        const confidence = parseFloat(bet.SYSTEM_CONFIDENCE) || 0;
+        const recommendation = bet.SYSTEM_RECOMMENDATION || "Unknown";
 
-    // Calculate accuracy for each group
-    const calculateGroupAccuracy = (group) => {
-      const correct = group.filter((acc) => acc === "Yes").length;
-      return group.length > 0 ? (correct / group.length) * 100 : 0;
-    };
+        // Calculate accuracy based on recommendation vs actual result
+        let accuracy = "Pending";
+        if (bet.RESULT) {
+          const recTypeText = recommendation.toLowerCase();
+          const result = bet.RESULT.toLowerCase();
 
-    return {
-      totalPredictions: deduplicatedBets.length,
-      correctPredictions,
-      overallAccuracy: (correctPredictions / deduplicatedBets.length) * 100,
-      byConfidence: {
-        "4-6": calculateGroupAccuracy(confidenceRanges["4-6"]),
-        "6-8": calculateGroupAccuracy(confidenceRanges["6-8"]),
-        "8-10": calculateGroupAccuracy(confidenceRanges["8-10"]),
-      },
-      byBetType: Object.fromEntries(
-        Object.entries(betTypes).map(([type, group]) => [
-          type,
-          calculateGroupAccuracy(group),
-        ])
-      ),
-      byRecommendationType: Object.fromEntries(
-        Object.entries(recommendationTypes).map(([type, group]) => [
-          type,
-          calculateGroupAccuracy(group),
-        ])
-      ),
-    };
+          if (
+            recTypeText.includes("home win") ||
+            recTypeText.includes("away win")
+          ) {
+            // WIN recommendation is correct if result is a win
+            accuracy = result.includes("win") ? "Yes" : "No";
+          } else if (recTypeText.includes("double chance home")) {
+            // DOUBLE CHANCE HOME is correct if result is win (home team won)
+            accuracy = result.includes("win") ? "Yes" : "No";
+          } else if (recTypeText.includes("double chance away")) {
+            // DOUBLE CHANCE AWAY is correct if result is win (away team won)
+            accuracy = result.includes("win") ? "Yes" : "No";
+          } else if (
+            recTypeText.includes("over") ||
+            recTypeText.includes("under")
+          ) {
+            // OVER/UNDER recommendation is correct if result matches
+            if (recTypeText.includes("over") && result.includes("over"))
+              accuracy = "Yes";
+            else if (recTypeText.includes("under") && result.includes("under"))
+              accuracy = "Yes";
+            else accuracy = "No";
+          } else if (recTypeText.includes("avoid")) {
+            // AVOID recommendation is correct if result is a loss
+            accuracy = result.includes("loss") ? "Yes" : "No";
+          }
+        }
+
+        // Infer bet type from recommendation text (same logic as database)
+        let betType = "Unknown";
+        const recTypeText = recommendation.toLowerCase();
+
+        if (
+          recTypeText.includes("home win") ||
+          recTypeText.includes("away win")
+        ) {
+          betType = "Win";
+        } else if (
+          recTypeText.includes("double chance home") ||
+          recTypeText.includes("double chance away")
+        ) {
+          betType = "Double Chance";
+        } else if (
+          recTypeText.includes("over") ||
+          recTypeText.includes("under") ||
+          recTypeText.includes("o/u")
+        ) {
+          betType = "Over/Under";
+        } else if (recTypeText.includes("avoid")) {
+          betType = "Avoid";
+        }
+
+        if (accuracy === "Yes") {
+          correctPredictions++;
+        }
+
+        if (confidence >= 4 && confidence < 6)
+          confidenceRanges["4-6"].push(accuracy);
+        else if (confidence >= 6 && confidence < 8)
+          confidenceRanges["6-8"].push(accuracy);
+        else if (confidence >= 8 && confidence <= 10)
+          confidenceRanges["8-10"].push(accuracy);
+
+        if (!betTypes[betType]) betTypes[betType] = [];
+        betTypes[betType].push(accuracy);
+
+        // Group by recommendation type (same logic as bet type)
+        const recTypeText2 = recommendation.toLowerCase();
+        const recType = recTypeText2.includes("avoid")
+          ? "AVOID"
+          : recTypeText2.includes("win") ||
+            recTypeText2.includes("straight win")
+          ? "WIN"
+          : recTypeText2.includes("double chance") ||
+            recTypeText2.includes("double")
+          ? "DOUBLE_CHANCE"
+          : recTypeText2.includes("over") ||
+            recTypeText2.includes("under") ||
+            recTypeText2.includes("o/u")
+          ? "OVER_UNDER"
+          : "OTHER";
+        if (!recommendationTypes[recType]) recommendationTypes[recType] = [];
+        recommendationTypes[recType].push(accuracy);
+      });
+
+      const calculateGroupAccuracy = (group) => {
+        const correct = group.filter((acc) => acc === "Yes").length;
+        return group.length > 0 ? (correct / group.length) * 100 : 0;
+      };
+
+      const byConfidence = {};
+      Object.keys(confidenceRanges).forEach((range) => {
+        byConfidence[range] = calculateGroupAccuracy(confidenceRanges[range]);
+      });
+
+      const byBetType = {};
+      Object.keys(betTypes).forEach((type) => {
+        byBetType[type] = calculateGroupAccuracy(betTypes[type]);
+      });
+
+      const byRecommendationType = {};
+      Object.keys(recommendationTypes).forEach((type) => {
+        byRecommendationType[type] = calculateGroupAccuracy(
+          recommendationTypes[type]
+        );
+      });
+
+      const overallAccuracy =
+        deduplicatedBets.length > 0
+          ? (correctPredictions / deduplicatedBets.length) * 100
+          : 0;
+
+      return {
+        totalPredictions: deduplicatedBets.length,
+        correctPredictions,
+        overallAccuracy,
+        byConfidence,
+        byBetType,
+        byRecommendationType,
+      };
+    }
   };
 
   // Calculate prediction accuracy
@@ -1971,22 +2362,36 @@ function App() {
       };
 
       // Create a lookup map for faster matching (only games with results)
-      // Use team names as the key for simpler matching
+      // Use BET_ID as the key for precise matching of specific bets
       const betsLookup = new Map();
+      const teamBetsLookup = new Map(); // Fallback for team-based matching
+
       currentBets.forEach((bet) => {
         // Only include games that have results
         if (bet.RESULT && bet.RESULT.trim() !== "") {
-          // Create a simple key using team names
+          // Primary lookup: Use BET_ID for exact matching
+          if (bet.BET_ID && bet.BET_ID.trim() !== "") {
+            betsLookup.set(bet.BET_ID, bet);
+          }
+
+          // Fallback lookup: Use team names for cases where BET_ID doesn't match
           const teamKey = `${bet.HOME_TEAM}_vs_${bet.AWAY_TEAM}`.replace(
             /\s+/g,
             "_"
           );
-          betsLookup.set(teamKey, bet);
+
+          if (!teamBetsLookup.has(teamKey)) {
+            teamBetsLookup.set(teamKey, []);
+          }
+          teamBetsLookup.get(teamKey).push(bet);
         }
       });
 
       console.log(
-        `Created lookup map with ${betsLookup.size} games that have results`
+        `Created BET_ID lookup map with ${betsLookup.size} games that have results`
+      );
+      console.log(
+        `Created team-based fallback lookup with ${teamBetsLookup.size} team combinations`
       );
 
       // Debug: Show sample results from Google Sheets
@@ -2057,9 +2462,11 @@ function App() {
         teamCombinations.slice(0, 10)
       );
 
-      // Debug: Show first few keys in the lookup map
-      const lookupKeys = Array.from(betsLookup.keys()).slice(0, 5);
-      console.log("First 5 lookup map keys:", lookupKeys);
+      // Debug: Show first few keys in the lookup maps
+      const betIdKeys = Array.from(betsLookup.keys()).slice(0, 5);
+      const teamKeys = Array.from(teamBetsLookup.keys()).slice(0, 5);
+      console.log("First 5 BET_ID lookup keys:", betIdKeys);
+      console.log("First 5 team lookup keys:", teamKeys);
 
       // Check date ranges
       const storedDates = storedRecommendations
@@ -2128,21 +2535,48 @@ function App() {
           console.error("Recommendation missing database id:", recommendation);
         }
 
-        // Create team key for matching (same as above)
-        const teamKey =
-          `${recommendation.home_team}_vs_${recommendation.away_team}`.replace(
-            /\s+/g,
-            "_"
-          );
+        // Try to find matching bet using BET_ID first (most accurate)
+        let matchingBet = null;
 
-        // Find matching bet using the lookup map
-        const matchingBet = betsLookup.get(teamKey);
+        if (recommendation.bet_id && recommendation.bet_id.trim() !== "") {
+          matchingBet = betsLookup.get(recommendation.bet_id);
+          console.log(`Looking for BET_ID: ${recommendation.bet_id}`);
+          console.log(`Found BET_ID match:`, matchingBet ? "Yes" : "No");
+        }
 
-        // Debug logging
-        console.log(`Looking for team key: ${teamKey}`);
-        console.log(`Found match:`, matchingBet ? "Yes" : "No");
+        // Fallback: If no BET_ID match, try team-based matching with bet type
+        if (!matchingBet) {
+          const teamKey =
+            `${recommendation.home_team}_vs_${recommendation.away_team}`.replace(
+              /\s+/g,
+              "_"
+            );
+
+          const teamBets = teamBetsLookup.get(teamKey) || [];
+
+          // Try to find exact bet type match first
+          if (recommendation.bet_type && recommendation.bet_selection) {
+            matchingBet = teamBets.find(
+              (bet) =>
+                bet.BET_TYPE === recommendation.bet_type &&
+                bet.BET_SELECTION === recommendation.bet_selection
+            );
+          }
+
+          // If still no match, use the first available bet for this team combination
+          if (!matchingBet && teamBets.length > 0) {
+            matchingBet = teamBets[0];
+          }
+
+          console.log(`Looking for team key: ${teamKey}`);
+          console.log(`Found team match:`, matchingBet ? "Yes" : "No");
+          console.log(`Available bets for team:`, teamBets.length);
+        }
+
         if (matchingBet) {
           console.log(`Result: "${matchingBet.RESULT}"`);
+          console.log(`Bet Type: "${matchingBet.BET_TYPE}"`);
+          console.log(`Bet Selection: "${matchingBet.BET_SELECTION}"`);
         }
 
         if (

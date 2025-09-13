@@ -324,6 +324,7 @@ export const getTopTeams = (deduplicatedBets) => {
     const awayTeam = bet.AWAY_TEAM;
     const country = bet.COUNTRY;
     const league = bet.LEAGUE;
+    const betType = bet.BET_TYPE || "Unknown";
 
     // Use TEAM_INCLUDED if available, otherwise use HOME_TEAM or AWAY_TEAM
     const teamToAnalyze = teamIncluded || homeTeam || awayTeam;
@@ -352,6 +353,7 @@ export const getTopTeams = (deduplicatedBets) => {
         winRate: 0,
         recentWinRate: 0,
         lastBetDate: null,
+        betTypes: {}, // Add bet type tracking
       });
     }
 
@@ -368,6 +370,24 @@ export const getTopTeams = (deduplicatedBets) => {
       team.wins++;
     } else if (bet.RESULT?.toLowerCase().includes("loss")) {
       team.losses++;
+    }
+
+    // Track bet types
+    if (!team.betTypes[betType]) {
+      team.betTypes[betType] = {
+        wins: 0,
+        losses: 0,
+        total: 0,
+        totalWithResult: 0,
+      };
+    }
+    team.betTypes[betType].total++;
+    if (bet.RESULT?.toLowerCase().includes("win")) {
+      team.betTypes[betType].wins++;
+      team.betTypes[betType].totalWithResult++;
+    } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+      team.betTypes[betType].losses++;
+      team.betTypes[betType].totalWithResult++;
     }
 
     // Track last bet date
@@ -421,11 +441,28 @@ export const getTopTeams = (deduplicatedBets) => {
       const compositeScore =
         winRateScore + totalWinsScore + recentPerformanceScore;
 
+      // Generate bet type breakdown
+      const betTypeBreakdown = Object.entries(team.betTypes || {})
+        .map(([betType, stats]) => ({
+          betType,
+          wins: stats.wins,
+          losses: stats.losses,
+          total: stats.total,
+          totalWithResult: stats.totalWithResult,
+          winRate:
+            stats.totalWithResult > 0
+              ? ((stats.wins / stats.totalWithResult) * 100).toFixed(1)
+              : "0.0",
+        }))
+        .filter((bt) => bt.totalWithResult > 0) // Only show bet types with results
+        .sort((a, b) => b.totalWithResult - a.totalWithResult);
+
       return {
         ...team,
         team: team.teamName, // Map teamName to team for compatibility
         total: team.totalBets, // Map totalBets to total for compatibility
         compositeScore,
+        betTypeBreakdown, // Add the breakdown data
       };
     })
     .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0))
