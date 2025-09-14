@@ -204,6 +204,9 @@ const RecommendationAnalysisTab = ({
 
           // Convert stored recommendations to the format expected by the UI
           const matched = recommendations.map((rec) => {
+            console.log(
+              `Processing recommendation: ${rec.home_team} vs ${rec.away_team}, actual_result: "${rec.actual_result}"`
+            );
             // Determine if the prediction was correct
             let isCorrect = false;
             if (
@@ -605,8 +608,12 @@ const RecommendationAnalysisTab = ({
                     <td className="py-3 px-2 text-white">
                       {match.recommendation}
                     </td>
-                    <td className="py-3 px-2 text-white">
-                      {match.actual_result || "Pending"}
+                    <td className="py-3 px-2 text-white font-bold">
+                      {match.actual_result === "Win"
+                        ? "✅ WIN"
+                        : match.actual_result === "Loss"
+                        ? "❌ LOSS"
+                        : match.actual_result || "⏳ PENDING"}
                     </td>
                     <td className="py-3 px-2 text-center">
                       <span

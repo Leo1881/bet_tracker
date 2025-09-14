@@ -2251,7 +2251,6 @@ function App() {
   const compareRecommendationsWithResults = async () => {
     try {
       setIsComparing(true);
-      console.log("Starting recommendation comparison...");
 
       // Fetch stored recommendations from database
       const recommendationsResponse = await fetch("/api/recommendations");
@@ -2273,6 +2272,18 @@ function App() {
         currentBets ? currentBets.length : 0,
         "records"
       );
+
+      // Debug: Show first few bets from Google Sheets
+      if (currentBets && currentBets.length > 0) {
+        console.log("=== GOOGLE SHEETS DATA SAMPLE ===");
+        currentBets.slice(0, 5).forEach((bet, index) => {
+          console.log(
+            `${index + 1}. BET_ID: "${bet.BET_ID}", Teams: "${
+              bet.HOME_TEAM
+            }" vs "${bet.AWAY_TEAM}", Result: "${bet.RESULT}"`
+          );
+        });
+      }
 
       if (!currentBets || currentBets.length === 0) {
         throw new Error("Failed to fetch current bets from Google Sheets");
@@ -2390,6 +2401,18 @@ function App() {
       console.log(
         `Created BET_ID lookup map with ${betsLookup.size} games that have results`
       );
+
+      // Debug: Show what BET_IDs are actually in the lookup
+      const betIdKeys = Array.from(betsLookup.keys());
+      console.log("BET_IDs in lookup:", betIdKeys.slice(0, 10));
+
+      // Check if your specific BET_ID is in the lookup
+      const targetBetId = "2005/09/13 - 136";
+      console.log(`Looking for BET_ID: "${targetBetId}"`);
+      console.log(`Found in lookup: ${betsLookup.has(targetBetId)}`);
+      if (betsLookup.has(targetBetId)) {
+        console.log("Match found:", betsLookup.get(targetBetId));
+      }
       console.log(
         `Created team-based fallback lookup with ${teamBetsLookup.size} team combinations`
       );
@@ -2463,9 +2486,7 @@ function App() {
       );
 
       // Debug: Show first few keys in the lookup maps
-      const betIdKeys = Array.from(betsLookup.keys()).slice(0, 5);
       const teamKeys = Array.from(teamBetsLookup.keys()).slice(0, 5);
-      console.log("First 5 BET_ID lookup keys:", betIdKeys);
       console.log("First 5 team lookup keys:", teamKeys);
 
       // Check date ranges
@@ -2489,35 +2510,18 @@ function App() {
       // Filter stored recommendations to only include games that have results in Google Sheets
       const recommendationsWithResults = storedRecommendations.filter(
         (recommendation) => {
-          // Create a simple key using team names
+          // Use BET_ID for filtering instead of team names
+          if (recommendation.bet_id && recommendation.bet_id.trim() !== "") {
+            return betsLookup.has(recommendation.bet_id);
+          }
+
+          // Fallback to team-based matching if no BET_ID
           const teamKey =
             `${recommendation.home_team}_vs_${recommendation.away_team}`.replace(
               /\s+/g,
               "_"
             );
-
-          // Debug: Show what we're looking for vs what's available
-          if (storedRecommendations.indexOf(recommendation) < 3) {
-            // Only show first 3
-            console.log(`=== MATCHING DEBUG ===`);
-            console.log(`Looking for team key: ${teamKey}`);
-            console.log(`Found in lookup: ${betsLookup.has(teamKey)}`);
-            if (betsLookup.has(teamKey)) {
-              console.log(
-                `✅ MATCH FOUND! Result: ${betsLookup.get(teamKey).RESULT}`
-              );
-            } else {
-              console.log(`❌ NO MATCH - checking similar keys...`);
-              const similarKeys = Array.from(betsLookup.keys()).filter(
-                (key) =>
-                  key.includes(recommendation.home_team) ||
-                  key.includes(recommendation.away_team)
-              );
-              console.log(`Similar keys:`, similarKeys.slice(0, 3));
-            }
-          }
-
-          return betsLookup.has(teamKey);
+          return teamBetsLookup.has(teamKey);
         }
       );
 
@@ -2539,9 +2543,61 @@ function App() {
         let matchingBet = null;
 
         if (recommendation.bet_id && recommendation.bet_id.trim() !== "") {
-          matchingBet = betsLookup.get(recommendation.bet_id);
+          // Find all games with this BET_ID
+          const gamesWithBetId = currentBets.filter(
+            (bet) =>
+              bet.BET_ID === recommendation.bet_id &&
+              bet.RESULT &&
+              bet.RESULT.trim() !== ""
+          );
+
           console.log(`Looking for BET_ID: ${recommendation.bet_id}`);
-          console.log(`Found BET_ID match:`, matchingBet ? "Yes" : "No");
+          console.log(`Found ${gamesWithBetId.length} games with this BET_ID`);
+
+          // Log all games with this BET_ID for debugging
+          if (gamesWithBetId.length > 0) {
+            console.log(`All games with BET_ID ${recommendation.bet_id}:`);
+            gamesWithBetId.forEach((bet, index) => {
+              console.log(
+                `  ${index + 1}. ${bet.HOME_TEAM} vs ${
+                  bet.AWAY_TEAM
+                } - Result: ${bet.RESULT}`
+              );
+            });
+          }
+
+          // Find the specific game that matches teams
+          matchingBet = gamesWithBetId.find((bet) => {
+            const homeMatch = bet.HOME_TEAM === recommendation.home_team;
+            const awayMatch = bet.AWAY_TEAM === recommendation.away_team;
+
+            console.log(
+              `Checking: "${bet.HOME_TEAM}" === "${recommendation.home_team}" ? ${homeMatch}`
+            );
+            console.log(
+              `Checking: "${bet.AWAY_TEAM}" === "${recommendation.away_team}" ? ${awayMatch}`
+            );
+
+            return homeMatch && awayMatch;
+          });
+
+          console.log(
+            `Looking for teams: ${recommendation.home_team} vs ${recommendation.away_team}`
+          );
+          console.log(`Found specific game match:`, matchingBet ? "Yes" : "No");
+          console.log(
+            `Recommendation ID: ${recommendation.id}, Game: ${recommendation.home_team} vs ${recommendation.away_team}`
+          );
+
+          if (matchingBet) {
+            console.log(
+              `✅ MATCHED: ${matchingBet.HOME_TEAM} vs ${matchingBet.AWAY_TEAM}, Result: ${matchingBet.RESULT}`
+            );
+          } else {
+            console.log(
+              `❌ NO MATCH FOUND for teams: ${recommendation.home_team} vs ${recommendation.away_team}`
+            );
+          }
         }
 
         // Fallback: If no BET_ID match, try team-based matching with bet type

@@ -424,9 +424,13 @@ export const getTopTeams = (deduplicatedBets) => {
     // Calculate win rates
     const totalBetsWithResult = team.wins + team.losses;
     team.winRate =
-      totalBetsWithResult > 0 ? (team.wins / totalBetsWithResult) * 100 : 0;
+      totalBetsWithResult > 0
+        ? parseFloat(((team.wins / totalBetsWithResult) * 100).toFixed(1))
+        : 0;
     team.recentWinRate =
-      team.recentBets > 0 ? (team.recentWins / team.recentBets) * 100 : 0;
+      team.recentBets > 0
+        ? parseFloat(((team.recentWins / team.recentBets) * 100).toFixed(1))
+        : 0;
   });
 
   // Convert to array and calculate composite score
