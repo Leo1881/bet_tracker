@@ -2719,27 +2719,52 @@ function App() {
 
   // Analyze why a specific recommendation failed
   const analyzeRecommendationFailure = (recommendation, actualBet) => {
-    const prediction = recommendation.recommendation.toLowerCase();
+    const betType = recommendation.bet_type?.toLowerCase() || "";
+    const betSelection = recommendation.bet_selection || "";
     const result = actualBet.RESULT.toLowerCase();
 
     // Determine if prediction was correct
     let isCorrect = false;
     let failureReason = "";
 
-    if (prediction.includes("win")) {
+    // Check if the recommended team won
+    const recommendedTeam = recommendation.recommendation;
+
+    // Check prediction accuracy based on the actual bet type and result
+    // "Win" result means the user's selection won, "Loss" means it lost
+    if (betType.includes("win")) {
+      // For straight win bets
       isCorrect = result.includes("win");
       if (!isCorrect) {
-        failureReason = "Predicted win but got loss/draw";
+        failureReason = `Predicted ${recommendedTeam} to win but they lost`;
       }
-    } else if (prediction.includes("avoid")) {
-      isCorrect = result.includes("loss");
-      if (!isCorrect) {
-        failureReason = "Predicted avoid but team won";
-      }
-    } else if (prediction.includes("double chance")) {
-      isCorrect = result.includes("win") || result.includes("draw");
+    } else if (betType.includes("double chance")) {
+      // For double chance bets
+      isCorrect = result.includes("win");
       if (!isCorrect) {
         failureReason = "Predicted double chance but got loss";
+      }
+    } else if (
+      betType.includes("over/under") ||
+      betType.includes("over") ||
+      betType.includes("under")
+    ) {
+      // For over/under bets - "Win" result means the over/under bet won
+      isCorrect = result.includes("win");
+      if (!isCorrect) {
+        failureReason = `Predicted ${betSelection} but got loss`;
+      }
+    } else if (betType.includes("avoid")) {
+      // For avoid bets - "Win" result means the avoided team won (prediction failed)
+      isCorrect = result.includes("loss");
+      if (!isCorrect) {
+        failureReason = `Predicted to avoid ${recommendedTeam} but they won`;
+      }
+    } else {
+      // Fallback for any other bet types
+      isCorrect = result.includes("win");
+      if (!isCorrect) {
+        failureReason = `Predicted ${betSelection} but got loss`;
       }
     }
 
@@ -2754,7 +2779,7 @@ function App() {
       isCorrect,
       failureReason,
       confidenceAnalysis,
-      prediction,
+      prediction: betType,
       actualResult: result,
     };
   };

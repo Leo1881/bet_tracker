@@ -101,18 +101,25 @@ const RecommendationAnalysisTab = ({
               rec.actual_result &&
               rec.actual_result.trim() !== ""
             ) {
-              const prediction = rec.recommendation.toLowerCase();
+              const betType = rec.bet_type?.toLowerCase() || "";
               const result = rec.actual_result.toLowerCase();
+              const recommendedTeam = rec.recommendation;
 
-              // Basic failure reason
-              if (prediction.includes("win")) {
-                failureReason = "Predicted win but got loss/draw";
-              } else if (prediction.includes("avoid")) {
-                failureReason = "Predicted avoid but team won";
-              } else if (prediction.includes("double chance")) {
+              // Basic failure reason based on bet type
+              if (betType.includes("win")) {
+                failureReason = `Predicted ${recommendedTeam} to win but they lost`;
+              } else if (betType.includes("double chance")) {
                 failureReason = "Predicted double chance but got loss";
+              } else if (
+                betType.includes("over/under") ||
+                betType.includes("over") ||
+                betType.includes("under")
+              ) {
+                failureReason = `Predicted ${rec.bet_selection} but got loss`;
+              } else if (betType.includes("avoid")) {
+                failureReason = `Predicted to avoid ${recommendedTeam} but they won`;
               } else {
-                failureReason = "Prediction did not match actual result";
+                failureReason = `Predicted ${rec.bet_selection} but got loss`;
               }
 
               // Add detailed confidence analysis
@@ -235,18 +242,25 @@ const RecommendationAnalysisTab = ({
               rec.actual_result &&
               rec.actual_result.trim() !== ""
             ) {
-              const prediction = rec.recommendation.toLowerCase();
+              const betType = rec.bet_type?.toLowerCase() || "";
               const result = rec.actual_result.toLowerCase();
+              const recommendedTeam = rec.recommendation;
 
-              // Basic failure reason
-              if (prediction.includes("win")) {
-                failureReason = "Predicted win but got loss/draw";
-              } else if (prediction.includes("avoid")) {
-                failureReason = "Predicted avoid but team won";
-              } else if (prediction.includes("double chance")) {
+              // Basic failure reason based on bet type
+              if (betType.includes("win")) {
+                failureReason = `Predicted ${recommendedTeam} to win but they lost`;
+              } else if (betType.includes("double chance")) {
                 failureReason = "Predicted double chance but got loss";
+              } else if (
+                betType.includes("over/under") ||
+                betType.includes("over") ||
+                betType.includes("under")
+              ) {
+                failureReason = `Predicted ${rec.bet_selection} but got loss`;
+              } else if (betType.includes("avoid")) {
+                failureReason = `Predicted to avoid ${recommendedTeam} but they won`;
               } else {
-                failureReason = "Prediction did not match actual result";
+                failureReason = `Predicted ${rec.bet_selection} but got loss`;
               }
 
               // Add detailed confidence analysis
@@ -444,10 +458,12 @@ const RecommendationAnalysisTab = ({
       <div className="mb-6">
         <button
           onClick={handleCompare}
-          disabled={isComparing || !selectedBetslip || isBetslipAnalyzed()}
+          disabled={isComparing || !selectedBetslip}
           className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-            isComparing || !selectedBetslip || isBetslipAnalyzed()
+            isComparing || !selectedBetslip
               ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+              : isBetslipAnalyzed()
+              ? "bg-orange-500 text-white hover:bg-orange-600"
               : "bg-blue-500 text-white hover:bg-blue-600"
           }`}
         >
@@ -456,9 +472,15 @@ const RecommendationAnalysisTab = ({
             : !selectedBetslip
             ? "🔍 Select a betslip first"
             : isBetslipAnalyzed()
-            ? "✅ Already analyzed"
+            ? "🔄 Re-analyze Recommendations"
             : "🔍 Compare Recommendations vs Results"}
         </button>
+        {isBetslipAnalyzed() && (
+          <p className="text-sm text-gray-400 mt-2">
+            This betslip has been analyzed before. Click to re-analyze with
+            updated logic.
+          </p>
+        )}
       </div>
 
       {/* Filters */}
