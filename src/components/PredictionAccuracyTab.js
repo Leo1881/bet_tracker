@@ -84,8 +84,8 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
       <div className="text-gray-300 mb-6">
         <p>
           Track how accurate the system's predictions are compared to actual
-          results. Data includes both database recommendations and Google Sheets
-          data.
+          results. Data is sourced from database recommendations with analyzed
+          prediction accuracy.
         </p>
       </div>
 
@@ -119,31 +119,17 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
               <h4 className="text-lg font-semibold text-white mb-4">
                 Accuracy by Confidence Level
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="text-xl font-bold text-yellow-400">
-                    {metrics.byConfidence["4-6"]?.toFixed(1) || 0}%
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {Object.entries(metrics.byConfidence).map(([level, data]) => (
+                  <div key={level} className="text-center">
+                    <div className="text-xl font-bold text-blue-400">
+                      {data.accuracy?.toFixed(1) || 0}%
+                    </div>
+                    <div className="text-gray-300 text-sm">
+                      {level} ({data.total || 0} predictions)
+                    </div>
                   </div>
-                  <div className="text-gray-300 text-sm">
-                    Low Confidence (4-6)
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold text-orange-400">
-                    {metrics.byConfidence["6-8"]?.toFixed(1) || 0}%
-                  </div>
-                  <div className="text-gray-300 text-sm">
-                    Medium Confidence (6-8)
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold text-green-400">
-                    {metrics.byConfidence["8-10"]?.toFixed(1) || 0}%
-                  </div>
-                  <div className="text-gray-300 text-sm">
-                    High Confidence (8-10)
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -153,16 +139,16 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
                 Accuracy by Bet Type
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(metrics.byBetType).map(
-                  ([betType, accuracy]) => (
-                    <div key={betType} className="text-center">
-                      <div className="text-xl font-bold text-purple-400">
-                        {accuracy.toFixed(1)}%
-                      </div>
-                      <div className="text-gray-300 text-sm">{betType}</div>
+                {Object.entries(metrics.byBetType).map(([betType, data]) => (
+                  <div key={betType} className="text-center">
+                    <div className="text-xl font-bold text-purple-400">
+                      {data.accuracy?.toFixed(1) || 0}%
                     </div>
-                  )
-                )}
+                    <div className="text-gray-300 text-sm">
+                      {betType} ({data.total || 0} predictions)
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -173,22 +159,25 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {Object.entries(metrics.byRecommendationType).map(
-                  ([recType, accuracy]) => (
+                  ([recType, data]) => (
                     <div key={recType} className="text-center">
                       <div
                         className={`text-xl font-bold ${
-                          recType === "AVOID"
+                          recType.toLowerCase().includes("avoid")
                             ? "text-red-400"
-                            : recType === "WIN"
+                            : recType.toLowerCase().includes("win")
                             ? "text-green-400"
-                            : recType === "OVER"
+                            : recType.toLowerCase().includes("over") ||
+                              recType.toLowerCase().includes("under")
                             ? "text-blue-400"
                             : "text-gray-400"
                         }`}
                       >
-                        {accuracy.toFixed(1)}%
+                        {data.accuracy?.toFixed(1) || 0}%
                       </div>
-                      <div className="text-gray-300 text-sm">{recType}</div>
+                      <div className="text-gray-300 text-sm">
+                        {recType} ({data.total || 0} predictions)
+                      </div>
                     </div>
                   )
                 )}
