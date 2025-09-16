@@ -53,6 +53,45 @@ const RecommendationsTab = ({ betRecommendations }) => {
                 </div>
               </div>
 
+              {/* Recent Form Display */}
+              {rec.recentFormData && (
+                <div className="mb-4 bg-white/5 rounded-lg p-3 border border-white/10">
+                  <h5 className="text-sm font-semibold text-white mb-2">
+                    📈 Recent Form (Last 5 Games)
+                  </h5>
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="text-gray-300">Home Team:</span>
+                      <div className="flex items-center mt-1">
+                        <span className="text-green-400 font-medium">
+                          {rec.recentFormData.homeWins}W
+                        </span>
+                        <span className="text-yellow-400 mx-1">
+                          {rec.recentFormData.homeDraws}D
+                        </span>
+                        <span className="text-red-400">
+                          {rec.recentFormData.homeLosses}L
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-300">Away Team:</span>
+                      <div className="flex items-center mt-1">
+                        <span className="text-green-400 font-medium">
+                          {rec.recentFormData.awayWins}W
+                        </span>
+                        <span className="text-yellow-400 mx-1">
+                          {rec.recentFormData.awayDraws}D
+                        </span>
+                        <span className="text-red-400">
+                          {rec.recentFormData.awayLosses}L
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Primary Recommendation */}
                 <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/30 rounded-lg p-4">

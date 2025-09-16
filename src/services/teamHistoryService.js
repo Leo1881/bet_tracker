@@ -349,6 +349,83 @@ export const calculateHomeAwayConfidence = (
 };
 
 /**
+ * Calculates recent form confidence based on last 5 games performance
+ * @param {Object} bet - Bet object with last 5 games data
+ * @returns {number} Recent form confidence score (0-10)
+ */
+export const calculateRecentFormConfidence = (bet) => {
+  if (!bet) return 5;
+
+  // Determine which team we're betting on
+  const isBettingOnHomeTeam =
+    bet.team_included &&
+    bet.home_team &&
+    bet.team_included.toLowerCase().includes(bet.home_team.toLowerCase());
+
+  // Get the last 5 games data for the team we're betting on
+  let wins, draws, losses;
+
+  // Debug: Log available properties in bet object
+  console.log("Available bet properties:", Object.keys(bet));
+  console.log("Recent form data found:", {
+    LAST_5_WINS_HOME: bet.LAST_5_WINS_HOME,
+    LAST_5_DRAWS_HOME: bet.LAST_5_DRAWS_HOME,
+    LAST_5_LOSSES_HOME: bet.LAST_5_LOSSES_HOME,
+    LAST_5_WINS_AWAY: bet.LAST_5_WINS_AWAY,
+    LAST_5_DRAWS_AWAY: bet.LAST_5_DRAWS_AWAY,
+    LAST_5_LOSSES_AWAY: bet.LAST_5_LOSSES_AWAY,
+  });
+
+  if (isBettingOnHomeTeam) {
+    wins = parseInt(bet.LAST_5_WINS_HOME) || 0;
+    draws = parseInt(bet.LAST_5_DRAWS_HOME) || 0;
+    losses = parseInt(bet.LAST_5_LOSSES_HOME) || 0;
+  } else {
+    wins = parseInt(bet.LAST_5_WINS_AWAY) || 0;
+    draws = parseInt(bet.LAST_5_DRAWS_AWAY) || 0;
+    losses = parseInt(bet.LAST_5_LOSSES_AWAY) || 0;
+  }
+
+  const totalGames = wins + draws + losses;
+
+  // If no recent form data available, return neutral score
+  if (totalGames === 0) {
+    console.log("No recent form data available, returning neutral score");
+    return 5;
+  }
+
+  // Calculate recent form score (wins + 0.5*draws) / totalGames
+  const recentFormScore = (wins + 0.5 * draws) / totalGames;
+
+  // Convert to confidence score (0-10 scale)
+  let confidence = 5; // Start with neutral
+
+  if (recentFormScore >= 0.8) confidence = 9; // 4+ wins out of 5
+  else if (recentFormScore >= 0.7) confidence = 8; // 3.5+ wins out of 5
+  else if (recentFormScore >= 0.6) confidence = 7; // 3+ wins out of 5
+  else if (recentFormScore >= 0.5) confidence = 6; // 2.5+ wins out of 5
+  else if (recentFormScore >= 0.4) confidence = 4; // 2+ wins out of 5
+  else if (recentFormScore >= 0.3) confidence = 3; // 1.5+ wins out of 5
+  else confidence = 2; // Less than 1.5 wins out of 5
+
+  // Adjust for sample size (if less than 5 games)
+  if (totalGames < 5) {
+    const sampleSizePenalty = (5 - totalGames) * 0.5;
+    confidence = Math.max(3, confidence - sampleSizePenalty);
+  }
+
+  console.log(
+    `Recent form for ${
+      isBettingOnHomeTeam ? bet.home_team : bet.away_team
+    }: ${wins}W-${draws}D-${losses}L (${recentFormScore.toFixed(
+      2
+    )} score, ${confidence}/10 confidence)`
+  );
+
+  return Math.min(10, Math.max(1, confidence));
+};
+
+/**
  * Calculates overall confidence score from individual components
  * @param {Object} bet - Bet object with all necessary data
  * @returns {number} Overall confidence score (0-10)
@@ -405,18 +482,23 @@ export const calculateConfidenceScore = (bet) => {
     bet.bets || []
   );
 
-  // Calculate weighted average
+  // Calculate recent form confidence
+  const recentFormConfidence = calculateRecentFormConfidence(bet);
+
+  // Calculate weighted average with recent form included
   const weights = {
-    team: 0.25,
-    league: 0.2,
+    team: 0.2, // Reduced from 0.25 to make room for recent form
+    recentForm: 0.2, // New: Recent form gets 20% weight
+    league: 0.15, // Reduced from 0.2
     odds: 0.15,
     matchup: 0.15,
-    position: 0.15,
-    homeAway: 0.1,
+    position: 0.1, // Reduced from 0.15
+    homeAway: 0.05, // Reduced from 0.1
   };
 
   const weightedScore =
     teamConfidence * weights.team +
+    recentFormConfidence * weights.recentForm +
     leagueConfidence * weights.league +
     oddsConfidence * weights.odds +
     matchupConfidence * weights.matchup +
@@ -427,6 +509,7 @@ export const calculateConfidenceScore = (bet) => {
 
   console.log(`Confidence breakdown:`, {
     team: teamConfidence,
+    recentForm: recentFormConfidence,
     league: leagueConfidence,
     odds: oddsConfidence,
     matchup: matchupConfidence,
@@ -491,8 +574,11 @@ export const getConfidenceBreakdown = (bet) => {
     bet.bets || []
   );
 
+  const recentFormConfidence = calculateRecentFormConfidence(bet);
+
   return {
     team: Math.round(teamConfidence),
+    recentForm: Math.round(recentFormConfidence),
     league: Math.round(leagueConfidence),
     odds: Math.round(oddsConfidence),
     matchup: Math.round(matchupConfidence),

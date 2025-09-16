@@ -1138,6 +1138,16 @@ function App() {
       const secondary = rankedBets[1];
       const tertiary = rankedBets[2];
 
+      // Extract recent form data
+      const recentFormData = {
+        homeWins: parseInt(bet.LAST_5_WINS_HOME) || 0,
+        homeDraws: parseInt(bet.LAST_5_DRAWS_HOME) || 0,
+        homeLosses: parseInt(bet.LAST_5_LOSSES_HOME) || 0,
+        awayWins: parseInt(bet.LAST_5_WINS_AWAY) || 0,
+        awayDraws: parseInt(bet.LAST_5_DRAWS_AWAY) || 0,
+        awayLosses: parseInt(bet.LAST_5_LOSSES_AWAY) || 0,
+      };
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
@@ -1149,6 +1159,7 @@ function App() {
         confidence: confidence,
         odds: odds,
         recommendationScore: recommendationScore,
+        recentFormData: recentFormData,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
         doubleChance: doubleChanceRecommendation,
@@ -3471,6 +3482,7 @@ function App() {
                                   className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${result.confidenceLabel.color} cursor-help`}
                                   title={`${result.confidenceLabel.label}
 🏆 Team Performance: ${result.confidenceBreakdown.team}/10
+📈 Recent Form: ${result.confidenceBreakdown.recentForm}/10
 🏛️ League Experience: ${result.confidenceBreakdown.league}/10
 💰 Odds Value: ${result.confidenceBreakdown.odds}/10
 ⚔️ Head-to-Head: ${result.confidenceBreakdown.matchup}/10

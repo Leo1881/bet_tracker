@@ -238,6 +238,7 @@ const BetAnalysisTab = ({
                             } cursor-help`}
                             title={`${result.confidenceLabel?.label || "N/A"}
 🏆 Team Performance: ${result.confidenceBreakdown?.team || 0}/10
+📈 Recent Form: ${result.confidenceBreakdown?.recentForm || 0}/10
 🏛️ League Experience: ${result.confidenceBreakdown?.league || 0}/10
 💰 Odds Value: ${result.confidenceBreakdown?.odds || 0}/10
 ⚔️ Head-to-Head: ${result.confidenceBreakdown?.matchup || 0}/10
