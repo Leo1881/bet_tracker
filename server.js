@@ -560,6 +560,10 @@ app.get("/api/recommendations", async (req, res) => {
         "BET_ID in retrieved recommendation:",
         recommendations[0]?.bet_id
       );
+      console.log(
+        "BET_TYPE in retrieved recommendation:",
+        recommendations[0]?.bet_type
+      );
     }
 
     res.json(recommendations);

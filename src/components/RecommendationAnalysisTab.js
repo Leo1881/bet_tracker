@@ -59,6 +59,7 @@ const RecommendationAnalysisTab = ({
               recommendations[0].prediction_accurate
             );
             console.log("actual_result:", recommendations[0].actual_result);
+            console.log("bet_type from API:", recommendations[0].bet_type);
           }
 
           // Convert stored recommendations to the format expected by the UI
@@ -164,6 +165,8 @@ const RecommendationAnalysisTab = ({
               home_team: rec.home_team,
               away_team: rec.away_team,
               recommendation: rec.recommendation,
+              bet_type: rec.bet_type,
+              bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
               prediction_accurate: rec.prediction_accurate,
@@ -305,6 +308,8 @@ const RecommendationAnalysisTab = ({
               home_team: rec.home_team,
               away_team: rec.away_team,
               recommendation: rec.recommendation,
+              bet_type: rec.bet_type,
+              bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
               prediction_accurate: rec.prediction_accurate,
@@ -598,6 +603,9 @@ const RecommendationAnalysisTab = ({
                     Prediction
                   </th>
                   <th className="text-left py-3 px-2 text-white font-medium">
+                    Bet Type
+                  </th>
+                  <th className="text-left py-3 px-2 text-white font-medium">
                     Actual
                   </th>
                   <th className="text-center py-3 px-2 text-white font-medium">
@@ -629,6 +637,9 @@ const RecommendationAnalysisTab = ({
                     </td>
                     <td className="py-3 px-2 text-white">
                       {match.recommendation}
+                    </td>
+                    <td className="py-3 px-2 text-blue-300 font-medium">
+                      {match.bet_selection || "N/A"}
                     </td>
                     <td className="py-3 px-2 text-white font-bold">
                       {match.actual_result === "Win"
