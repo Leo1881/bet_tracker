@@ -170,6 +170,9 @@ const RecommendationAnalysisTab = ({
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
               prediction_accurate: rec.prediction_accurate,
+              your_bet_won: rec.your_bet_won,
+              analysis_type: rec.analysis_type,
+              insight: rec.insight,
               analysis: {
                 isCorrect: isCorrect,
                 failureReason: failureReason || null,
@@ -313,6 +316,9 @@ const RecommendationAnalysisTab = ({
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
               prediction_accurate: rec.prediction_accurate,
+              your_bet_won: rec.your_bet_won,
+              analysis_type: rec.analysis_type,
+              insight: rec.insight,
               analysis: {
                 isCorrect: isCorrect,
                 failureReason: failureReason || null,
@@ -603,19 +609,22 @@ const RecommendationAnalysisTab = ({
                     Prediction
                   </th>
                   <th className="text-left py-3 px-2 text-white font-medium">
-                    Bet Type
+                    Your Bet
                   </th>
                   <th className="text-left py-3 px-2 text-white font-medium">
-                    Actual
+                    Actual Result
                   </th>
                   <th className="text-center py-3 px-2 text-white font-medium">
-                    Result
+                    System Result
+                  </th>
+                  <th className="text-center py-3 px-2 text-white font-medium">
+                    Analysis
                   </th>
                   <th className="text-center py-3 px-2 text-white font-medium">
                     Confidence
                   </th>
                   <th className="text-left py-3 px-2 text-white font-medium">
-                    Failure Reason
+                    Insight
                   </th>
                 </tr>
               </thead>
@@ -651,37 +660,53 @@ const RecommendationAnalysisTab = ({
                     <td className="py-3 px-2 text-center">
                       <span
                         className={`text-lg ${
-                          match.analysis?.isCorrect
+                          match.prediction_accurate
                             ? "text-green-400"
                             : "text-red-400"
                         }`}
                       >
-                        {match.analysis?.isCorrect ? "✅" : "❌"}
+                        {match.prediction_accurate ? "✅" : "❌"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2 text-center">
+                      <span
+                        className={`text-xs px-2 py-1 rounded ${
+                          match.analysis_type === "Both Correct"
+                            ? "bg-green-500/20 text-green-300"
+                            : match.analysis_type === "You Won, System Wrong"
+                            ? "bg-yellow-500/20 text-yellow-300"
+                            : match.analysis_type === "System Right, You Lost"
+                            ? "bg-orange-500/20 text-orange-300"
+                            : "bg-red-500/20 text-red-300"
+                        }`}
+                      >
+                        {match.analysis_type || "N/A"}
                       </span>
                     </td>
                     <td className="py-3 px-2 text-center text-gray-300">
                       {match.confidence_score}/10
                     </td>
                     <td className="py-3 px-2 text-gray-300 text-xs">
-                      {match.analysis && !match.analysis.isCorrect ? (
-                        <div>
-                          <div className="text-red-400 font-medium mb-1">
-                            {match.analysis.failureReason}
-                          </div>
-                          {match.analysis.confidenceAnalysis &&
-                            Object.entries(
-                              match.analysis.confidenceAnalysis
-                            ).map(([factor, analysis]) => (
-                              <div key={factor} className="text-orange-300">
-                                <strong>{factor}:</strong> {analysis.issue}
-                              </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <span className="text-green-400">
-                          Correct prediction
-                        </span>
-                      )}
+                      <div>
+                        {match.insight || "N/A"}
+                        {match.analysis &&
+                          match.analysis.confidenceAnalysis &&
+                          Object.keys(match.analysis.confidenceAnalysis)
+                            .length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {Object.entries(
+                                match.analysis.confidenceAnalysis
+                              ).map(([factor, analysis]) => (
+                                <div
+                                  key={factor}
+                                  className="text-orange-300 text-xs"
+                                >
+                                  <strong>{factor}:</strong> {analysis.issue}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -2346,12 +2346,17 @@ function App() {
               id: match.id,
               bet_id: match.bet_id,
               actual_result: match.actual_result,
-              isCorrect: match.analysis.isCorrect,
+              yourBetWon: match.analysis.yourBetWon,
+              systemRecommendationAccurate:
+                match.analysis.systemRecommendationAccurate,
             });
 
             const updateData = {
               actual_result: match.actual_result,
-              prediction_accurate: match.analysis.isCorrect,
+              prediction_accurate: match.analysis.systemRecommendationAccurate,
+              your_bet_won: match.analysis.yourBetWon,
+              analysis_type: match.analysis.analysisType,
+              insight: match.analysis.insight,
               result_updated_at: new Date().toISOString(),
             };
 
@@ -2392,69 +2397,136 @@ function App() {
     }
   };
 
+  // Evaluate if your specific bet selection won (separate from system prediction accuracy)
+  const evaluateYourBetOutcome = (yourBetSelection, actualResult) => {
+    const result = actualResult.toLowerCase();
+    const betSelection = yourBetSelection?.toLowerCase() || "";
+
+    // Since your Google Sheets RESULT column contains your bet outcome (WIN/LOSS),
+    // we can directly check if the result is "win"
+    if (result.includes("win")) {
+      return true; // Your bet won
+    } else if (result.includes("loss")) {
+      return false; // Your bet lost
+    } else {
+      return false; // Pending or unknown
+    }
+  };
+
+  // Evaluate if the system's recommendation matched what you actually bet
+  const evaluateSystemRecommendationAccuracy = (
+    systemRecommendation,
+    yourBetSelection
+  ) => {
+    const recommendation = systemRecommendation?.toLowerCase() || "";
+    const yourBet = yourBetSelection?.toLowerCase() || "";
+
+    // Check if the system recommended what you actually bet
+    // Need exact matches, not partial matches
+
+    // Handle exact matches first
+    if (recommendation === yourBet) {
+      return true;
+    }
+
+    // Handle specific bet type matches
+    if (
+      recommendation.includes("home win") ||
+      recommendation.includes("home")
+    ) {
+      // System recommended home win - only matches if you bet home win (not 1 X)
+      return yourBet.includes("home win") || yourBet.includes("home");
+    } else if (
+      recommendation.includes("away win") ||
+      recommendation.includes("away")
+    ) {
+      // System recommended away win - only matches if you bet away win (not X 2)
+      return yourBet.includes("away win") || yourBet.includes("away");
+    } else if (recommendation.includes("draw")) {
+      // System recommended draw - only matches if you bet draw (not 1 X or X 2)
+      return yourBet.includes("draw");
+    } else if (
+      recommendation.includes("1 x") ||
+      recommendation.includes("1x")
+    ) {
+      // System recommended 1 X - only matches if you bet 1 X
+      return yourBet.includes("1 x") || yourBet.includes("1x");
+    } else if (
+      recommendation.includes("x 2") ||
+      recommendation.includes("x2")
+    ) {
+      // System recommended X 2 - only matches if you bet X 2
+      return yourBet.includes("x 2") || yourBet.includes("x2");
+    } else if (
+      recommendation.includes("1 2") ||
+      recommendation.includes("12")
+    ) {
+      // System recommended 1 2 - only matches if you bet 1 2
+      return yourBet.includes("1 2") || yourBet.includes("12");
+    } else if (recommendation.includes("over")) {
+      return yourBet.includes("over");
+    } else if (recommendation.includes("under")) {
+      return yourBet.includes("under");
+    } else {
+      // Fallback - exact match only
+      return recommendation === yourBet;
+    }
+  };
+
   // Analyze why a specific recommendation failed
   const analyzeRecommendationFailure = (recommendation, actualBet) => {
     const betType = recommendation.bet_type?.toLowerCase() || "";
     const betSelection = recommendation.bet_selection || "";
+    const systemRecommendation = recommendation.recommendation || "";
     const result = actualBet.RESULT.toLowerCase();
 
-    // Determine if prediction was correct
-    let isCorrect = false;
+    // Separate evaluations
+    const yourBetWon = evaluateYourBetOutcome(betSelection, result);
+    const systemRecommendationAccurate = evaluateSystemRecommendationAccuracy(
+      systemRecommendation,
+      betSelection
+    );
+
+    // Determine overall analysis
+    let analysisType = "";
     let failureReason = "";
+    let insight = "";
 
-    // Check if the recommended team won
-    const recommendedTeam = recommendation.recommendation;
-
-    // Check prediction accuracy based on the actual bet type and result
-    // "Win" result means the user's selection won, "Loss" means it lost
-    if (betType.includes("win")) {
-      // For straight win bets
-      isCorrect = result.includes("win");
-      if (!isCorrect) {
-        failureReason = `Predicted ${recommendedTeam} to win but they lost`;
-      }
-    } else if (betType.includes("double chance")) {
-      // For double chance bets
-      isCorrect = result.includes("win");
-      if (!isCorrect) {
-        failureReason = "Predicted double chance but got loss";
-      }
-    } else if (
-      betType.includes("over/under") ||
-      betType.includes("over") ||
-      betType.includes("under")
-    ) {
-      // For over/under bets - "Win" result means the over/under bet won
-      isCorrect = result.includes("win");
-      if (!isCorrect) {
-        failureReason = `Predicted ${betSelection} but got loss`;
-      }
-    } else if (betType.includes("avoid")) {
-      // For avoid bets - "Win" result means the avoided team won (prediction failed)
-      isCorrect = result.includes("loss");
-      if (!isCorrect) {
-        failureReason = `Predicted to avoid ${recommendedTeam} but they won`;
-      }
+    if (yourBetWon && systemRecommendationAccurate) {
+      analysisType = "Both Correct";
+      insight = "Your bet won and the system recommended what you bet";
+    } else if (yourBetWon && !systemRecommendationAccurate) {
+      analysisType = "You Won, System Wrong";
+      insight =
+        "Your bet won but the system recommended something different than what you bet";
+      failureReason = `System recommended ${systemRecommendation} but you bet ${betSelection}`;
+    } else if (!yourBetWon && systemRecommendationAccurate) {
+      analysisType = "System Right, You Lost";
+      insight = "System recommended what you bet but your bet lost";
+      failureReason = `System recommended ${systemRecommendation} and you bet ${betSelection}, but you lost`;
     } else {
-      // Fallback for any other bet types
-      isCorrect = result.includes("win");
-      if (!isCorrect) {
-        failureReason = `Predicted ${betSelection} but got loss`;
-      }
+      analysisType = "Both Wrong";
+      insight =
+        "System recommended something different than what you bet, and your bet lost";
+      failureReason = `System recommended ${systemRecommendation} but you bet ${betSelection}, and you lost`;
     }
 
     // Analyze confidence factors that may have been wrong
     const confidenceAnalysis = analyzeConfidenceFactors(
       recommendation,
       actualBet,
-      isCorrect
+      systemRecommendationAccurate // Use system accuracy for confidence analysis
     );
 
     return {
-      isCorrect,
+      yourBetWon,
+      systemRecommendationAccurate,
+      analysisType,
+      insight,
       failureReason,
       confidenceAnalysis,
-      prediction: betType,
+      yourBetSelection: betSelection,
+      systemRecommendation: systemRecommendation,
       actualResult: result,
     };
   };
