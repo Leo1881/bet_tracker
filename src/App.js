@@ -775,7 +775,7 @@ function App() {
         };
       }
 
-      // Calculate overall accuracy using the corrected logic
+      // Calculate overall accuracy using the existing prediction_accurate field
       const totalPredictions = recommendationsWithResults.length;
       const correctPredictions = recommendationsWithResults.filter(
         (rec) => rec.prediction_accurate === true
@@ -2342,18 +2342,28 @@ function App() {
         console.log("Sample match data:", matched[0]);
         try {
           const updatePromises = matched.map(async (match) => {
-            console.log(`Updating match:`, {
-              id: match.id,
-              bet_id: match.bet_id,
-              actual_result: match.actual_result,
-              yourBetWon: match.analysis.yourBetWon,
-              systemRecommendationAccurate:
-                match.analysis.systemRecommendationAccurate,
-            });
+            // Only log for Double Chance Away games
+            if (
+              match.recommendation &&
+              match.recommendation.includes("Double Chance Away")
+            ) {
+              console.log(`DEBUG UPDATE - Double Chance Away:`, {
+                id: match.id,
+                bet_id: match.bet_id,
+                actual_result: match.actual_result,
+                yourBetWon: match.analysis.yourBetWon,
+                systemRecommendationAccurate:
+                  match.analysis.systemRecommendationAccurate,
+                analysisType: match.analysis.analysisType,
+                insight: match.analysis.insight,
+              });
+            }
 
             const updateData = {
               actual_result: match.actual_result,
-              prediction_accurate: match.analysis.systemRecommendationAccurate,
+              prediction_accurate: match.analysis.systemPredictionAccurate,
+              recommendation_alignment:
+                match.analysis.systemRecommendationAccurate,
               your_bet_won: match.analysis.yourBetWon,
               analysis_type: match.analysis.analysisType,
               insight: match.analysis.insight,
@@ -2413,6 +2423,21 @@ function App() {
     }
   };
 
+  // Evaluate if the system's original prediction about the game outcome was accurate
+  const evaluateSystemPredictionAccuracy = (
+    systemRecommendation,
+    actualResult
+  ) => {
+    const result = actualResult.toLowerCase();
+    const recommendation = systemRecommendation?.toLowerCase() || "";
+
+    // Simplified approach: If your bet won, assume the system was right
+    // If your bet lost, assume the system was wrong
+    // This is a proxy for system prediction accuracy based on your betting results
+
+    return result.includes("win");
+  };
+
   // Evaluate if the system's recommendation matched what you actually bet
   const evaluateSystemRecommendationAccuracy = (
     systemRecommendation,
@@ -2420,6 +2445,17 @@ function App() {
   ) => {
     const recommendation = systemRecommendation?.toLowerCase() || "";
     const yourBet = yourBetSelection?.toLowerCase() || "";
+
+    // Debug logging - only for specific game
+    if (
+      systemRecommendation &&
+      systemRecommendation.includes("Double Chance Away")
+    ) {
+      console.log(
+        `DEBUG: System recommendation: "${systemRecommendation}" -> "${recommendation}"`
+      );
+      console.log(`DEBUG: Your bet: "${yourBetSelection}" -> "${yourBet}"`);
+    }
 
     // Check if the system recommended what you actually bet
     // Need exact matches, not partial matches
@@ -2446,6 +2482,29 @@ function App() {
       // System recommended draw - only matches if you bet draw (not 1 X or X 2)
       return yourBet.includes("draw");
     } else if (
+      recommendation.includes("double chance away") ||
+      recommendation.includes("Double Chance Away")
+    ) {
+      // System recommended double chance away - matches if you bet X 2
+      return yourBet.includes("x 2") || yourBet.includes("x2");
+    } else if (
+      recommendation.includes("double chance home") ||
+      recommendation.includes("Double Chance Home")
+    ) {
+      // System recommended double chance home - matches if you bet 1 X
+      return yourBet.includes("1 x") || yourBet.includes("1x");
+    } else if (
+      recommendation.includes("double chance") ||
+      recommendation.includes("Double Chance")
+    ) {
+      // Generic double chance - check both possibilities
+      return (
+        yourBet.includes("1 x") ||
+        yourBet.includes("1x") ||
+        yourBet.includes("x 2") ||
+        yourBet.includes("x2")
+      );
+    } else if (
       recommendation.includes("1 x") ||
       recommendation.includes("1x")
     ) {
@@ -2469,7 +2528,9 @@ function App() {
       return yourBet.includes("under");
     } else {
       // Fallback - exact match only
-      return recommendation === yourBet;
+      const result = recommendation === yourBet;
+      console.log(`DEBUG: Fallback result: ${result}`);
+      return result;
     }
   };
 
@@ -2485,6 +2546,11 @@ function App() {
     const systemRecommendationAccurate = evaluateSystemRecommendationAccuracy(
       systemRecommendation,
       betSelection
+    );
+
+    // Debug logging
+    console.log(
+      `Debug: System recommendation: "${systemRecommendation}", Your bet: "${betSelection}", Match: ${systemRecommendationAccurate}`
     );
 
     // Determine overall analysis
@@ -2521,6 +2587,10 @@ function App() {
     return {
       yourBetWon,
       systemRecommendationAccurate,
+      systemPredictionAccurate: evaluateSystemPredictionAccuracy(
+        systemRecommendation,
+        result
+      ),
       analysisType,
       insight,
       failureReason,
@@ -2579,11 +2649,22 @@ function App() {
     }
 
     const total = matchedRecommendations.length;
-    const correct = matchedRecommendations.filter(
-      (m) => m.analysis.isCorrect
+
+    // Count user bet outcomes
+    const userBetsWon = matchedRecommendations.filter(
+      (m) => m.analysis.yourBetWon
     ).length;
-    const wrong = total - correct;
-    const accuracy = (correct / total) * 100;
+    const userBetsLost = total - userBetsWon;
+
+    // Count system recommendation accuracy
+    const systemCorrect = matchedRecommendations.filter(
+      (m) => m.analysis.systemRecommendationAccurate
+    ).length;
+    const systemWrong = total - systemCorrect;
+
+    // Calculate accuracies
+    const userBetAccuracy = (userBetsWon / total) * 100;
+    const systemAccuracy = (systemCorrect / total) * 100;
 
     // Analyze confidence factor failures
     const confidenceFailures = {
@@ -2596,7 +2677,10 @@ function App() {
     };
 
     matchedRecommendations.forEach((match) => {
-      if (!match.analysis.isCorrect && match.analysis.confidenceAnalysis) {
+      if (
+        !match.analysis.systemRecommendationAccurate &&
+        match.analysis.confidenceAnalysis
+      ) {
         Object.keys(match.analysis.confidenceAnalysis).forEach((factor) => {
           if (match.analysis.confidenceAnalysis[factor]?.wasHigh) {
             confidenceFailures[factor]++;
@@ -2607,9 +2691,12 @@ function App() {
 
     return {
       total,
-      correct,
-      wrong,
-      accuracy: Math.round(accuracy * 10) / 10,
+      correct: systemCorrect, // Show system recommendation accuracy
+      wrong: systemWrong, // Show system recommendation failures
+      accuracy: Math.round(systemAccuracy * 10) / 10, // System accuracy
+      userBetsWon,
+      userBetsLost,
+      userBetAccuracy: Math.round(userBetAccuracy * 10) / 10,
       confidenceFailures,
       recommendations: matchedRecommendations,
     };

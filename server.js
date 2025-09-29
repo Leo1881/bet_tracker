@@ -440,6 +440,7 @@ app.put("/api/recommendations/:id", async (req, res) => {
     const {
       actual_result,
       prediction_accurate,
+      recommendation_alignment,
       your_bet_won,
       analysis_type,
       insight,
@@ -452,6 +453,7 @@ app.put("/api/recommendations/:id", async (req, res) => {
     console.log(`Request body:`, {
       actual_result,
       prediction_accurate,
+      recommendation_alignment,
       your_bet_won,
       analysis_type,
       insight,
@@ -469,18 +471,20 @@ app.put("/api/recommendations/:id", async (req, res) => {
       SET 
         actual_result = $1,
         prediction_accurate = $2,
-        your_bet_won = $3,
-        analysis_type = $4,
-        insight = $5,
-        result_updated_at = $6,
+        recommendation_alignment = $3,
+        your_bet_won = $4,
+        analysis_type = $5,
+        insight = $6,
+        result_updated_at = $7,
         updated_at = NOW()
-      WHERE id = $7
+      WHERE id = $8
       RETURNING *
     `;
 
     const result = await pool.query(query, [
       actual_result,
       prediction_accurate,
+      recommendation_alignment,
       your_bet_won,
       analysis_type,
       insight,
@@ -513,7 +517,7 @@ app.get("/api/recommendations", async (req, res) => {
         recommendation, confidence_score, confidence_breakdown,
         reasoning, historical_data, probabilities,
         actual_result, actual_home_score, actual_away_score,
-        prediction_accurate, your_bet_won, analysis_type, insight, analysis_notes,
+        prediction_accurate, system_prediction_accurate, your_bet_won, analysis_type, insight, analysis_notes,
         created_at, updated_at, result_updated_at
       FROM recommendation_tracking
     `;

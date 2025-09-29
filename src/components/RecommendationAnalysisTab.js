@@ -72,25 +72,33 @@ const RecommendationAnalysisTab = ({
               recommendation: rec.recommendation,
             });
 
-            // Determine if the prediction was correct
-            // Handle cases where prediction_accurate might be null, string, or boolean
+            // Use the stored analysis fields if available, otherwise fall back to old logic
             let isCorrect = false;
-            if (
-              rec.prediction_accurate === true ||
-              rec.prediction_accurate === "true"
-            ) {
-              isCorrect = true;
-            } else if (
-              rec.prediction_accurate === false ||
-              rec.prediction_accurate === "false"
-            ) {
-              isCorrect = false;
-            } else if (rec.actual_result && rec.actual_result.trim() !== "") {
-              // If we have an actual result but no prediction_accurate, we can infer it
-              // This is a fallback - ideally prediction_accurate should be set during comparison
+            let analysisType = rec.analysis_type || "";
+            let insight = rec.insight || "";
+
+            if (rec.analysis_type) {
+              // Use the stored analysis type
               isCorrect =
-                rec.actual_result.toLowerCase().includes("win") &&
-                rec.recommendation.toLowerCase().includes("win");
+                rec.analysis_type === "Both Correct" ||
+                rec.analysis_type === "System Right, You Lost";
+            } else {
+              // Fallback to old logic
+              if (
+                rec.prediction_accurate === true ||
+                rec.prediction_accurate === "true"
+              ) {
+                isCorrect = true;
+              } else if (
+                rec.prediction_accurate === false ||
+                rec.prediction_accurate === "false"
+              ) {
+                isCorrect = false;
+              } else if (rec.actual_result && rec.actual_result.trim() !== "") {
+                isCorrect =
+                  rec.actual_result.toLowerCase().includes("win") &&
+                  rec.recommendation.toLowerCase().includes("win");
+              }
             }
 
             // Generate detailed failure analysis
@@ -177,6 +185,8 @@ const RecommendationAnalysisTab = ({
                 isCorrect: isCorrect,
                 failureReason: failureReason || null,
                 confidenceAnalysis: confidenceAnalysis,
+                analysisType: rec.analysis_type || "",
+                insight: rec.insight || "",
               },
             };
           });
@@ -323,6 +333,8 @@ const RecommendationAnalysisTab = ({
                 isCorrect: isCorrect,
                 failureReason: failureReason || null,
                 confidenceAnalysis: confidenceAnalysis,
+                analysisType: rec.analysis_type || "",
+                insight: rec.insight || "",
               },
             };
           });

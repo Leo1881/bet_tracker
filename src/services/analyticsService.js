@@ -327,14 +327,24 @@ export const getTopTeams = (deduplicatedBets) => {
     const betType = bet.BET_TYPE || "Unknown";
 
     // Use TEAM_INCLUDED if available, otherwise use HOME_TEAM or AWAY_TEAM
-    const teamToAnalyze = teamIncluded || homeTeam || awayTeam;
+    let teamToAnalyze = teamIncluded || homeTeam || awayTeam;
 
     if (!teamToAnalyze || !country || !league) return;
 
-    // Exclude teams named "Over 1.5" and "Over 0.5"
-    if (teamToAnalyze === "Over 1.5" || teamToAnalyze === "Over 0.5") {
-      return;
+    // Handle Over/Under bets - use the actual team name instead of bet type
+    if (
+      teamToAnalyze === "Over 1.5" ||
+      teamToAnalyze === "Over 0.5" ||
+      teamToAnalyze === "Under 1.5" ||
+      teamToAnalyze === "Under 0.5" ||
+      teamToAnalyze.includes("Over") ||
+      teamToAnalyze.includes("Under")
+    ) {
+      // For Over/Under bets, use the team from HOME_TEAM or AWAY_TEAM
+      teamToAnalyze = homeTeam || awayTeam;
     }
+
+    if (!teamToAnalyze) return;
 
     // Create unique key for team + country + league combination
     const teamKey = `${teamToAnalyze.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
