@@ -35,6 +35,7 @@ const DataTab = ({
                         (key) =>
                           ![
                             "ID",
+                            "id",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",
@@ -71,6 +72,7 @@ const DataTab = ({
                         ([key, value]) =>
                           ![
                             "ID",
+                            "id",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",
@@ -126,6 +128,7 @@ const DataTab = ({
                         (key) =>
                           ![
                             "ID",
+                            "id",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",
@@ -164,6 +167,7 @@ const DataTab = ({
                         ([key, value]) =>
                           ![
                             "ID",
+                            "id",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",
