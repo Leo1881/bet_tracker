@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/bet_tracker/static/css/main.75b7f9be.css",
-    "main.js": "/bet_tracker/static/js/main.fe9bcaa3.js",
+    "main.js": "/bet_tracker/static/js/main.37df7c04.js",
     "static/js/389.a7a53cd8.chunk.js": "/bet_tracker/static/js/389.a7a53cd8.chunk.js",
     "static/js/453.0350aa36.chunk.js": "/bet_tracker/static/js/453.0350aa36.chunk.js",
     "static/js/239.33655c11.chunk.js": "/bet_tracker/static/js/239.33655c11.chunk.js",
@@ -9,7 +9,7 @@
     "static/js/732.fcc4e41c.chunk.js": "/bet_tracker/static/js/732.fcc4e41c.chunk.js",
     "index.html": "/bet_tracker/index.html",
     "main.75b7f9be.css.map": "/bet_tracker/static/css/main.75b7f9be.css.map",
-    "main.fe9bcaa3.js.map": "/bet_tracker/static/js/main.fe9bcaa3.js.map",
+    "main.37df7c04.js.map": "/bet_tracker/static/js/main.37df7c04.js.map",
     "389.a7a53cd8.chunk.js.map": "/bet_tracker/static/js/389.a7a53cd8.chunk.js.map",
     "453.0350aa36.chunk.js.map": "/bet_tracker/static/js/453.0350aa36.chunk.js.map",
     "239.33655c11.chunk.js.map": "/bet_tracker/static/js/239.33655c11.chunk.js.map",
@@ -18,6 +18,6 @@
   },
   "entrypoints": [
     "static/css/main.75b7f9be.css",
-    "static/js/main.fe9bcaa3.js"
+    "static/js/main.37df7c04.js"
   ]
 }
