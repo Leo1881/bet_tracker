@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 const ScoringAnalysisTab = ({
   analyzeScoringPatterns,
@@ -6,6 +6,72 @@ const ScoringAnalysisTab = ({
   scoringAnalysis,
   bets,
 }) => {
+  const [sortConfig, setSortConfig] = useState({
+    key: "over2_5Rate",
+    direction: "desc",
+  });
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const handleSort = (key) => {
+    let direction = "desc";
+    if (sortConfig.key === key && sortConfig.direction === "desc") {
+      direction = "asc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortedData = () => {
+    if (!scoringAnalysis || scoringAnalysis.length === 0) return [];
+
+    let filtered = scoringAnalysis.filter((stat) => stat.totalGames >= 3);
+
+    // Apply search filter if search term exists
+    if (searchTerm.trim()) {
+      filtered = filtered.filter(
+        (stat) =>
+          stat.team.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          stat.league.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          stat.country.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    return filtered
+      .sort((a, b) => {
+        let aValue, bValue;
+
+        switch (sortConfig.key) {
+          case "totalGames":
+            aValue = a.totalGames;
+            bValue = b.totalGames;
+            break;
+          case "avgGoals":
+            aValue = parseFloat(a.avgGoals);
+            bValue = parseFloat(b.avgGoals);
+            break;
+          case "over1_5Rate":
+            aValue = parseFloat(a.over1_5Rate);
+            bValue = parseFloat(b.over1_5Rate);
+            break;
+          case "over2_5Rate":
+            aValue = parseFloat(a.over2_5Rate);
+            bValue = parseFloat(b.over2_5Rate);
+            break;
+          case "over3_5Rate":
+            aValue = parseFloat(a.over3_5Rate);
+            bValue = parseFloat(b.over3_5Rate);
+            break;
+          default:
+            return 0;
+        }
+
+        if (sortConfig.direction === "asc") {
+          return aValue - bValue;
+        } else {
+          return bValue - aValue;
+        }
+      })
+      .slice(0, 50);
+  };
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <div className="flex items-center justify-between mb-6">
@@ -37,6 +103,32 @@ const ScoringAnalysisTab = ({
             </p>
           </div>
 
+          {/* Search Input */}
+          <div className="mb-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search teams, leagues, or countries..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {searchTerm && (
+              <p className="text-sm text-gray-400 mt-2">
+                Showing {getSortedData().length} results for "{searchTerm}"
+              </p>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-white/20">
@@ -47,61 +139,104 @@ const ScoringAnalysisTab = ({
                   <th className="px-4 py-2 text-left text-white font-semibold">
                     League
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Games
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("totalGames")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Games</span>
+                      {sortConfig.key === "totalGames" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Avg Goals
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("avgGoals")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Avg Goals</span>
+                      {sortConfig.key === "avgGoals" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Over 1.5
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("over1_5Rate")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Over 1.5</span>
+                      {sortConfig.key === "over1_5Rate" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Over 2.5
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("over2_5Rate")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Over 2.5</span>
+                      {sortConfig.key === "over2_5Rate" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Over 3.5
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("over3_5Rate")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Over 3.5</span>
+                      {sortConfig.key === "over3_5Rate" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {scoringAnalysis
-                  .filter((stat) => stat.totalGames >= 3) // Only show teams with 3+ games
-                  .sort(
-                    (a, b) =>
-                      parseFloat(b.over2_5Rate) - parseFloat(a.over2_5Rate)
-                  )
-                  .slice(0, 50) // Show top 50 teams
-                  .map((stat, index) => (
-                    <tr
-                      key={index}
-                      className={`${
-                        index % 2 === 0 ? "bg-white/5" : "bg-white/10"
-                      }`}
-                    >
-                      <td className="px-4 py-3 text-white font-medium">
-                        {stat.team}
-                      </td>
-                      <td className="px-4 py-3 text-gray-300">
-                        {stat.country} - {stat.league}
-                      </td>
-                      <td className="px-4 py-3 text-gray-300">
-                        {stat.totalGames}
-                      </td>
-                      <td className="px-4 py-3 text-blue-300 font-mono">
-                        {stat.avgGoals}
-                      </td>
-                      <td className="px-4 py-3 text-green-300 font-mono">
-                        {stat.over1_5Rate}%
-                      </td>
-                      <td className="px-4 py-3 text-yellow-300 font-mono">
-                        {stat.over2_5Rate}%
-                      </td>
-                      <td className="px-4 py-3 text-orange-300 font-mono">
-                        {stat.over3_5Rate}%
-                      </td>
-                    </tr>
-                  ))}
+                {getSortedData().map((stat, index) => (
+                  <tr
+                    key={index}
+                    className={`${
+                      index % 2 === 0 ? "bg-white/5" : "bg-white/10"
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-white font-medium">
+                      {stat.team}
+                    </td>
+                    <td className="px-4 py-3 text-gray-300">
+                      {stat.country} - {stat.league}
+                    </td>
+                    <td className="px-4 py-3 text-gray-300">
+                      {stat.totalGames}
+                    </td>
+                    <td className="px-4 py-3 text-blue-300 font-mono">
+                      {stat.avgGoals}
+                    </td>
+                    <td className="px-4 py-3 text-green-300 font-mono">
+                      {stat.over1_5Rate}%
+                    </td>
+                    <td className="px-4 py-3 text-yellow-300 font-mono">
+                      {stat.over2_5Rate}%
+                    </td>
+                    <td className="px-4 py-3 text-orange-300 font-mono">
+                      {stat.over3_5Rate}%
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
