@@ -201,6 +201,7 @@ export const analyzeNewBets = async (
         HOME_TEAM_GAMES_PLAYED: newBet.HOME_TEAM_GAMES_PLAYED || "",
         AWAY_TEAM_GAMES_PLAYED: newBet.AWAY_TEAM_GAMES_PLAYED || "",
         LEAGUE: newBet.LEAGUE || "",
+        bets: bets || [], // Add the bets array for momentum calculation
       });
 
       const confidenceLabel = getLabel(confidenceScore);

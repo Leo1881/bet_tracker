@@ -4,7 +4,7 @@
  */
 
 /**
- * Calculates team confidence based on historical performance
+ * Calculates team confidence based on historical performance using statistical confidence intervals
  * @param {string} teamName - Name of the team
  * @param {string} country - Country of the team
  * @param {string} league - League of the team
@@ -38,27 +38,49 @@ export const calculateTeamConfidence = (teamName, country, league, bets) => {
 
   if (total === 0) return 5;
 
-  const winRate = (wins / total) * 100;
+  const winRate = wins / total;
 
-  // Calculate confidence based on win rate and sample size
-  let confidence = 5;
-  if (winRate >= 80) confidence = 9;
-  else if (winRate >= 70) confidence = 8;
-  else if (winRate >= 60) confidence = 7;
-  else if (winRate >= 50) confidence = 6;
-  else if (winRate >= 40) confidence = 4;
-  else if (winRate >= 30) confidence = 3;
-  else confidence = 2;
-
-  // Adjust for sample size
-  if (total < 3) confidence = Math.max(3, confidence - 2);
-  else if (total < 5) confidence = Math.max(4, confidence - 1);
+  // Use Wilson Score confidence interval for statistical rigor
+  const confidence = calculateStatisticalConfidence(wins, total);
 
   return Math.min(10, Math.max(1, confidence));
 };
 
 /**
- * Calculates league confidence based on performance in specific league/country
+ * Calculates statistical confidence using Wilson Score confidence interval
+ * @param {number} wins - Number of wins
+ * @param {number} total - Total number of games
+ * @returns {number} Confidence score (0-10)
+ */
+const calculateStatisticalConfidence = (wins, total) => {
+  if (total === 0) return 5;
+
+  const z = 1.96; // 95% confidence level
+  const n = total;
+  const p = wins / total;
+
+  // Wilson Score confidence interval
+  const lowerBound =
+    (p +
+      (z * z) / (2 * n) -
+      z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
+    (1 + (z * z) / n);
+  const upperBound =
+    (p +
+      (z * z) / (2 * n) +
+      z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
+    (1 + (z * z) / n);
+
+  // Use lower bound for conservative estimate, but adjust for sample size uncertainty
+  const uncertainty = Math.sqrt((p * (1 - p)) / n);
+  const adjustedConfidence = Math.max(0, lowerBound - uncertainty * 0.5);
+
+  // Convert to 0-10 scale
+  return Math.min(10, Math.max(1, adjustedConfidence * 10));
+};
+
+/**
+ * Calculates league confidence based on performance in specific league/country using statistical confidence intervals
  * @param {string} country - Country name
  * @param {string} league - League name
  * @param {Array} bets - Array of all bets
@@ -87,19 +109,8 @@ export const calculateLeagueConfidence = (country, league, bets) => {
 
   if (total === 0) return 5;
 
-  const winRate = (wins / total) * 100;
-
-  let confidence = 5;
-  if (winRate >= 75) confidence = 9;
-  else if (winRate >= 65) confidence = 8;
-  else if (winRate >= 55) confidence = 7;
-  else if (winRate >= 45) confidence = 6;
-  else if (winRate >= 35) confidence = 4;
-  else confidence = 3;
-
-  // Adjust for sample size
-  if (total < 5) confidence = Math.max(3, confidence - 1);
-  else if (total < 10) confidence = Math.max(4, confidence - 0.5);
+  // Use statistical confidence calculation
+  const confidence = calculateStatisticalConfidence(wins, total);
 
   return Math.min(10, Math.max(1, confidence));
 };
@@ -159,7 +170,7 @@ export const calculateOddsConfidence = (odds1, betType, teamName, bets) => {
 };
 
 /**
- * Calculates matchup confidence based on head-to-head history
+ * Calculates matchup confidence based on head-to-head history using statistical confidence intervals
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {string} country - Country name
@@ -204,19 +215,8 @@ export const calculateMatchupConfidence = (
 
   if (total === 0) return 5;
 
-  const winRate = (wins / total) * 100;
-
-  let confidence = 5;
-  if (winRate >= 80) confidence = 9;
-  else if (winRate >= 70) confidence = 8;
-  else if (winRate >= 60) confidence = 7;
-  else if (winRate >= 50) confidence = 6;
-  else if (winRate >= 40) confidence = 4;
-  else confidence = 3;
-
-  // Adjust for sample size
-  if (total < 2) confidence = Math.max(3, confidence - 2);
-  else if (total < 3) confidence = Math.max(4, confidence - 1);
+  // Use statistical confidence calculation
+  const confidence = calculateStatisticalConfidence(wins, total);
 
   return Math.min(10, Math.max(1, confidence));
 };
@@ -426,7 +426,141 @@ export const calculateRecentFormConfidence = (bet) => {
 };
 
 /**
- * Calculates overall confidence score from individual components
+ * Calculates team momentum confidence based on performance trend over last 10 games
+ * @param {string} teamName - Name of the team
+ * @param {Array} bets - Array of all bets
+ * @returns {number} Momentum confidence score (0-10)
+ */
+export const calculateMomentumConfidence = (teamName, bets) => {
+  if (!teamName || !bets || bets.length === 0) return 5;
+
+  // Get last 10 games for the team, sorted by date (newest first)
+  const teamBets = bets
+    .filter((bet) => bet.TEAM_INCLUDED === teamName)
+    .sort((a, b) => new Date(b.DATE) - new Date(a.DATE))
+    .slice(0, 10); // Last 10 games
+
+  if (teamBets.length === 0) return 5;
+
+  let momentum = 0;
+  let totalWeight = 0;
+
+  teamBets.forEach((bet, index) => {
+    // Weight recent games more heavily (exponential decay)
+    const weight = Math.pow(0.8, index);
+    totalWeight += weight;
+
+    if (bet.RESULT?.toLowerCase().includes("win")) {
+      momentum += weight; // Positive momentum for wins
+    } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+      momentum -= weight; // Negative momentum for losses
+    }
+    // Draws don't affect momentum (neutral)
+  });
+
+  // Normalize momentum to -1 to +1 range
+  const normalizedMomentum = totalWeight > 0 ? momentum / totalWeight : 0;
+
+  // Convert to confidence score (0-10 scale)
+  // -1 (all losses) = 1/10, 0 (neutral) = 5/10, +1 (all wins) = 10/10
+  const momentumConfidence = Math.min(
+    10,
+    Math.max(1, (normalizedMomentum + 1) * 4.5 + 1)
+  );
+
+  console.log(
+    `Momentum calculation for ${teamName}: raw=${momentum.toFixed(
+      2
+    )}, normalized=${normalizedMomentum.toFixed(2)} → ${momentumConfidence}/10`
+  );
+
+  return momentumConfidence;
+};
+
+/**
+ * Calculates dynamic weights based on confidence scores and bet type
+ * @param {Object} confidenceBreakdown - Individual confidence scores
+ * @param {string} betType - Type of bet (e.g., "Over/Under", "Win/Loss")
+ * @returns {Object} Dynamic weight distribution
+ */
+const calculateDynamicWeights = (confidenceBreakdown, betType) => {
+  // Base weights (starting point)
+  const baseWeights = {
+    team: 0.2,
+    recentForm: 0.15,
+    momentum: 0.15,
+    league: 0.15,
+    odds: 0.15,
+    matchup: 0.15,
+    position: 0.1,
+    homeAway: 0.05,
+  };
+
+  // Adjust weights based on confidence scores
+  if (confidenceBreakdown.team < 3) {
+    // Poor team data - reduce team weight, increase others
+    baseWeights.team *= 0.5;
+    baseWeights.league *= 1.3;
+    baseWeights.odds *= 1.2;
+  }
+
+  if (confidenceBreakdown.recentForm < 3) {
+    // Poor recent form data - reduce recent form weight
+    baseWeights.recentForm *= 0.6;
+    baseWeights.team *= 1.2;
+    baseWeights.league *= 1.1;
+  }
+
+  if (confidenceBreakdown.momentum < 3) {
+    // Poor momentum data - reduce momentum weight
+    baseWeights.momentum *= 0.6;
+    baseWeights.team *= 1.1;
+    baseWeights.recentForm *= 1.1;
+  }
+
+  if (confidenceBreakdown.league < 3) {
+    // Poor league data - reduce league weight
+    baseWeights.league *= 0.6;
+    baseWeights.team *= 1.3;
+    baseWeights.odds *= 1.2;
+  }
+
+  if (confidenceBreakdown.odds < 3) {
+    // Poor odds data - reduce odds weight
+    baseWeights.odds *= 0.6;
+    baseWeights.team *= 1.2;
+    baseWeights.league *= 1.2;
+  }
+
+  if (confidenceBreakdown.matchup < 3) {
+    // Poor matchup data - reduce matchup weight
+    baseWeights.matchup *= 0.6;
+    baseWeights.team *= 1.1;
+    baseWeights.league *= 1.1;
+  }
+
+  // Adjust weights based on bet type
+  if (
+    (betType && betType.toLowerCase().includes("over")) ||
+    (betType && betType.toLowerCase().includes("under"))
+  ) {
+    // For Over/Under bets, increase odds and league weights
+    baseWeights.odds *= 1.3;
+    baseWeights.league *= 1.2;
+    baseWeights.team *= 0.8;
+  }
+
+  // Normalize weights to sum to 1
+  const totalWeight = Object.values(baseWeights).reduce((sum, w) => sum + w, 0);
+  Object.keys(baseWeights).forEach((key) => {
+    baseWeights[key] /= totalWeight;
+  });
+
+  return baseWeights;
+};
+
+/**
+ * Calculates overall confidence score from individual components using dynamic weights
  * @param {Object} bet - Bet object with all necessary data
  * @returns {number} Overall confidence score (0-10)
  */
@@ -485,20 +619,31 @@ export const calculateConfidenceScore = (bet) => {
   // Calculate recent form confidence
   const recentFormConfidence = calculateRecentFormConfidence(bet);
 
-  // Calculate weighted average with recent form included
-  const weights = {
-    team: 0.2, // Reduced from 0.25 to make room for recent form
-    recentForm: 0.2, // New: Recent form gets 20% weight
-    league: 0.15, // Reduced from 0.2
-    odds: 0.15,
-    matchup: 0.15,
-    position: 0.1, // Reduced from 0.15
-    homeAway: 0.05, // Reduced from 0.1
+  // Calculate momentum confidence
+  const momentumConfidence = calculateMomentumConfidence(
+    bet.team_included,
+    bet.bets || []
+  );
+
+  // Create confidence breakdown for dynamic weight calculation
+  const confidenceBreakdown = {
+    team: teamConfidence,
+    recentForm: recentFormConfidence,
+    momentum: momentumConfidence,
+    league: leagueConfidence,
+    odds: oddsConfidence,
+    matchup: matchupConfidence,
+    position: positionConfidence,
+    homeAway: homeAwayConfidence,
   };
+
+  // Calculate dynamic weights based on confidence scores and bet type
+  const weights = calculateDynamicWeights(confidenceBreakdown, bet.bet_type);
 
   const weightedScore =
     teamConfidence * weights.team +
     recentFormConfidence * weights.recentForm +
+    momentumConfidence * weights.momentum +
     leagueConfidence * weights.league +
     oddsConfidence * weights.odds +
     matchupConfidence * weights.matchup +
@@ -510,6 +655,7 @@ export const calculateConfidenceScore = (bet) => {
   console.log(`Confidence breakdown:`, {
     team: teamConfidence,
     recentForm: recentFormConfidence,
+    momentum: momentumConfidence,
     league: leagueConfidence,
     odds: oddsConfidence,
     matchup: matchupConfidence,
@@ -517,6 +663,8 @@ export const calculateConfidenceScore = (bet) => {
     homeAway: homeAwayConfidence,
     final: finalScore,
   });
+
+  console.log(`Dynamic weights applied:`, weights);
 
   return Math.min(10, Math.max(1, finalScore));
 };
@@ -575,10 +723,15 @@ export const getConfidenceBreakdown = (bet) => {
   );
 
   const recentFormConfidence = calculateRecentFormConfidence(bet);
+  const momentumConfidence = calculateMomentumConfidence(
+    bet.team_included,
+    bet.bets || []
+  );
 
   return {
     team: Math.round(teamConfidence),
     recentForm: Math.round(recentFormConfidence),
+    momentum: Math.round(momentumConfidence),
     league: Math.round(leagueConfidence),
     odds: Math.round(oddsConfidence),
     matchup: Math.round(matchupConfidence),
