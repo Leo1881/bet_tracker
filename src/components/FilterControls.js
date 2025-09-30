@@ -200,67 +200,6 @@ const FilterControls = ({
           </div>
         )}
       </div>
-
-      {/* Best Performers Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        {(() => {
-          const performers = getBestPerformers();
-          return (
-            <>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-lg font-bold text-green-400 mb-2">
-                  Best League
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {performers.bestLeague.leagueDisplay ||
-                    performers.bestLeague.league ||
-                    "N/A"}
-                </div>
-                <div className="text-gray-300">
-                  {performers.bestLeague.winRate || 0}% Win Rate
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-lg font-bold text-green-400 mb-2">
-                  Best Country
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {performers.bestCountry.country || "N/A"}
-                </div>
-                <div className="text-gray-300">
-                  {performers.bestCountry.winRate || 0}% Win Rate
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-lg font-bold text-blue-400 mb-2">
-                  Most Bets
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {performers.mostBetsLeague.leagueDisplay ||
-                    performers.mostBetsLeague.league ||
-                    "N/A"}
-                </div>
-                <div className="text-gray-300">
-                  {performers.mostBetsLeague.total || 0} Bets
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-lg font-bold text-red-400 mb-2">
-                  Worst League
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {performers.worstLeague.leagueDisplay ||
-                    performers.worstLeague.league ||
-                    "N/A"}
-                </div>
-                <div className="text-gray-300">
-                  {performers.worstLeague.winRate || 0}% Win Rate
-                </div>
-              </div>
-            </>
-          );
-        })()}
-      </div>
     </>
   );
 };

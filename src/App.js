@@ -3287,7 +3287,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#121212] via-[#1E1E1E] to-[#121212]">
       {/* Header */}
-      <div className="w-full px-4 py-8">
+      <div className="w-full px-2 md:px-4 py-4 md:py-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">
             <span className="text-2xl md:text-[44px]">⚽️</span> BET TRACKER
@@ -3295,14 +3295,14 @@ function App() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6 mb-6 md:mb-8">
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
             <div className="text-2xl font-bold text-white">
               {getDeduplicatedFilteredBets().length}
             </div>
             <div className="text-gray-300">Filtered Bets</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
             <div className="text-2xl font-bold text-green-400">
               {
                 getDeduplicatedFilteredBets().filter((bet) =>
@@ -3312,7 +3312,7 @@ function App() {
             </div>
             <div className="text-gray-300">Wins</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
             <div className="text-2xl font-bold text-red-400">
               {
                 getDeduplicatedFilteredBets().filter((bet) =>
@@ -3322,7 +3322,7 @@ function App() {
             </div>
             <div className="text-gray-300">Losses</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
             <div className="text-2xl font-bold text-yellow-400">
               {
                 getDeduplicatedFilteredBets().filter(
@@ -3332,12 +3332,73 @@ function App() {
             </div>
             <div className="text-gray-300">Pending</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20 col-span-2 md:col-span-1">
             <div className="text-2xl font-bold text-blue-400">
               {calculateWinPercentageForBets(getDeduplicatedFilteredBets())}%
             </div>
             <div className="text-gray-300">Win Rate</div>
           </div>
+        </div>
+
+        {/* Analytics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-6">
+          {(() => {
+            const performers = getBestPerformers();
+            return (
+              <>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                  <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
+                    Best League
+                  </div>
+                  <div className="text-lg md:text-2xl font-bold text-white">
+                    {performers.bestLeague.leagueDisplay ||
+                      performers.bestLeague.league ||
+                      "N/A"}
+                  </div>
+                  <div className="text-xs md:text-sm text-gray-300">
+                    {performers.bestLeague.winRate || 0}% Win Rate
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                  <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
+                    Best Country
+                  </div>
+                  <div className="text-lg md:text-2xl font-bold text-white">
+                    {performers.bestCountry.country || "N/A"}
+                  </div>
+                  <div className="text-xs md:text-sm text-gray-300">
+                    {performers.bestCountry.winRate || 0}% Win Rate
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                  <div className="text-sm md:text-lg font-bold text-blue-400 mb-1 md:mb-2">
+                    Most Bets
+                  </div>
+                  <div className="text-lg md:text-2xl font-bold text-white">
+                    {performers.mostBetsLeague.leagueDisplay ||
+                      performers.mostBetsLeague.league ||
+                      "N/A"}
+                  </div>
+                  <div className="text-xs md:text-sm text-gray-300">
+                    {performers.mostBetsLeague.total || 0} Bets
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                  <div className="text-sm md:text-lg font-bold text-red-400 mb-1 md:mb-2">
+                    Worst League
+                  </div>
+                  <div className="text-lg md:text-2xl font-bold text-white">
+                    {performers.worstLeague.leagueDisplay ||
+                      performers.worstLeague.league ||
+                      "N/A"}
+                  </div>
+                  <div className="text-xs md:text-sm text-gray-300">
+                    {performers.worstLeague.winRate || 0}% Win Rate
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         <FilterControls
@@ -3354,292 +3415,294 @@ function App() {
         <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
 
         {/* Tab Content */}
-        {activeTab === "data" && (
-          <DataTab
-            dataViewLoaded={dataViewLoaded}
-            getDeduplicatedFilteredBets={getDeduplicatedFilteredBets}
-            handleSort={handleSort}
-            sortConfig={sortConfig}
-            getSortedData={getSortedDataLocal}
-            getStatusColor={getStatusColorClass}
-            formatDate={formatDateString}
-          />
-        )}
+        <div className="px-2 md:px-0">
+          {activeTab === "data" && (
+            <DataTab
+              dataViewLoaded={dataViewLoaded}
+              getDeduplicatedFilteredBets={getDeduplicatedFilteredBets}
+              handleSort={handleSort}
+              sortConfig={sortConfig}
+              getSortedData={getSortedDataLocal}
+              getStatusColor={getStatusColorClass}
+              formatDate={formatDateString}
+            />
+          )}
 
-        {activeTab === "analytics" && (
-          <AnalyticsTab
-            handleAnalyticsSort={handleAnalyticsSort}
-            analyticsSortConfig={analyticsSortConfig}
-            getSortedAnalyticsData={getSortedAnalyticsData}
-            expandedAnalyticsTeams={expandedAnalyticsTeams}
-            toggleAnalyticsTeamExpansion={toggleAnalyticsTeamExpansion}
-            bets={bets}
-          />
-        )}
+          {activeTab === "analytics" && (
+            <AnalyticsTab
+              handleAnalyticsSort={handleAnalyticsSort}
+              analyticsSortConfig={analyticsSortConfig}
+              getSortedAnalyticsData={getSortedAnalyticsData}
+              expandedAnalyticsTeams={expandedAnalyticsTeams}
+              toggleAnalyticsTeamExpansion={toggleAnalyticsTeamExpansion}
+              bets={bets}
+            />
+          )}
 
-        {activeTab === "performance" && (
-          <PerformanceTab
-            handleLeagueSort={handleLeagueSort}
-            leagueSortConfig={leagueSortConfig}
-            getSortedLeagueData={getSortedLeagueDataLocal}
-            handleCountrySort={handleCountrySort}
-            countrySortConfig={countrySortConfig}
-            getSortedCountryData={getSortedCountryDataLocal}
-          />
-        )}
+          {activeTab === "performance" && (
+            <PerformanceTab
+              handleLeagueSort={handleLeagueSort}
+              leagueSortConfig={leagueSortConfig}
+              getSortedLeagueData={getSortedLeagueDataLocal}
+              handleCountrySort={handleCountrySort}
+              countrySortConfig={countrySortConfig}
+              getSortedCountryData={getSortedCountryDataLocal}
+            />
+          )}
 
-        {activeTab === "blacklist" && (
-          <BlacklistTab
-            handleBlacklistSort={handleBlacklistSort}
-            blacklistSortConfig={blacklistSortConfig}
-            blacklistedTeams={blacklistedTeams}
-            getSortedBlacklistData={getSortedBlacklistData}
-          />
-        )}
+          {activeTab === "blacklist" && (
+            <BlacklistTab
+              handleBlacklistSort={handleBlacklistSort}
+              blacklistSortConfig={blacklistSortConfig}
+              blacklistedTeams={blacklistedTeams}
+              getSortedBlacklistData={getSortedBlacklistData}
+            />
+          )}
 
-        {activeTab === "odds" && (
-          <OddsTab
-            handleOddsSort={handleOddsSort}
-            oddsSortConfig={oddsSortConfig}
-            getSortedOddsData={getSortedOddsDataLocal}
-            getFilteredOddsAnalytics={getFilteredOddsAnalytics}
-            expandedOddsRanges={expandedOddsRanges}
-            toggleOddsRangeExpansion={toggleOddsRangeExpansion}
-            getBetsForOddsRange={getBetsForOddsRange}
-            formatDate={formatDateString}
-            getStatusColor={getStatusColorClass}
-          />
-        )}
+          {activeTab === "odds" && (
+            <OddsTab
+              handleOddsSort={handleOddsSort}
+              oddsSortConfig={oddsSortConfig}
+              getSortedOddsData={getSortedOddsDataLocal}
+              getFilteredOddsAnalytics={getFilteredOddsAnalytics}
+              expandedOddsRanges={expandedOddsRanges}
+              toggleOddsRangeExpansion={toggleOddsRangeExpansion}
+              getBetsForOddsRange={getBetsForOddsRange}
+              formatDate={formatDateString}
+              getStatusColor={getStatusColorClass}
+            />
+          )}
 
-        {activeTab === "betAnalysis" && (
-          <BetAnalysisTab
-            analyzeNewBets={analyzeNewBets}
-            isAnalyzing={isAnalyzing}
-            generatePDFReport={generatePDFReport}
-            updateDatabase={updateDatabase}
-            isUpdatingDatabase={isUpdatingDatabase}
-            analysisResults={analysisResults}
-            handleAnalysisSort={handleAnalysisSort}
-            analysisSortConfig={analysisSortConfig}
-            getSortedAnalysisResults={getSortedAnalysisResultsLocal}
-            formatDate={formatDateString}
-            getStatusColor={getStatusColorClass}
-            getPositionBadge={getPositionBadge}
-            isTeamInTop40={isTeamInTop40}
-            getTop40Ranking={getTop40Ranking}
-            getBetTypeAnalyticsForTeam={getBetTypeAnalyticsForTeam}
-            getTeamNotesForTeam={getTeamNotesForTeam}
-          />
-        )}
+          {activeTab === "betAnalysis" && (
+            <BetAnalysisTab
+              analyzeNewBets={analyzeNewBets}
+              isAnalyzing={isAnalyzing}
+              generatePDFReport={generatePDFReport}
+              updateDatabase={updateDatabase}
+              isUpdatingDatabase={isUpdatingDatabase}
+              analysisResults={analysisResults}
+              handleAnalysisSort={handleAnalysisSort}
+              analysisSortConfig={analysisSortConfig}
+              getSortedAnalysisResults={getSortedAnalysisResultsLocal}
+              formatDate={formatDateString}
+              getStatusColor={getStatusColorClass}
+              getPositionBadge={getPositionBadge}
+              isTeamInTop40={isTeamInTop40}
+              getTop40Ranking={getTop40Ranking}
+              getBetTypeAnalyticsForTeam={getBetTypeAnalyticsForTeam}
+              getTeamNotesForTeam={getTeamNotesForTeam}
+            />
+          )}
 
-        {/* Original betAnalysis content - to be removed after testing */}
-        {false && activeTab === "betAnalysis" && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-            <div className="flex items-center mb-4">
-              <h3 className="text-lg font-bold text-white">Bet Analysis</h3>
-              <div className="relative ml-2 group">
-                <button className="text-blue-400 hover:text-blue-300 text-sm bg-blue-500/20 hover:bg-blue-500/30 rounded-full w-6 h-6 flex items-center justify-center transition-colors">
-                  ?
-                </button>
-                <div className="absolute left-0 top-8 w-96 bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm text-gray-300 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto z-50">
-                  <div className="mb-3">
-                    <strong className="text-white">
-                      Confidence Score (0-10):
-                    </strong>
-                    <br />
-                    🏆 Team Performance: Historical win rate and betting
-                    experience
-                    <br />
-                    🏛️ League Experience: Your success rate in this
-                    league/country
-                    <br />
-                    💰 Odds Value: Risk assessment based on betting odds
-                    <br />
-                    ⚔️ Head-to-Head: Previous results when these teams met
-                    <br />
-                    📊 League Position: Team strength based on league position
-                    (Top/Mid/Bottom)
-                    <br />
-                    🏠 Home/Away: Team performance in home vs away games
-                  </div>
-                  <div>
-                    <strong className="text-white">
-                      📊 Probability Calculator:
-                    </strong>
-                    <br />
-                    🏠 Home/Draw/Away: Mathematical probabilities from odds
-                    <br />
-                    📈 Expected Goals: Poisson distribution modeling
-                    <br />
-                    🎯 Top Scorelines: Most likely final scores
+          {/* Original betAnalysis content - to be removed after testing */}
+          {false && activeTab === "betAnalysis" && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+              <div className="flex items-center mb-4">
+                <h3 className="text-lg font-bold text-white">Bet Analysis</h3>
+                <div className="relative ml-2 group">
+                  <button className="text-blue-400 hover:text-blue-300 text-sm bg-blue-500/20 hover:bg-blue-500/30 rounded-full w-6 h-6 flex items-center justify-center transition-colors">
+                    ?
+                  </button>
+                  <div className="absolute left-0 top-8 w-96 bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm text-gray-300 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto z-50">
+                    <div className="mb-3">
+                      <strong className="text-white">
+                        Confidence Score (0-10):
+                      </strong>
+                      <br />
+                      🏆 Team Performance: Historical win rate and betting
+                      experience
+                      <br />
+                      🏛️ League Experience: Your success rate in this
+                      league/country
+                      <br />
+                      💰 Odds Value: Risk assessment based on betting odds
+                      <br />
+                      ⚔️ Head-to-Head: Previous results when these teams met
+                      <br />
+                      📊 League Position: Team strength based on league position
+                      (Top/Mid/Bottom)
+                      <br />
+                      🏠 Home/Away: Team performance in home vs away games
+                    </div>
+                    <div>
+                      <strong className="text-white">
+                        📊 Probability Calculator:
+                      </strong>
+                      <br />
+                      🏠 Home/Draw/Away: Mathematical probabilities from odds
+                      <br />
+                      📈 Expected Goals: Poisson distribution modeling
+                      <br />
+                      🎯 Top Scorelines: Most likely final scores
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Fetch and Analyze Button */}
-            <div className="mb-6 flex gap-4">
-              <button
-                onClick={analyzeNewBets}
-                disabled={isAnalyzing}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-                  isAnalyzing
-                    ? "bg-gray-500 text-gray-300 cursor-not-allowed"
-                    : "bg-blue-500 text-white hover:bg-blue-600"
-                }`}
-              >
-                {isAnalyzing ? "🔄 Analyzing..." : "Fetch & Analyze New Bets"}
-              </button>
-              <button
-                onClick={generatePDFReport}
-                disabled={!analysisResults || analysisResults.length === 0}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-                  !analysisResults || analysisResults.length === 0
-                    ? "bg-gray-500 text-gray-300 cursor-not-allowed"
-                    : "bg-green-500 text-white hover:bg-green-600"
-                }`}
-              >
-                📄 Generate PDF Report
-              </button>
-            </div>
+              {/* Fetch and Analyze Button */}
+              <div className="mb-6 flex gap-4">
+                <button
+                  onClick={analyzeNewBets}
+                  disabled={isAnalyzing}
+                  className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                    isAnalyzing
+                      ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+                      : "bg-blue-500 text-white hover:bg-blue-600"
+                  }`}
+                >
+                  {isAnalyzing ? "🔄 Analyzing..." : "Fetch & Analyze New Bets"}
+                </button>
+                <button
+                  onClick={generatePDFReport}
+                  disabled={!analysisResults || analysisResults.length === 0}
+                  className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                    !analysisResults || analysisResults.length === 0
+                      ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+                      : "bg-green-500 text-white hover:bg-green-600"
+                  }`}
+                >
+                  📄 Generate PDF Report
+                </button>
+              </div>
 
-            {/* Analysis Results */}
-            {analysisResults.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-white mb-4">
-                  📋 Analysis Results ({analysisResults.length} bets)
-                </h4>
+              {/* Analysis Results */}
+              {analysisResults.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="text-lg font-semibold text-white mb-4">
+                    📋 Analysis Results ({analysisResults.length} bets)
+                  </h4>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-white/20">
-                      <tr>
-                        <th
-                          className="px-4 py-2 text-left text-white font-semibold w-20 cursor-pointer hover:bg-white/10"
-                          onClick={() => handleAnalysisSort("DATE")}
-                        >
-                          <div className="flex items-center">
-                            Date
-                            {analysisSortConfig.key === "DATE" && (
-                              <span className="ml-1">
-                                {analysisSortConfig.direction === "asc"
-                                  ? "↑"
-                                  : "↓"}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
-                          Match
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-20">
-                          Positions
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-24">
-                          Bet On
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-16">
-                          Odds
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-80">
-                          Confidence
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-80">
-                          Probability
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
-                          Blacklist
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-80">
-                          History
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
-                          Previous Matchups
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-32">
-                          Recommendation
-                        </th>
-                        <th className="px-4 py-2 text-left text-white font-semibold w-40">
-                          Scoring
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10">
-                      {getSortedAnalysisResultsLocal().map((result, index) => (
-                        <tr
-                          key={index}
-                          className={`${
-                            index % 2 === 0 ? "bg-white/5" : "bg-white/10"
-                          }`}
-                        >
-                          <td className="px-4 py-6 text-gray-300">
-                            {formatDateString(result.DATE)}
-                          </td>
-                          <td className="px-4 py-6 text-gray-300">
-                            <div className="text-sm">
-                              <div>
-                                {result.HOME_TEAM} vs {result.AWAY_TEAM}
-                              </div>
-                              <div className="text-gray-400 text-xs">
-                                {result.COUNTRY} • {result.LEAGUE}
-                              </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-white/20">
+                        <tr>
+                          <th
+                            className="px-4 py-2 text-left text-white font-semibold w-20 cursor-pointer hover:bg-white/10"
+                            onClick={() => handleAnalysisSort("DATE")}
+                          >
+                            <div className="flex items-center">
+                              Date
+                              {analysisSortConfig.key === "DATE" && (
+                                <span className="ml-1">
+                                  {analysisSortConfig.direction === "asc"
+                                    ? "↑"
+                                    : "↓"}
+                                </span>
+                              )}
                             </div>
-                          </td>
-                          <td className="px-4 py-6 text-gray-300">
-                            <div className="text-sm">
-                              {(() => {
-                                const homeBadge = getPositionBadge(
-                                  result.HOME_TEAM_POSITION
-                                );
-                                const awayBadge = getPositionBadge(
-                                  result.AWAY_TEAM_POSITION
-                                );
-                                return (
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-32">
+                            Match
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-20">
+                            Positions
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-24">
+                            Bet On
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-16">
+                            Odds
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-80">
+                            Confidence
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-80">
+                            Probability
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-32">
+                            Blacklist
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-80">
+                            History
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-32">
+                            Previous Matchups
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-32">
+                            Recommendation
+                          </th>
+                          <th className="px-4 py-2 text-left text-white font-semibold w-40">
+                            Scoring
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10">
+                        {getSortedAnalysisResultsLocal().map(
+                          (result, index) => (
+                            <tr
+                              key={index}
+                              className={`${
+                                index % 2 === 0 ? "bg-white/5" : "bg-white/10"
+                              }`}
+                            >
+                              <td className="px-4 py-6 text-gray-300">
+                                {formatDateString(result.DATE)}
+                              </td>
+                              <td className="px-4 py-6 text-gray-300">
+                                <div className="text-sm">
                                   <div>
-                                    <div
-                                      className={`text-xs ${
-                                        homeBadge?.color || "text-gray-400"
-                                      }`}
-                                    >
-                                      {homeBadge?.text || "N/A"}
-                                    </div>
-                                    <div
-                                      className={`text-xs ${
-                                        awayBadge?.color || "text-gray-400"
-                                      }`}
-                                    >
-                                      {awayBadge?.text || "N/A"}
-                                    </div>
+                                    {result.HOME_TEAM} vs {result.AWAY_TEAM}
                                   </div>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                          <td className="px-4 py-6 text-purple-300 font-medium">
-                            <div>
-                              {result.TEAM_INCLUDED}
-                              {isTeamInTop40(result.TEAM_INCLUDED) && (
-                                <div className="text-xs text-yellow-400 mt-1">
-                                  Top 40: #
-                                  {getTop40Ranking(result.TEAM_INCLUDED)}
+                                  <div className="text-gray-400 text-xs">
+                                    {result.COUNTRY} • {result.LEAGUE}
+                                  </div>
                                 </div>
-                              )}
-                              {result.isBlacklisted && (
-                                <div className="text-xs text-red-400 mt-1 font-medium">
-                                  🚫 Blacklisted
+                              </td>
+                              <td className="px-4 py-6 text-gray-300">
+                                <div className="text-sm">
+                                  {(() => {
+                                    const homeBadge = getPositionBadge(
+                                      result.HOME_TEAM_POSITION
+                                    );
+                                    const awayBadge = getPositionBadge(
+                                      result.AWAY_TEAM_POSITION
+                                    );
+                                    return (
+                                      <div>
+                                        <div
+                                          className={`text-xs ${
+                                            homeBadge?.color || "text-gray-400"
+                                          }`}
+                                        >
+                                          {homeBadge?.text || "N/A"}
+                                        </div>
+                                        <div
+                                          className={`text-xs ${
+                                            awayBadge?.color || "text-gray-400"
+                                          }`}
+                                        >
+                                          {awayBadge?.text || "N/A"}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-6 text-yellow-400 font-mono">
-                            {result.betOdds}
-                          </td>
-                          <td className="px-4 py-6">
-                            <div className="text-sm">
-                              <div className="mb-1">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${result.confidenceLabel.color} cursor-help`}
-                                  title={`${result.confidenceLabel.label}
+                              </td>
+                              <td className="px-4 py-6 text-purple-300 font-medium">
+                                <div>
+                                  {result.TEAM_INCLUDED}
+                                  {isTeamInTop40(result.TEAM_INCLUDED) && (
+                                    <div className="text-xs text-yellow-400 mt-1">
+                                      Top 40: #
+                                      {getTop40Ranking(result.TEAM_INCLUDED)}
+                                    </div>
+                                  )}
+                                  {result.isBlacklisted && (
+                                    <div className="text-xs text-red-400 mt-1 font-medium">
+                                      🚫 Blacklisted
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-6 text-yellow-400 font-mono">
+                                {result.betOdds}
+                              </td>
+                              <td className="px-4 py-6">
+                                <div className="text-sm">
+                                  <div className="mb-1">
+                                    <span
+                                      className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${result.confidenceLabel.color} cursor-help`}
+                                      title={`${result.confidenceLabel.label}
 🏆 Team Performance: ${result.confidenceBreakdown.team}/10
 📈 Recent Form: ${result.confidenceBreakdown.recentForm}/10
 🏛️ League Experience: ${result.confidenceBreakdown.league}/10
@@ -3647,508 +3710,527 @@ function App() {
 ⚔️ Head-to-Head: ${result.confidenceBreakdown.matchup}/10
 📊 League Position: ${result.confidenceBreakdown.position}/10
 🏠 Home/Away: ${result.confidenceBreakdown.homeAway}/10`}
-                                >
-                                  {result.confidenceLabel.emoji}{" "}
-                                  {result.confidenceScore}/10
-                                </span>
-                                <div className="text-xs text-gray-400 mt-2">
-                                  {result.confidenceLabel.label}
+                                    >
+                                      {result.confidenceLabel.emoji}{" "}
+                                      {result.confidenceScore}/10
+                                    </span>
+                                    <div className="text-xs text-gray-400 mt-2">
+                                      {result.confidenceLabel.label}
+                                    </div>
+                                  </div>
+
+                                  {/* Bet Type Suggestions */}
+                                  {(() => {
+                                    const betTypeAnalytics =
+                                      getBetTypeAnalyticsForTeam(
+                                        result.TEAM_INCLUDED,
+                                        result.COUNTRY,
+                                        result.LEAGUE
+                                      );
+
+                                    if (
+                                      betTypeAnalytics &&
+                                      betTypeAnalytics.length > 0
+                                    ) {
+                                      const topBetTypes =
+                                        betTypeAnalytics.slice(0, 3); // Show top 3
+                                      return (
+                                        <div className="mt-3 pt-3 border-t border-white/10">
+                                          <div className="text-xs text-blue-400 font-medium mb-2">
+                                            💡 Bet Type Tips for{" "}
+                                            {result.team_included}:
+                                          </div>
+                                          {topBetTypes.map((betType, idx) => {
+                                            const isGood =
+                                              parseFloat(betType.winRate) >= 60;
+                                            const isAverage =
+                                              parseFloat(betType.winRate) >= 40;
+                                            const icon = isGood
+                                              ? "✅"
+                                              : isAverage
+                                              ? "⚠️"
+                                              : "❌";
+                                            const color = isGood
+                                              ? "text-green-300"
+                                              : isAverage
+                                              ? "text-yellow-300"
+                                              : "text-red-300";
+
+                                            return (
+                                              <div
+                                                key={idx}
+                                                className={`text-xs ${color} mb-1`}
+                                              >
+                                                {icon} {betType.betType}:{" "}
+                                                {betType.winRate}% (
+                                                {betType.wins}/{betType.total})
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+
+                                  {/* Team Notes Display */}
+                                  {(() => {
+                                    const homeTeamNotes = getTeamNotesForTeam(
+                                      result.HOME_TEAM,
+                                      result.COUNTRY,
+                                      result.LEAGUE
+                                    );
+                                    const awayTeamNotes = getTeamNotesForTeam(
+                                      result.AWAY_TEAM,
+                                      result.COUNTRY,
+                                      result.LEAGUE
+                                    );
+
+                                    if (
+                                      homeTeamNotes.length > 0 ||
+                                      awayTeamNotes.length > 0
+                                    ) {
+                                      return (
+                                        <div className="mt-3 pt-3 border-t border-white/10">
+                                          <div className="text-xs text-orange-400 font-medium mb-2">
+                                            📝 Team Notes:
+                                          </div>
+                                          {homeTeamNotes.map((note, idx) => (
+                                            <div
+                                              key={`home-${idx}`}
+                                              className="text-xs text-orange-300 mb-1"
+                                            >
+                                              <span className="font-medium">
+                                                {result.HOME_TEAM}:
+                                              </span>{" "}
+                                              {note.NOTE}
+                                              <span className="text-gray-400 ml-1">
+                                                ({note.DATE_ADDED})
+                                              </span>
+                                            </div>
+                                          ))}
+                                          {awayTeamNotes.map((note, idx) => (
+                                            <div
+                                              key={`away-${idx}`}
+                                              className="text-xs text-orange-300 mb-1"
+                                            >
+                                              <span className="font-medium">
+                                                {result.AWAY_TEAM}:
+                                              </span>{" "}
+                                              {note.NOTE}
+                                              <span className="text-gray-400 ml-1">
+                                                ({note.DATE_ADDED})
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
                                 </div>
-                              </div>
-
-                              {/* Bet Type Suggestions */}
-                              {(() => {
-                                const betTypeAnalytics =
-                                  getBetTypeAnalyticsForTeam(
-                                    result.TEAM_INCLUDED,
-                                    result.COUNTRY,
-                                    result.LEAGUE
-                                  );
-
-                                if (
-                                  betTypeAnalytics &&
-                                  betTypeAnalytics.length > 0
-                                ) {
-                                  const topBetTypes = betTypeAnalytics.slice(
-                                    0,
-                                    3
-                                  ); // Show top 3
-                                  return (
-                                    <div className="mt-3 pt-3 border-t border-white/10">
-                                      <div className="text-xs text-blue-400 font-medium mb-2">
-                                        💡 Bet Type Tips for{" "}
-                                        {result.team_included}:
+                              </td>
+                              <td className="px-4 py-6">
+                                {result.probabilities ? (
+                                  <div className="text-sm">
+                                    <div className="mb-2">
+                                      <div className="text-xs text-gray-400 mb-1">
+                                        Win Probabilities:
                                       </div>
-                                      {topBetTypes.map((betType, idx) => {
-                                        const isGood =
-                                          parseFloat(betType.winRate) >= 60;
-                                        const isAverage =
-                                          parseFloat(betType.winRate) >= 40;
-                                        const icon = isGood
-                                          ? "✅"
-                                          : isAverage
-                                          ? "⚠️"
-                                          : "❌";
-                                        const color = isGood
-                                          ? "text-green-300"
-                                          : isAverage
-                                          ? "text-yellow-300"
-                                          : "text-red-300";
-
-                                        return (
+                                      <div className="flex space-x-2 text-xs">
+                                        <span className="text-blue-300">
+                                          🏠 {result.probabilities.probs.home}%
+                                        </span>
+                                        <span className="text-yellow-300">
+                                          🤝 {result.probabilities.probs.draw}%
+                                        </span>
+                                        <span className="text-red-300">
+                                          ✈️ {result.probabilities.probs.away}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="mb-2">
+                                      <div className="text-xs text-gray-400 mb-1">
+                                        Expected Goals:
+                                      </div>
+                                      <div className="text-xs text-purple-300">
+                                        {result.probabilities.lambda.home} -{" "}
+                                        {result.probabilities.lambda.away}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-1">
+                                        Top Scorelines:
+                                      </div>
+                                      {result.probabilities.topScores
+                                        .slice(0, 3)
+                                        .map((score, idx) => (
                                           <div
                                             key={idx}
-                                            className={`text-xs ${color} mb-1`}
+                                            className="text-xs text-green-300"
                                           >
-                                            {icon} {betType.betType}:{" "}
-                                            {betType.winRate}% ({betType.wins}/
-                                            {betType.total})
+                                            {score.score} ({score.prob}%)
                                           </div>
-                                        );
-                                      })}
+                                        ))}
                                     </div>
-                                  );
-                                }
-                                return null;
-                              })()}
-
-                              {/* Team Notes Display */}
-                              {(() => {
-                                const homeTeamNotes = getTeamNotesForTeam(
-                                  result.HOME_TEAM,
-                                  result.COUNTRY,
-                                  result.LEAGUE
-                                );
-                                const awayTeamNotes = getTeamNotesForTeam(
-                                  result.AWAY_TEAM,
-                                  result.COUNTRY,
-                                  result.LEAGUE
-                                );
-
-                                if (
-                                  homeTeamNotes.length > 0 ||
-                                  awayTeamNotes.length > 0
-                                ) {
-                                  return (
-                                    <div className="mt-3 pt-3 border-t border-white/10">
-                                      <div className="text-xs text-orange-400 font-medium mb-2">
-                                        📝 Team Notes:
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">
+                                    No odds data
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-6">
+                                {result.isBlacklisted ? (
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">
+                                    🚫 Blacklisted
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
+                                    ✅ Safe
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-6 text-gray-300">
+                                {result.hasHistory ? (
+                                  <div className="text-sm">
+                                    <div>
+                                      {result.historicalWins}W -{" "}
+                                      {result.historicalLosses}L
+                                    </div>
+                                    <div className="text-xs mt-2">
+                                      {result.winRate}% win rate
+                                    </div>
+                                    {result.competitions.length > 0 && (
+                                      <div className="mt-1">
+                                        <div className="text-xs text-blue-400 font-medium">
+                                          Competitions:
+                                        </div>
+                                        {result.competitions.map(
+                                          (comp, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="text-xs text-blue-300"
+                                            >
+                                              • {comp}
+                                            </div>
+                                          )
+                                        )}
                                       </div>
-                                      {homeTeamNotes.map((note, idx) => (
-                                        <div
-                                          key={`home-${idx}`}
-                                          className="text-xs text-orange-300 mb-1"
-                                        >
-                                          <span className="font-medium">
-                                            {result.HOME_TEAM}:
-                                          </span>{" "}
-                                          {note.NOTE}
-                                          <span className="text-gray-400 ml-1">
-                                            ({note.DATE_ADDED})
+                                    )}
+                                    {result.winDetails.length > 0 && (
+                                      <div className="mt-1">
+                                        <div className="text-xs text-green-400 font-medium">
+                                          Wins:
+                                        </div>
+                                        {result.winDetails.map(
+                                          (detail, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="text-xs text-green-300"
+                                            >
+                                              • {detail}
+                                            </div>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
+                                    {result.lossDetails.length > 0 && (
+                                      <div className="mt-1">
+                                        <div className="text-xs text-red-400 font-medium">
+                                          Losses:
+                                        </div>
+                                        {result.lossDetails.map(
+                                          (detail, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="text-xs text-red-300"
+                                            >
+                                              • {detail}
+                                            </div>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">
+                                    No history
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-6 text-gray-300">
+                                {result.previousMatchups.length > 0 ? (
+                                  <div className="text-sm">
+                                    <div className="text-blue-400 font-medium mb-1">
+                                      🔄 {result.previousMatchups.length}{" "}
+                                      previous matchup
+                                      {result.previousMatchups.length > 1
+                                        ? "s"
+                                        : ""}
+                                    </div>
+                                    {(() => {
+                                      const wins =
+                                        result.previousMatchups.filter((m) =>
+                                          m.result
+                                            ?.toLowerCase()
+                                            .includes("win")
+                                        ).length;
+                                      const losses =
+                                        result.previousMatchups.filter((m) =>
+                                          m.result
+                                            ?.toLowerCase()
+                                            .includes("loss")
+                                        ).length;
+                                      const total = wins + losses;
+                                      const winRate =
+                                        total > 0
+                                          ? ((wins / total) * 100).toFixed(1)
+                                          : 0;
+
+                                      return (
+                                        <div className="text-xs">
+                                          <div className="text-gray-300 mb-1">
+                                            {wins}W - {losses}L
+                                          </div>
+                                          <span
+                                            className={`px-1 py-0.5 rounded text-xs font-medium mt-2 ${
+                                              parseFloat(winRate) >= 70
+                                                ? "bg-green-100 text-green-800"
+                                                : parseFloat(winRate) >= 50
+                                                ? "bg-yellow-100 text-yellow-800"
+                                                : "bg-red-100 text-red-800"
+                                            }`}
+                                          >
+                                            {winRate}% win rate
                                           </span>
                                         </div>
-                                      ))}
-                                      {awayTeamNotes.map((note, idx) => (
-                                        <div
-                                          key={`away-${idx}`}
-                                          className="text-xs text-orange-300 mb-1"
-                                        >
-                                          <span className="font-medium">
-                                            {result.AWAY_TEAM}:
-                                          </span>{" "}
-                                          {note.NOTE}
-                                          <span className="text-gray-400 ml-1">
-                                            ({note.DATE_ADDED})
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-                          </td>
-                          <td className="px-4 py-6">
-                            {result.probabilities ? (
-                              <div className="text-sm">
-                                <div className="mb-2">
-                                  <div className="text-xs text-gray-400 mb-1">
-                                    Win Probabilities:
+                                      );
+                                    })()}
                                   </div>
-                                  <div className="flex space-x-2 text-xs">
-                                    <span className="text-blue-300">
-                                      🏠 {result.probabilities.probs.home}%
-                                    </span>
-                                    <span className="text-yellow-300">
-                                      🤝 {result.probabilities.probs.draw}%
-                                    </span>
-                                    <span className="text-red-300">
-                                      ✈️ {result.probabilities.probs.away}%
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="mb-2">
-                                  <div className="text-xs text-gray-400 mb-1">
-                                    Expected Goals:
-                                  </div>
-                                  <div className="text-xs text-purple-300">
-                                    {result.probabilities.lambda.home} -{" "}
-                                    {result.probabilities.lambda.away}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-gray-400 mb-1">
-                                    Top Scorelines:
-                                  </div>
-                                  {result.probabilities.topScores
-                                    .slice(0, 3)
-                                    .map((score, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="text-xs text-green-300"
-                                      >
-                                        {score.score} ({score.prob}%)
-                                      </div>
-                                    ))}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">
-                                No odds data
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-6">
-                            {result.isBlacklisted ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">
-                                🚫 Blacklisted
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
-                                ✅ Safe
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-6 text-gray-300">
-                            {result.hasHistory ? (
-                              <div className="text-sm">
-                                <div>
-                                  {result.historicalWins}W -{" "}
-                                  {result.historicalLosses}L
-                                </div>
-                                <div className="text-xs mt-2">
-                                  {result.winRate}% win rate
-                                </div>
-                                {result.competitions.length > 0 && (
-                                  <div className="mt-1">
-                                    <div className="text-xs text-blue-400 font-medium">
-                                      Competitions:
-                                    </div>
-                                    {result.competitions.map((comp, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="text-xs text-blue-300"
-                                      >
-                                        • {comp}
-                                      </div>
-                                    ))}
-                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">
+                                    No previous matchups
+                                  </span>
                                 )}
-                                {result.winDetails.length > 0 && (
-                                  <div className="mt-1">
-                                    <div className="text-xs text-green-400 font-medium">
-                                      Wins:
-                                    </div>
-                                    {result.winDetails.map((detail, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="text-xs text-green-300"
-                                      >
-                                        • {detail}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {result.lossDetails.length > 0 && (
-                                  <div className="mt-1">
-                                    <div className="text-xs text-red-400 font-medium">
-                                      Losses:
-                                    </div>
-                                    {result.lossDetails.map((detail, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="text-xs text-red-300"
-                                      >
-                                        • {detail}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">
-                                No history
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-6 text-gray-300">
-                            {result.previousMatchups.length > 0 ? (
-                              <div className="text-sm">
-                                <div className="text-blue-400 font-medium mb-1">
-                                  🔄 {result.previousMatchups.length} previous
-                                  matchup
-                                  {result.previousMatchups.length > 1
-                                    ? "s"
-                                    : ""}
-                                </div>
-                                {(() => {
-                                  const wins = result.previousMatchups.filter(
-                                    (m) =>
-                                      m.result?.toLowerCase().includes("win")
-                                  ).length;
-                                  const losses = result.previousMatchups.filter(
-                                    (m) =>
-                                      m.result?.toLowerCase().includes("loss")
-                                  ).length;
-                                  const total = wins + losses;
-                                  const winRate =
-                                    total > 0
-                                      ? ((wins / total) * 100).toFixed(1)
-                                      : 0;
-
-                                  return (
-                                    <div className="text-xs">
-                                      <div className="text-gray-300 mb-1">
-                                        {wins}W - {losses}L
-                                      </div>
-                                      <span
-                                        className={`px-1 py-0.5 rounded text-xs font-medium mt-2 ${
-                                          parseFloat(winRate) >= 70
-                                            ? "bg-green-100 text-green-800"
-                                            : parseFloat(winRate) >= 50
-                                            ? "bg-yellow-100 text-yellow-800"
-                                            : "bg-red-100 text-red-800"
-                                        }`}
-                                      >
-                                        {winRate}% win rate
-                                      </span>
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">
-                                No previous matchups
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-6">
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${result.recommendationColor}`}
-                            >
-                              {result.recommendation}
-                            </span>
-                          </td>
-                          <td className="px-4 py-6">
-                            {result.scoringRecommendation ? (
-                              <div className="text-sm">
-                                <div
-                                  className={`px-2 py-1 rounded text-xs font-medium ${
-                                    result.scoringRecommendation.confidence ===
-                                    "high"
-                                      ? "bg-green-100 text-green-800"
-                                      : result.scoringRecommendation
-                                          .confidence === "medium"
-                                      ? "bg-yellow-100 text-yellow-800"
-                                      : "bg-gray-100 text-gray-800"
-                                  }`}
+                              </td>
+                              <td className="px-4 py-6">
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${result.recommendationColor}`}
                                 >
-                                  {result.scoringRecommendation.type}
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {result.scoringRecommendation.rate.toFixed(1)}
-                                  % rate
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">
-                                No data
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                                  {result.recommendation}
+                                </span>
+                              </td>
+                              <td className="px-4 py-6">
+                                {result.scoringRecommendation ? (
+                                  <div className="text-sm">
+                                    <div
+                                      className={`px-2 py-1 rounded text-xs font-medium ${
+                                        result.scoringRecommendation
+                                          .confidence === "high"
+                                          ? "bg-green-100 text-green-800"
+                                          : result.scoringRecommendation
+                                              .confidence === "medium"
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : "bg-gray-100 text-gray-800"
+                                      }`}
+                                    >
+                                      {result.scoringRecommendation.type}
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      {result.scoringRecommendation.rate.toFixed(
+                                        1
+                                      )}
+                                      % rate
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 text-sm">
+                                    No data
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
 
-                {/* Summary Stats */}
-                <div className="mt-6 p-4 bg-white/5 rounded-lg">
-                  <h5 className="text-white font-semibold mb-3">📊 Summary</h5>
+                  {/* Summary Stats */}
+                  <div className="mt-6 p-4 bg-white/5 rounded-lg">
+                    <h5 className="text-white font-semibold mb-3">
+                      📊 Summary
+                    </h5>
 
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-400">Total Bets</div>
-                      <div className="text-white font-medium">
-                        {analysisResults.length}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                      <div>
+                        <div className="text-gray-400">Total Bets</div>
+                        <div className="text-white font-medium">
+                          {analysisResults.length}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Blacklisted</div>
-                      <div className="text-red-400 font-medium">
-                        {analysisResults.filter((r) => r.isBlacklisted).length}
+                      <div>
+                        <div className="text-gray-400">Blacklisted</div>
+                        <div className="text-red-400 font-medium">
+                          {
+                            analysisResults.filter((r) => r.isBlacklisted)
+                              .length
+                          }
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">High Confidence</div>
-                      <div className="text-green-400 font-medium">
-                        {
-                          analysisResults.filter(
-                            (r) =>
-                              r.recommendation.includes("Win") ||
-                              r.recommendation === "Home Win" ||
-                              r.recommendation === "Away Win"
-                          ).length
-                        }
+                      <div>
+                        <div className="text-gray-400">High Confidence</div>
+                        <div className="text-green-400 font-medium">
+                          {
+                            analysisResults.filter(
+                              (r) =>
+                                r.recommendation.includes("Win") ||
+                                r.recommendation === "Home Win" ||
+                                r.recommendation === "Away Win"
+                            ).length
+                          }
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Double Chance</div>
-                      <div className="text-yellow-400 font-medium">
-                        {
-                          analysisResults.filter((r) =>
-                            r.recommendation.includes("Double Chance")
-                          ).length
-                        }
+                      <div>
+                        <div className="text-gray-400">Double Chance</div>
+                        <div className="text-yellow-400 font-medium">
+                          {
+                            analysisResults.filter((r) =>
+                              r.recommendation.includes("Double Chance")
+                            ).length
+                          }
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Avoid</div>
-                      <div className="text-red-400 font-medium">
-                        {
-                          analysisResults.filter((r) =>
-                            r.recommendation.includes("Avoid")
-                          ).length
-                        }
+                      <div>
+                        <div className="text-gray-400">Avoid</div>
+                        <div className="text-red-400 font-medium">
+                          {
+                            analysisResults.filter((r) =>
+                              r.recommendation.includes("Avoid")
+                            ).length
+                          }
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {analysisResults.length === 0 && !isAnalyzing && (
-              <div className="text-center py-8">
-                <div className="text-gray-400 text-lg mb-4">
-                  No Analysis Results
+              {analysisResults.length === 0 && !isAnalyzing && (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-lg mb-4">
+                    No Analysis Results
+                  </div>
+                  <p className="text-gray-500">
+                    Click the button above to fetch and analyze new bets from
+                    Sheet3.
+                  </p>
                 </div>
-                <p className="text-gray-500">
-                  Click the button above to fetch and analyze new bets from
-                  Sheet3.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {activeTab === "query" && (
-          <QueryTab
-            queryFilters={queryFilters}
-            updateQueryFilter={updateQueryFilter}
-            addQueryFilter={addQueryFilter}
-            removeQueryFilter={removeQueryFilter}
-            clearQuery={clearQuery}
-            executeQuery={executeQuery}
-            isQuerying={isQuerying}
-            queryResults={queryResults}
-            getAvailableFields={getAvailableFields}
-            getFieldValues={getFieldValues}
-            getAvailableMetrics={getAvailableMetrics}
-            getAvailableOperators={getAvailableOperators}
-          />
-        )}
+          {activeTab === "query" && (
+            <QueryTab
+              queryFilters={queryFilters}
+              updateQueryFilter={updateQueryFilter}
+              addQueryFilter={addQueryFilter}
+              removeQueryFilter={removeQueryFilter}
+              clearQuery={clearQuery}
+              executeQuery={executeQuery}
+              isQuerying={isQuerying}
+              queryResults={queryResults}
+              getAvailableFields={getAvailableFields}
+              getFieldValues={getFieldValues}
+              getAvailableMetrics={getAvailableMetrics}
+              getAvailableOperators={getAvailableOperators}
+            />
+          )}
 
-        {activeTab === "recommendations" && (
-          <RecommendationsTab betRecommendations={betRecommendations} />
-        )}
+          {activeTab === "recommendations" && (
+            <RecommendationsTab betRecommendations={betRecommendations} />
+          )}
 
-        {activeTab === "predictionAccuracy" && (
-          <PredictionAccuracyTab
-            getPredictionAccuracyMetrics={getPredictionAccuracyMetrics}
-          />
-        )}
+          {activeTab === "predictionAccuracy" && (
+            <PredictionAccuracyTab
+              getPredictionAccuracyMetrics={getPredictionAccuracyMetrics}
+            />
+          )}
 
-        {activeTab === "recommendationAnalysis" && (
-          <RecommendationAnalysisTab
-            compareRecommendationsWithResults={
-              compareRecommendationsWithResults
-            }
-            isComparing={isComparing}
-            comparisonResults={comparisonResults}
-            setComparisonResults={setComparisonResults}
-          />
-        )}
+          {activeTab === "recommendationAnalysis" && (
+            <RecommendationAnalysisTab
+              compareRecommendationsWithResults={
+                compareRecommendationsWithResults
+              }
+              isComparing={isComparing}
+              comparisonResults={comparisonResults}
+              setComparisonResults={setComparisonResults}
+            />
+          )}
 
-        {activeTab === "headToHead" && (
-          <HeadToHeadTab
-            analysisResults={analysisResults}
-            formatDate={formatDateString}
-          />
-        )}
+          {activeTab === "headToHead" && (
+            <HeadToHeadTab
+              analysisResults={analysisResults}
+              formatDate={formatDateString}
+            />
+          )}
 
-        {activeTab === "topTeams" && <TopTeamsTab getTopTeams={getTopTeams} />}
+          {activeTab === "topTeams" && (
+            <TopTeamsTab getTopTeams={getTopTeams} />
+          )}
 
-        {activeTab === "betSlips" && (
-          <BetSlipsTab
-            showCompletedSlips={showCompletedSlips}
-            setShowCompletedSlips={setShowCompletedSlips}
-            getBetSlipsSummary={getBetSlipsSummary}
-            handleSlipsSort={handleSlipsSort}
-            slipsSortConfig={slipsSortConfig}
-            getSortedSlipsData={getSortedSlipsDataLocal}
-            expandedSlips={expandedSlips}
-            toggleSlipExpansion={toggleSlipExpansion}
-            formatDate={formatDateString}
-            attachedPredictions={attachedPredictions}
-            getTodayPredictions={getTodayPredictions}
-            checkBetslipMatch={checkBetslipMatch}
-            attachPredictionsToBetslip={attachPredictionsToBetslip}
-          />
-        )}
+          {activeTab === "betSlips" && (
+            <BetSlipsTab
+              showCompletedSlips={showCompletedSlips}
+              setShowCompletedSlips={setShowCompletedSlips}
+              getBetSlipsSummary={getBetSlipsSummary}
+              handleSlipsSort={handleSlipsSort}
+              slipsSortConfig={slipsSortConfig}
+              getSortedSlipsData={getSortedSlipsDataLocal}
+              expandedSlips={expandedSlips}
+              toggleSlipExpansion={toggleSlipExpansion}
+              formatDate={formatDateString}
+              attachedPredictions={attachedPredictions}
+              getTodayPredictions={getTodayPredictions}
+              checkBetslipMatch={checkBetslipMatch}
+              attachPredictionsToBetslip={attachPredictionsToBetslip}
+            />
+          )}
 
-        {activeTab === "teamNotes" && (
-          <TeamNotesTab
-            handleTeamNotesSort={handleTeamNotesSort}
-            teamNotesSortConfig={teamNotesSortConfig}
-            getSortedTeamNotesData={getSortedTeamNotesData}
-            teamNotes={teamNotes}
-          />
-        )}
+          {activeTab === "teamNotes" && (
+            <TeamNotesTab
+              handleTeamNotesSort={handleTeamNotesSort}
+              teamNotesSortConfig={teamNotesSortConfig}
+              getSortedTeamNotesData={getSortedTeamNotesData}
+              teamNotes={teamNotes}
+            />
+          )}
 
-        {activeTab === "betTypeAnalytics" && (
-          <TeamAnalyticsTab
-            getTeamBetTypeAnalytics={getTeamBetTypeAnalytics}
-            expandedBetTypes={expandedBetTypes}
-            toggleTeamExpansion={toggleTeamExpansion}
-          />
-        )}
+          {activeTab === "betTypeAnalytics" && (
+            <TeamAnalyticsTab
+              getTeamBetTypeAnalytics={getTeamBetTypeAnalytics}
+              expandedBetTypes={expandedBetTypes}
+              toggleTeamExpansion={toggleTeamExpansion}
+            />
+          )}
 
-        {activeTab === "dailyGames" && (
-          <DailyGamesTab
-            dailyGamesLoading={dailyGamesLoading}
-            getProcessedDailyGames={getProcessedDailyGames}
-          />
-        )}
+          {activeTab === "dailyGames" && (
+            <DailyGamesTab
+              dailyGamesLoading={dailyGamesLoading}
+              getProcessedDailyGames={getProcessedDailyGames}
+            />
+          )}
 
-        {activeTab === "scoringAnalysis" && (
-          <ScoringAnalysisTab
-            analyzeScoringPatterns={analyzeScoringPatterns}
-            scoringAnalysisLoading={scoringAnalysisLoading}
-            scoringAnalysis={scoringAnalysis}
-            bets={bets}
-          />
-        )}
+          {activeTab === "scoringAnalysis" && (
+            <ScoringAnalysisTab
+              analyzeScoringPatterns={analyzeScoringPatterns}
+              scoringAnalysisLoading={scoringAnalysisLoading}
+              scoringAnalysis={scoringAnalysis}
+              bets={bets}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

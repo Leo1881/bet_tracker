@@ -129,7 +129,8 @@ const ScoringAnalysisTab = ({
             )}
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead className="bg-white/20">
                 <tr>
@@ -239,6 +240,71 @@ const ScoringAnalysisTab = ({
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="block md:hidden space-y-4">
+            {getSortedData().map((stat, index) => (
+              <div
+                key={index}
+                className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-colors"
+              >
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Team
+                    </span>
+                    <span className="text-white font-medium text-sm">
+                      {stat.team}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      League
+                    </span>
+                    <span className="text-gray-300 text-sm">
+                      {stat.country} - {stat.league}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Games
+                    </span>
+                    <span className="text-gray-300 text-sm">
+                      {stat.totalGames}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Avg Goals
+                    </span>
+                    <span className="text-blue-300 font-mono text-sm">
+                      {stat.avgGoals}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Over 1.5</div>
+                      <div className="text-green-300 font-mono text-sm">
+                        {stat.over1_5Rate}%
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Over 2.5</div>
+                      <div className="text-yellow-300 font-mono text-sm">
+                        {stat.over2_5Rate}%
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Over 3.5</div>
+                      <div className="text-orange-300 font-mono text-sm">
+                        {stat.over3_5Rate}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : (

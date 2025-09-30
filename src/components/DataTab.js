@@ -23,7 +23,9 @@ const DataTab = ({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full min-w-full">
             <thead className="bg-white/20">
               <tr>
@@ -109,6 +111,68 @@ const DataTab = ({
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Card View */}
+        <div className="block md:hidden space-y-4 p-4">
+          {getSortedData().map((bet, index) => (
+            <div
+              key={index}
+              className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-colors"
+            >
+              <div className="space-y-3">
+                {Object.entries(bet)
+                  .filter(
+                    ([key, value]) =>
+                      ![
+                        "ID",
+                        "SYSTEM_RECOMMENDATION",
+                        "SYSTEM_CONFIDENCE",
+                        "PREDICTION_ACCURATE",
+                        "RECOMMENDATION_FOLLOWED",
+                        "REASON",
+                      ].includes(key)
+                  )
+                  .map(([key, value], i) => (
+                    <div key={i} className="flex justify-between items-start">
+                      <span className="text-xs font-medium text-gray-400 uppercase tracking-wider flex-shrink-0 mr-2">
+                        {key.replace(/_/g, " ")}
+                      </span>
+                      <div className="text-right flex-1">
+                        {key === "RESULT" ? (
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                              value
+                            )}`}
+                          >
+                            {value || "Unknown"}
+                          </span>
+                        ) : key === "DATE" ? (
+                          <span className="text-blue-300 text-sm">
+                            {formatDate(value)}
+                          </span>
+                        ) : key.includes("ODDS") ? (
+                          <span className="font-mono text-yellow-400 text-sm">
+                            {value || "-"}
+                          </span>
+                        ) : key === "BET_TYPE" ||
+                          key === "BET_SELECTION" ||
+                          key === "TEAM_BET" ? (
+                          <span className="font-medium text-purple-300 text-sm">
+                            {value || "-"}
+                          </span>
+                        ) : (
+                          <span className="text-gray-200 text-sm">
+                            {value || "-"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        </>
       )}
     </div>
   );
