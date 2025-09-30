@@ -486,7 +486,7 @@ export const getTopTeams = (deduplicatedBets) => {
       };
     })
     .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0))
-    .slice(0, 70); // Top 70 teams
+    .slice(0, 100); // Top 100 teams
 
   return teamsArray || [];
 };

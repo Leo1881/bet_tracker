@@ -4,7 +4,7 @@ const TopTeamsTab = ({ getTopTeams }) => {
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
-        Top 70 Teams Ranking
+        Top 100 Teams Ranking
       </h3>
       <div className="text-gray-300 mb-6">
         <p>
