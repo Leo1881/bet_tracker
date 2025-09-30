@@ -26,152 +26,187 @@ const DataTab = ({
         <>
           {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-full">
-            <thead className="bg-white/20">
-              <tr>
-                {getDeduplicatedFilteredBets()[0] &&
-                  Object.keys(getDeduplicatedFilteredBets()[0])
-                    .filter(
-                      (key) =>
-                        ![
-                          "ID",
-                          "SYSTEM_RECOMMENDATION",
-                          "SYSTEM_CONFIDENCE",
-                          "PREDICTION_ACCURATE",
-                          "RECOMMENDATION_FOLLOWED",
-                          "REASON",
-                        ].includes(key)
-                    )
-                    .map((key) => (
-                      <th
-                        key={key}
-                        className="px-3 py-4 text-left text-white font-semibold text-sm whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors"
-                        onClick={() => handleSort(key)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>{key}</span>
-                          {sortConfig.key === key && (
-                            <span className="ml-2">
-                              {sortConfig.direction === "asc" ? "↑" : "↓"}
+            <table className="w-full min-w-full">
+              <thead className="bg-white/20">
+                <tr>
+                  {getDeduplicatedFilteredBets()[0] &&
+                    Object.keys(getDeduplicatedFilteredBets()[0])
+                      .filter(
+                        (key) =>
+                          ![
+                            "ID",
+                            "SYSTEM_RECOMMENDATION",
+                            "SYSTEM_CONFIDENCE",
+                            "PREDICTION_ACCURATE",
+                            "RECOMMENDATION_FOLLOWED",
+                            "REASON",
+                          ].includes(key)
+                      )
+                      .map((key) => (
+                        <th
+                          key={key}
+                          className="px-3 py-4 text-left text-white font-semibold text-sm whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors"
+                          onClick={() => handleSort(key)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>{key}</span>
+                            {sortConfig.key === key && (
+                              <span className="ml-2">
+                                {sortConfig.direction === "asc" ? "↑" : "↓"}
+                              </span>
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {getSortedData().map((bet, index) => (
+                  <tr
+                    key={index}
+                    className="hover:bg-white/5 transition-colors"
+                  >
+                    {Object.entries(bet)
+                      .filter(
+                        ([key, value]) =>
+                          ![
+                            "ID",
+                            "SYSTEM_RECOMMENDATION",
+                            "SYSTEM_CONFIDENCE",
+                            "PREDICTION_ACCURATE",
+                            "RECOMMENDATION_FOLLOWED",
+                            "REASON",
+                          ].includes(key)
+                      )
+                      .map(([key, value], i) => (
+                        <td key={i} className="px-3 py-4 text-gray-200 text-sm">
+                          {key === "RESULT" ? (
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                                value
+                              )}`}
+                            >
+                              {value || "Unknown"}
+                            </span>
+                          ) : key === "DATE" ? (
+                            <span className="text-blue-300 whitespace-nowrap">
+                              {formatDate(value)}
+                            </span>
+                          ) : key.includes("ODDS") ? (
+                            <span className="font-mono text-yellow-400 whitespace-nowrap">
+                              {value || "-"}
+                            </span>
+                          ) : key === "BET_TYPE" ||
+                            key === "BET_SELECTION" ||
+                            key === "TEAM_BET" ? (
+                            <span className="font-medium text-purple-300 whitespace-nowrap">
+                              {value || "-"}
+                            </span>
+                          ) : (
+                            <span className="whitespace-nowrap">
+                              {value || "-"}
                             </span>
                           )}
-                        </div>
-                      </th>
-                    ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10">
-              {getSortedData().map((bet, index) => (
-                <tr key={index} className="hover:bg-white/5 transition-colors">
-                  {Object.entries(bet)
-                    .filter(
-                      ([key, value]) =>
-                        ![
-                          "ID",
-                          "SYSTEM_RECOMMENDATION",
-                          "SYSTEM_CONFIDENCE",
-                          "PREDICTION_ACCURATE",
-                          "RECOMMENDATION_FOLLOWED",
-                          "REASON",
-                        ].includes(key)
-                    )
-                    .map(([key, value], i) => (
-                      <td key={i} className="px-3 py-4 text-gray-200 text-sm">
-                        {key === "RESULT" ? (
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              value
-                            )}`}
-                          >
-                            {value || "Unknown"}
-                          </span>
-                        ) : key === "DATE" ? (
-                          <span className="text-blue-300 whitespace-nowrap">
-                            {formatDate(value)}
-                          </span>
-                        ) : key.includes("ODDS") ? (
-                          <span className="font-mono text-yellow-400 whitespace-nowrap">
-                            {value || "-"}
-                          </span>
-                        ) : key === "BET_TYPE" ||
-                          key === "BET_SELECTION" ||
-                          key === "TEAM_BET" ? (
-                          <span className="font-medium text-purple-300 whitespace-nowrap">
-                            {value || "-"}
-                          </span>
-                        ) : (
-                          <span className="whitespace-nowrap">
-                            {value || "-"}
-                          </span>
-                        )}
-                      </td>
-                    ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        </td>
+                      ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Mobile Card View */}
-        <div className="block md:hidden space-y-4 p-4">
-          {getSortedData().map((bet, index) => (
-            <div
-              key={index}
-              className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-colors"
-            >
-              <div className="space-y-3">
-                {Object.entries(bet)
-                  .filter(
-                    ([key, value]) =>
-                      ![
-                        "ID",
-                        "SYSTEM_RECOMMENDATION",
-                        "SYSTEM_CONFIDENCE",
-                        "PREDICTION_ACCURATE",
-                        "RECOMMENDATION_FOLLOWED",
-                        "REASON",
-                      ].includes(key)
-                  )
-                  .map(([key, value], i) => (
-                    <div key={i} className="flex justify-between items-start">
-                      <span className="text-xs font-medium text-gray-400 uppercase tracking-wider flex-shrink-0 mr-2">
-                        {key.replace(/_/g, " ")}
-                      </span>
-                      <div className="text-right flex-1">
-                        {key === "RESULT" ? (
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              value
-                            )}`}
-                          >
-                            {value || "Unknown"}
-                          </span>
-                        ) : key === "DATE" ? (
-                          <span className="text-blue-300 text-sm">
-                            {formatDate(value)}
-                          </span>
-                        ) : key.includes("ODDS") ? (
-                          <span className="font-mono text-yellow-400 text-sm">
-                            {value || "-"}
-                          </span>
-                        ) : key === "BET_TYPE" ||
-                          key === "BET_SELECTION" ||
-                          key === "TEAM_BET" ? (
-                          <span className="font-medium text-purple-300 text-sm">
-                            {value || "-"}
-                          </span>
-                        ) : (
-                          <span className="text-gray-200 text-sm">
-                            {value || "-"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          ))}
-        </div>
+          {/* Mobile Grid View */}
+          <div className="block md:hidden overflow-x-auto">
+            <table className="w-full min-w-full">
+              <thead className="bg-white/20">
+                <tr>
+                  {getDeduplicatedFilteredBets()[0] &&
+                    Object.keys(getDeduplicatedFilteredBets()[0])
+                      .filter(
+                        (key) =>
+                          ![
+                            "ID",
+                            "SYSTEM_RECOMMENDATION",
+                            "SYSTEM_CONFIDENCE",
+                            "PREDICTION_ACCURATE",
+                            "RECOMMENDATION_FOLLOWED",
+                            "REASON",
+                          ].includes(key)
+                      )
+                      .map((key) => (
+                        <th
+                          key={key}
+                          className="px-2 py-3 text-left text-white font-semibold text-xs whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors"
+                          onClick={() => handleSort(key)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs">
+                              {key.replace(/_/g, " ")}
+                            </span>
+                            {sortConfig.key === key && (
+                              <span className="ml-1 text-xs">
+                                {sortConfig.direction === "asc" ? "↑" : "↓"}
+                              </span>
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {getSortedData().map((bet, index) => (
+                  <tr
+                    key={index}
+                    className="hover:bg-white/5 transition-colors"
+                  >
+                    {Object.entries(bet)
+                      .filter(
+                        ([key, value]) =>
+                          ![
+                            "ID",
+                            "SYSTEM_RECOMMENDATION",
+                            "SYSTEM_CONFIDENCE",
+                            "PREDICTION_ACCURATE",
+                            "RECOMMENDATION_FOLLOWED",
+                            "REASON",
+                          ].includes(key)
+                      )
+                      .map(([key, value], i) => (
+                        <td key={i} className="px-2 py-3 text-gray-200 text-xs">
+                          {key === "RESULT" ? (
+                            <span
+                              className={`px-1 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                value
+                              )}`}
+                            >
+                              {value || "Unknown"}
+                            </span>
+                          ) : key === "DATE" ? (
+                            <span className="text-blue-300 whitespace-nowrap text-xs">
+                              {formatDate(value)}
+                            </span>
+                          ) : key.includes("ODDS") ? (
+                            <span className="font-mono text-yellow-400 whitespace-nowrap text-xs">
+                              {value || "-"}
+                            </span>
+                          ) : key === "BET_TYPE" ||
+                            key === "BET_SELECTION" ||
+                            key === "TEAM_BET" ? (
+                            <span className="font-medium text-purple-300 whitespace-nowrap text-xs">
+                              {value || "-"}
+                            </span>
+                          ) : (
+                            <span className="whitespace-nowrap text-xs">
+                              {value || "-"}
+                            </span>
+                          )}
+                        </td>
+                      ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>
