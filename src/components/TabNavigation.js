@@ -11,7 +11,6 @@ const TabNavigation = ({ activeTab, setActiveTab }) => {
     { id: "odds", label: "Odds Analytics" },
     { id: "topTeams", label: "Top Teams" },
     { id: "betTypeAnalytics", label: "Team Analytics" },
-    { id: "dailyGames", label: "Daily Games" },
     { id: "scoringAnalysis", label: "Scoring Analysis" },
     { id: "headToHead", label: "Head to Head" },
     { id: "predictionAccuracy", label: "Prediction Accuracy" },
