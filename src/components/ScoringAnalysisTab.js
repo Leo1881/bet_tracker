@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 
 const ScoringAnalysisTab = ({
   analyzeScoringPatterns,
@@ -11,6 +11,16 @@ const ScoringAnalysisTab = ({
     direction: "desc",
   });
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const handleSort = (key) => {
     let direction = "desc";
@@ -25,13 +35,15 @@ const ScoringAnalysisTab = ({
 
     let filtered = scoringAnalysis.filter((stat) => stat.totalGames >= 3);
 
-    // Apply search filter if search term exists
-    if (searchTerm.trim()) {
+    // Apply search filter if debounced search term exists
+    if (debouncedSearchTerm.trim()) {
       filtered = filtered.filter(
         (stat) =>
-          stat.team.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          stat.league.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          stat.country.toLowerCase().includes(searchTerm.toLowerCase())
+          stat.team.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+          stat.league
+            .toLowerCase()
+            .includes(debouncedSearchTerm.toLowerCase()) ||
+          stat.country.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
       );
     }
 
@@ -122,9 +134,13 @@ const ScoringAnalysisTab = ({
                 </button>
               )}
             </div>
-            {searchTerm && (
+            {searchTerm !== debouncedSearchTerm && (
+              <p className="text-sm text-blue-400 mt-2">🔍 Searching...</p>
+            )}
+            {debouncedSearchTerm && searchTerm === debouncedSearchTerm && (
               <p className="text-sm text-gray-400 mt-2">
-                Showing {getSortedData().length} results for "{searchTerm}"
+                Showing {getSortedData().length} results for "
+                {debouncedSearchTerm}"
               </p>
             )}
           </div>

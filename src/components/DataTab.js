@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 const DataTab = ({
   dataViewLoaded,
@@ -9,6 +9,54 @@ const DataTab = ({
   getStatusColor,
   formatDate,
 }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const betsPerPage = 100;
+
+  // Get paginated data
+  const getPaginatedData = () => {
+    const allData = getSortedData();
+    const startIndex = (currentPage - 1) * betsPerPage;
+    const endIndex = startIndex + betsPerPage;
+    return allData.slice(startIndex, endIndex);
+  };
+
+  // Calculate total pages
+  const totalPages = Math.ceil(getSortedData().length / betsPerPage);
+
+  // Reset to page 1 when data changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [getSortedData]);
+
+  // Pagination controls
+  const PaginationControls = () => (
+    <div className="flex justify-between items-center mt-4 px-4 py-3 bg-white/5 rounded-lg">
+      <button
+        onClick={() => setCurrentPage(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+      >
+        ← Previous
+      </button>
+      
+      <div className="flex items-center space-x-4">
+        <span className="text-gray-300">
+          Page {currentPage} of {totalPages}
+        </span>
+        <span className="text-gray-400">
+          ({getSortedData().length} total bets)
+        </span>
+      </div>
+      
+      <button
+        onClick={() => setCurrentPage(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+      >
+        Next →
+      </button>
+    </div>
+  );
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden max-w-full">
       {!dataViewLoaded ? (
@@ -62,7 +110,7 @@ const DataTab = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {getSortedData().map((bet, index) => (
+                {getPaginatedData().map((bet, index) => (
                   <tr
                     key={index}
                     className="hover:bg-white/5 transition-colors"
@@ -114,10 +162,11 @@ const DataTab = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </table>
+          <PaginationControls />
+        </div>
 
-          {/* Mobile Grid View */}
+        {/* Mobile Grid View */}
           <div className="block md:hidden overflow-x-auto">
             <table className="w-full min-w-full">
               <thead className="bg-white/20">
@@ -157,7 +206,7 @@ const DataTab = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {getSortedData().map((bet, index) => (
+                {getPaginatedData().map((bet, index) => (
                   <tr
                     key={index}
                     className="hover:bg-white/5 transition-colors"
@@ -208,9 +257,10 @@ const DataTab = ({
                       ))}
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+            </tbody>
+          </table>
+          <PaginationControls />
+        </div>
         </>
       )}
     </div>
