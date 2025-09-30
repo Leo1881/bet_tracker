@@ -419,13 +419,19 @@ export const getTopTeams = (deduplicatedBets) => {
 
     // Calculate recent performance from last 10 bets
     let recentWins = 0;
+    let recentLosses = 0;
     let recentBets = 0;
 
     sortedBets.forEach((bet) => {
-      recentBets++;
+      // Only count completed bets (wins + losses), exclude pending bets
       if (bet.RESULT?.toLowerCase().includes("win")) {
         recentWins++;
+        recentBets++;
+      } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+        recentLosses++;
+        recentBets++;
       }
+      // Skip pending bets - don't count them in recent performance
     });
 
     team.recentBets = recentBets;
