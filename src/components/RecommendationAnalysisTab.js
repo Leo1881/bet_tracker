@@ -173,6 +173,9 @@ const RecommendationAnalysisTab = ({
               home_team: rec.home_team,
               away_team: rec.away_team,
               recommendation: rec.recommendation,
+              primary_recommendation: rec.primary_recommendation,
+              secondary_recommendation: rec.secondary_recommendation,
+              tertiary_recommendation: rec.tertiary_recommendation,
               bet_type: rec.bet_type,
               bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
@@ -321,6 +324,9 @@ const RecommendationAnalysisTab = ({
               home_team: rec.home_team,
               away_team: rec.away_team,
               recommendation: rec.recommendation,
+              primary_recommendation: rec.primary_recommendation,
+              secondary_recommendation: rec.secondary_recommendation,
+              tertiary_recommendation: rec.tertiary_recommendation,
               bet_type: rec.bet_type,
               bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
@@ -618,7 +624,7 @@ const RecommendationAnalysisTab = ({
                     Date
                   </th>
                   <th className="text-left py-3 px-2 text-white font-medium">
-                    Prediction
+                    Recommendations (Primary/Secondary/Tertiary)
                   </th>
                   <th className="text-left py-3 px-2 text-white font-medium">
                     Your Bet
@@ -657,7 +663,19 @@ const RecommendationAnalysisTab = ({
                       {new Date(match.date).toLocaleDateString()}
                     </td>
                     <td className="py-3 px-2 text-white">
-                      {match.recommendation}
+                      <div className="space-y-1">
+                        <div className="text-green-400 font-medium">
+                          🥇 Primary:{" "}
+                          {match.primary_recommendation || match.recommendation}
+                        </div>
+                        <div className="text-yellow-400 text-sm">
+                          🥈 Secondary:{" "}
+                          {match.secondary_recommendation || "N/A"}
+                        </div>
+                        <div className="text-orange-400 text-sm">
+                          🥉 Tertiary: {match.tertiary_recommendation || "N/A"}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-2 text-blue-300 font-medium">
                       {match.bet_selection || "N/A"}

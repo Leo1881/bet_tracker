@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 
 // Database configuration
 const POSTGRES_CONFIG = {
@@ -332,10 +332,14 @@ app.post("/api/recommendations", async (req, res) => {
     const insertQuery = `
       INSERT INTO recommendation_tracking (
         betslip_id, bet_id, game_id, date, home_team, away_team, team_included,
-        bet_type, bet_selection, odds1, odds2, oddsX,
+        bet_type, bet_selection, odds1, odds2, oddsx,
         recommendation, confidence_score, confidence_breakdown,
-        reasoning, historical_data, probabilities
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        reasoning, historical_data, probabilities,
+        primary_recommendation, primary_confidence, primary_reasoning,
+        secondary_recommendation, secondary_confidence, secondary_reasoning,
+        tertiary_recommendation, tertiary_confidence, tertiary_reasoning,
+        chosen_recommendation_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
       ON CONFLICT (game_id, betslip_id) 
       DO UPDATE SET 
         bet_id = $2,
@@ -345,6 +349,16 @@ app.post("/api/recommendations", async (req, res) => {
         reasoning = $16,
         historical_data = $17,
         probabilities = $18,
+        primary_recommendation = $19,
+        primary_confidence = $20,
+        primary_reasoning = $21,
+        secondary_recommendation = $22,
+        secondary_confidence = $23,
+        secondary_reasoning = $24,
+        tertiary_recommendation = $25,
+        tertiary_confidence = $26,
+        tertiary_reasoning = $27,
+        chosen_recommendation_type = $28,
         updated_at = NOW()
     `;
 
@@ -402,28 +416,52 @@ app.post("/api/recommendations", async (req, res) => {
       // Debug: Check what's being inserted into database
       if (recommendations.indexOf(rec) === 0) {
         console.log("Inserting into database with bet_id:", rec.bet_id);
+        console.log("Recommendation type:", rec.recommendation_type);
       }
 
-      await pool.query(insertQuery, [
-        betslipId,
-        rec.bet_id || null, // Add bet_id from the recommendation data
-        gameId,
-        parseDate(rec.date),
-        rec.home_team,
-        rec.away_team,
-        rec.team_included,
-        rec.bet_type,
-        rec.bet_selection,
-        parseNumeric(rec.odds1),
-        parseNumeric(rec.odds2),
-        parseNumeric(rec.oddsX),
-        rec.recommendation,
-        parseNumeric(rec.confidence_score),
-        JSON.stringify(rec.confidence_breakdown),
-        rec.reasoning,
-        JSON.stringify(rec.historical_data),
-        JSON.stringify(rec.probabilities),
-      ]);
+      try {
+        await pool.query(insertQuery, [
+          betslipId,
+          rec.bet_id || null, // Add bet_id from the recommendation data
+          gameId,
+          parseDate(rec.date),
+          rec.home_team,
+          rec.away_team,
+          rec.team_included,
+          rec.bet_type,
+          rec.bet_selection,
+          parseNumeric(rec.odds1),
+          parseNumeric(rec.odds2),
+          parseNumeric(rec.oddsX),
+          rec.primary_recommendation, // Use primary as main recommendation
+          parseNumeric(rec.confidence_score),
+          JSON.stringify(rec.confidence_breakdown),
+          rec.primary_reasoning, // Use primary reasoning
+          JSON.stringify(rec.historical_data),
+          JSON.stringify(rec.probabilities),
+          // All 3 recommendations
+          rec.primary_recommendation,
+          parseNumeric(rec.primary_confidence),
+          rec.primary_reasoning,
+          rec.secondary_recommendation,
+          parseNumeric(rec.secondary_confidence),
+          rec.secondary_reasoning,
+          rec.tertiary_recommendation,
+          parseNumeric(rec.tertiary_confidence),
+          rec.tertiary_reasoning,
+          "PRIMARY", // Default chosen recommendation type
+        ]);
+        console.log(
+          "Successfully inserted recommendation for:",
+          rec.home_team,
+          "vs",
+          rec.away_team
+        );
+      } catch (insertError) {
+        console.error("Error inserting recommendation:", insertError);
+        console.error("Recommendation data:", rec);
+        throw insertError;
+      }
     }
 
     res.json({ success: true, stored: recommendations.length });
@@ -514,8 +552,12 @@ app.get("/api/recommendations", async (req, res) => {
       SELECT 
         id, betslip_id, bet_id, game_id, date, home_team, away_team, team_included,
         bet_type, bet_selection, odds1, odds2, oddsX,
-        recommendation, confidence_score, confidence_breakdown,
+        recommendation, recommendation_type, confidence_score, confidence_breakdown,
         reasoning, historical_data, probabilities,
+        primary_recommendation, primary_confidence, primary_reasoning,
+        secondary_recommendation, secondary_confidence, secondary_reasoning,
+        tertiary_recommendation, tertiary_confidence, tertiary_reasoning,
+        chosen_recommendation_type,
         actual_result, actual_home_score, actual_away_score,
         prediction_accurate, system_prediction_accurate, your_bet_won, analysis_type, insight, analysis_notes,
         created_at, updated_at, result_updated_at

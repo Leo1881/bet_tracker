@@ -775,10 +775,86 @@ function App() {
         };
       }
 
-      // Calculate overall accuracy using the existing prediction_accurate field
+      // Calculate accuracy based on system recommendation vs actual game outcome
+      const calculateSystemAccuracy = (
+        recommendation,
+        actualResult,
+        recommendationType
+      ) => {
+        if (!recommendation || !actualResult) {
+          console.log("Missing data:", {
+            recommendation,
+            actualResult,
+            recommendationType,
+          });
+          return false;
+        }
+
+        const rec = recommendation.toLowerCase();
+        const result = actualResult.toLowerCase();
+
+        console.log("Checking accuracy:", { rec, result, recommendationType });
+
+        // System recommended Home Win and home team won
+        if (rec.includes("home win") && result.includes("win")) {
+          console.log("✅ Home Win correct");
+          return true;
+        }
+
+        // System recommended Away Win and away team won
+        if (rec.includes("away win") && result.includes("win")) {
+          console.log("✅ Away Win correct");
+          return true;
+        }
+
+        // System recommended Double Chance Home and home team won or drew
+        if (
+          rec.includes("double chance home") &&
+          (result.includes("win") || result.includes("draw"))
+        ) {
+          console.log("✅ Double Chance Home correct");
+          return true;
+        }
+
+        // System recommended Double Chance Away and away team won or drew
+        if (
+          rec.includes("double chance away") &&
+          (result.includes("win") || result.includes("draw"))
+        ) {
+          console.log("✅ Double Chance Away correct");
+          return true;
+        }
+
+        // System recommended Avoid and team lost
+        if (rec.includes("avoid") && result.includes("loss")) {
+          console.log("✅ Avoid correct");
+          return true;
+        }
+
+        // System recommended Over and goals were over the line
+        if (rec.includes("over") && result.includes("win")) {
+          console.log("✅ Over correct");
+          return true;
+        }
+
+        // System recommended Under and goals were under the line
+        if (rec.includes("under") && result.includes("win")) {
+          console.log("✅ Under correct");
+          return true;
+        }
+
+        console.log("❌ No match found");
+        return false;
+      };
+
+      // Calculate overall accuracy based on system recommendations vs actual outcomes
       const totalPredictions = recommendationsWithResults.length;
-      const correctPredictions = recommendationsWithResults.filter(
-        (rec) => rec.prediction_accurate === true
+      const correctPredictions = recommendationsWithResults.filter((rec) =>
+        calculateSystemAccuracy(
+          rec.recommendation,
+          rec.actual_result,
+          rec.recommendation_type
+        )
       ).length;
       const overallAccuracy =
         totalPredictions > 0
@@ -801,10 +877,14 @@ function App() {
         ),
       };
 
-      // Calculate accuracy for each confidence group
+      // Calculate accuracy for each confidence group using system accuracy
       const calculateGroupAccuracy = (group) => {
-        const correct = group.filter(
-          (rec) => rec.prediction_accurate === true
+        const correct = group.filter((rec) =>
+          calculateSystemAccuracy(
+            rec.recommendation,
+            rec.actual_result,
+            rec.recommendation_type
+          )
         ).length;
         return group.length > 0 ? (correct / group.length) * 100 : 0;
       };
@@ -819,12 +899,16 @@ function App() {
         betTypeGroups[betType].push(rec);
       });
 
-      // Calculate accuracy by bet type
+      // Calculate accuracy by bet type using system accuracy
       const accuracyByBetType = {};
       Object.keys(betTypeGroups).forEach((betType) => {
         const group = betTypeGroups[betType];
-        const correct = group.filter(
-          (rec) => rec.prediction_accurate === true
+        const correct = group.filter((rec) =>
+          calculateSystemAccuracy(
+            rec.recommendation,
+            rec.actual_result,
+            rec.recommendation_type
+          )
         ).length;
         accuracyByBetType[betType] = {
           total: group.length,
@@ -843,12 +927,16 @@ function App() {
         recommendationGroups[recType].push(rec);
       });
 
-      // Calculate accuracy by recommendation type
+      // Calculate accuracy by recommendation type using system accuracy
       const accuracyByRecommendationType = {};
       Object.keys(recommendationGroups).forEach((recType) => {
         const group = recommendationGroups[recType];
-        const correct = group.filter(
-          (rec) => rec.prediction_accurate === true
+        const correct = group.filter((rec) =>
+          calculateSystemAccuracy(
+            rec.recommendation,
+            rec.actual_result,
+            rec.recommendation_type
+          )
         ).length;
         accuracyByRecommendationType[recType] = {
           total: group.length,
@@ -864,8 +952,12 @@ function App() {
         byConfidence: {
           "High (8-10)": {
             total: confidenceGroups["High (8-10)"].length,
-            correct: confidenceGroups["High (8-10)"].filter(
-              (rec) => rec.prediction_accurate === true
+            correct: confidenceGroups["High (8-10)"].filter((rec) =>
+              calculateSystemAccuracy(
+                rec.recommendation,
+                rec.actual_result,
+                rec.recommendation_type
+              )
             ).length,
             accuracy:
               Math.round(
@@ -874,8 +966,12 @@ function App() {
           },
           "Medium (6-7)": {
             total: confidenceGroups["Medium (6-7)"].length,
-            correct: confidenceGroups["Medium (6-7)"].filter(
-              (rec) => rec.prediction_accurate === true
+            correct: confidenceGroups["Medium (6-7)"].filter((rec) =>
+              calculateSystemAccuracy(
+                rec.recommendation,
+                rec.actual_result,
+                rec.recommendation_type
+              )
             ).length,
             accuracy:
               Math.round(
@@ -884,8 +980,12 @@ function App() {
           },
           "Low (4-5)": {
             total: confidenceGroups["Low (4-5)"].length,
-            correct: confidenceGroups["Low (4-5)"].filter(
-              (rec) => rec.prediction_accurate === true
+            correct: confidenceGroups["Low (4-5)"].filter((rec) =>
+              calculateSystemAccuracy(
+                rec.recommendation,
+                rec.actual_result,
+                rec.recommendation_type
+              )
             ).length,
             accuracy:
               Math.round(
@@ -894,8 +994,12 @@ function App() {
           },
           "Very Low (1-3)": {
             total: confidenceGroups["Very Low (1-3)"].length,
-            correct: confidenceGroups["Very Low (1-3)"].filter(
-              (rec) => rec.prediction_accurate === true
+            correct: confidenceGroups["Very Low (1-3)"].filter((rec) =>
+              calculateSystemAccuracy(
+                rec.recommendation,
+                rec.actual_result,
+                rec.recommendation_type
+              )
             ).length,
             accuracy:
               Math.round(
@@ -1856,33 +1960,70 @@ function App() {
       console.log("BET_ID in first result:", analysisResults[0]?.BET_ID);
 
       // Prepare recommendations data for database storage
-      const recommendations = analysisResults.map((result) => ({
-        bet_id: result.BET_ID, // Add the original BET_ID from Google Sheets
-        date: result.DATE,
-        home_team: result.HOME_TEAM,
-        away_team: result.AWAY_TEAM,
-        team_included: result.TEAM_INCLUDED,
-        bet_type: result.BET_TYPE,
-        bet_selection: result.BET_SELECTION,
-        odds1: result.ODDS1,
-        odds2: result.ODDS2,
-        oddsX: result.ODDSX,
-        recommendation: result.recommendation,
-        confidence_score: result.confidenceScore,
-        confidence_breakdown: result.confidenceBreakdown,
-        reasoning: result.recommendation, // Using recommendation as reasoning for now
-        historical_data: {
-          historicalBets: result.historicalBets,
-          historicalWins: result.historicalWins,
-          historicalLosses: result.historicalLosses,
-          winRate: result.winRate,
-          winDetails: result.winDetails,
-          lossDetails: result.lossDetails,
-          previousMatchups: result.previousMatchups,
-          competitions: result.competitions,
-        },
-        probabilities: result.probabilities,
-      }));
+      // Store all 3 recommendations (Primary/Secondary/Tertiary) for each game in one record
+      const recommendations = analysisResults
+        .map((result) => {
+          // Get the full recommendation object that contains primary/secondary/tertiary
+          const fullRecommendation = betRecommendations.find(
+            (rec) =>
+              rec.match === `${result.HOME_TEAM} vs ${result.AWAY_TEAM}` ||
+              rec.match === `${result.AWAY_TEAM} vs ${result.HOME_TEAM}`
+          );
+
+          if (fullRecommendation) {
+            return {
+              bet_id: result.BET_ID,
+              date: result.DATE,
+              home_team: result.HOME_TEAM,
+              away_team: result.AWAY_TEAM,
+              team_included: result.TEAM_INCLUDED,
+              bet_type: result.BET_TYPE,
+              bet_selection: result.BET_SELECTION,
+              odds1: result.ODDS1,
+              odds2: result.ODDS2,
+              oddsX: result.ODDSX,
+              // Store all 3 recommendations in one record
+              primary_recommendation:
+                fullRecommendation.primary.recommendation.bet,
+              primary_confidence:
+                fullRecommendation.primary.recommendation.confidence,
+              primary_reasoning:
+                fullRecommendation.primary.recommendation.reasoning ||
+                fullRecommendation.primary.recommendation.bet,
+              secondary_recommendation:
+                fullRecommendation.secondary.recommendation.bet,
+              secondary_confidence:
+                fullRecommendation.secondary.recommendation.confidence,
+              secondary_reasoning:
+                fullRecommendation.secondary.recommendation.reasoning ||
+                fullRecommendation.secondary.recommendation.bet,
+              tertiary_recommendation:
+                fullRecommendation.tertiary.recommendation.bet,
+              tertiary_confidence:
+                fullRecommendation.tertiary.recommendation.confidence,
+              tertiary_reasoning:
+                fullRecommendation.tertiary.recommendation.reasoning ||
+                fullRecommendation.tertiary.recommendation.bet,
+              // Use primary confidence as the main confidence score
+              confidence_score:
+                fullRecommendation.primary.recommendation.confidence,
+              confidence_breakdown: result.confidenceBreakdown,
+              historical_data: {
+                historicalBets: result.historicalBets,
+                historicalWins: result.historicalWins,
+                historicalLosses: result.historicalLosses,
+                winRate: result.winRate,
+                winDetails: result.winDetails,
+                lossDetails: result.lossDetails,
+                previousMatchups: result.previousMatchups,
+                competitions: result.competitions,
+              },
+              probabilities: result.probabilities,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
 
       // Debug: Check what's being sent to database
       console.log("First recommendation being sent to DB:", recommendations[0]);
