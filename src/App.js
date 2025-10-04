@@ -524,9 +524,9 @@ function App() {
     if (filters.team) {
       filtered = filtered.filter(
         (bet) =>
-          bet.HOME_TEAM?.toLowerCase().includes(filters.team.toLowerCase()) ||
-          bet.AWAY_TEAM?.toLowerCase().includes(filters.team.toLowerCase()) ||
-          bet.TEAM_INCLUDED?.toLowerCase().includes(filters.team.toLowerCase())
+          bet.HOME_TEAM?.toLowerCase() === filters.team.toLowerCase() ||
+          bet.AWAY_TEAM?.toLowerCase() === filters.team.toLowerCase() ||
+          bet.TEAM_INCLUDED?.toLowerCase() === filters.team.toLowerCase()
       );
     }
 

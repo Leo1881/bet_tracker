@@ -307,7 +307,7 @@ export const getDeduplicatedFilteredBets = (deduplicatedBets, filters) => {
     if (filters.result && bet.RESULT !== filters.result) return false;
     if (
       filters.team &&
-      !bet.TEAM_INCLUDED?.toLowerCase().includes(filters.team.toLowerCase())
+      bet.TEAM_INCLUDED?.toLowerCase() !== filters.team.toLowerCase()
     )
       return false;
     if (filters.dateFrom && bet.DATE < filters.dateFrom) return false;
