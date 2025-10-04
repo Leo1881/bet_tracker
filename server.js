@@ -340,7 +340,7 @@ app.post("/api/recommendations", async (req, res) => {
         tertiary_recommendation, tertiary_confidence, tertiary_reasoning,
         chosen_recommendation_type
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
-      ON CONFLICT (game_id, betslip_id) 
+      ON CONFLICT (bet_id, betslip_id, game_id) 
       DO UPDATE SET 
         bet_id = $2,
         recommendation = $13,

@@ -1964,11 +1964,24 @@ function App() {
       const recommendations = analysisResults
         .map((result) => {
           // Get the full recommendation object that contains primary/secondary/tertiary
+          const matchString1 = `${result.HOME_TEAM} vs ${result.AWAY_TEAM}`;
+          const matchString2 = `${result.AWAY_TEAM} vs ${result.HOME_TEAM}`;
+
           const fullRecommendation = betRecommendations.find(
-            (rec) =>
-              rec.match === `${result.HOME_TEAM} vs ${result.AWAY_TEAM}` ||
-              rec.match === `${result.AWAY_TEAM} vs ${result.HOME_TEAM}`
+            (rec) => rec.match === matchString1 || rec.match === matchString2
           );
+
+          // Debug: Check matching for first few results
+          if (analysisResults.indexOf(result) < 3) {
+            console.log(`Game ${analysisResults.indexOf(result) + 1}:`);
+            console.log(
+              `  Looking for: "${matchString1}" or "${matchString2}"`
+            );
+            console.log(`  Found match:`, !!fullRecommendation);
+            if (fullRecommendation) {
+              console.log(`  Match found:`, fullRecommendation.match);
+            }
+          }
 
           if (fullRecommendation) {
             return {
@@ -2026,6 +2039,17 @@ function App() {
         .filter(Boolean);
 
       // Debug: Check what's being sent to database
+      console.log("Total analysis results:", analysisResults.length);
+      console.log("Total bet recommendations:", betRecommendations.length);
+      console.log(
+        "First few bet recommendations:",
+        betRecommendations.slice(0, 3)
+      );
+      console.log("First few analysis results:", analysisResults.slice(0, 3));
+      console.log(
+        "Total recommendations after filtering:",
+        recommendations.length
+      );
       console.log("First recommendation being sent to DB:", recommendations[0]);
       console.log(
         "BET_ID in first recommendation:",

@@ -74,30 +74,42 @@ const RecommendationAnalysisTab = ({
 
             // Use the stored analysis fields if available, otherwise fall back to old logic
             let isCorrect = false;
+            let isPending = false;
             let analysisType = rec.analysis_type || "";
             let insight = rec.insight || "";
 
-            if (rec.analysis_type) {
-              // Use the stored analysis type
+            // Check if this is a pending result (no actual_result entered yet)
+            if (!rec.actual_result || rec.actual_result.trim() === "") {
+              isPending = true;
+              isCorrect = false; // Pending results are neither correct nor wrong
+              console.log(
+                `Game: ${rec.home_team} vs ${rec.away_team} - PENDING (no actual_result)`
+              );
+            } else if (rec.analysis_type) {
+              // Use the stored analysis type for completed results
               isCorrect =
                 rec.analysis_type === "Both Correct" ||
                 rec.analysis_type === "System Right, You Lost";
+              isPending = false;
             } else {
-              // Fallback to old logic
+              // Fallback to old logic for completed results
               if (
                 rec.prediction_accurate === true ||
                 rec.prediction_accurate === "true"
               ) {
                 isCorrect = true;
+                isPending = false;
               } else if (
                 rec.prediction_accurate === false ||
                 rec.prediction_accurate === "false"
               ) {
                 isCorrect = false;
+                isPending = false;
               } else if (rec.actual_result && rec.actual_result.trim() !== "") {
                 isCorrect =
                   rec.actual_result.toLowerCase().includes("win") &&
                   rec.recommendation.toLowerCase().includes("win");
+                isPending = false;
               }
             }
 
@@ -186,6 +198,7 @@ const RecommendationAnalysisTab = ({
               insight: rec.insight,
               analysis: {
                 isCorrect: isCorrect,
+                isPending: isPending,
                 failureReason: failureReason || null,
                 confidenceAnalysis: confidenceAnalysis,
                 analysisType: rec.analysis_type || "",
@@ -194,15 +207,30 @@ const RecommendationAnalysisTab = ({
             };
           });
 
+          const analysis = {
+            total: matched.length,
+            correct: matched.filter((m) => m.analysis.isCorrect).length,
+            wrong: matched.filter(
+              (m) => !m.analysis.isCorrect && !m.analysis.isPending
+            ).length,
+            pending: matched.filter((m) => m.analysis.isPending).length,
+          };
+
+          console.log("Final analysis counts:", analysis);
+          console.log(
+            "Sample matches:",
+            matched.slice(0, 3).map((m) => ({
+              game: `${m.home_team} vs ${m.away_team}`,
+              isCorrect: m.analysis.isCorrect,
+              isPending: m.analysis.isPending,
+              actual_result: m.actual_result,
+            }))
+          );
+
           setStoredResults({
             matched: matched,
             unmatched: [],
-            analysis: {
-              total: matched.length,
-              correct: matched.filter((m) => m.analysis.isCorrect).length,
-              wrong: matched.filter((m) => !m.analysis.isCorrect).length,
-              pending: 0,
-            },
+            analysis: analysis,
           });
         }
       } catch (error) {
@@ -235,21 +263,33 @@ const RecommendationAnalysisTab = ({
             );
             // Determine if the prediction was correct
             let isCorrect = false;
-            if (
+            let isPending = false;
+
+            // Check if this is a pending result (no actual_result entered yet)
+            if (!rec.actual_result || rec.actual_result.trim() === "") {
+              isPending = true;
+              isCorrect = false; // Pending results are neither correct nor wrong
+              console.log(
+                `Game: ${rec.home_team} vs ${rec.away_team} - PENDING (no actual_result)`
+              );
+            } else if (
               rec.prediction_accurate === true ||
               rec.prediction_accurate === "true"
             ) {
               isCorrect = true;
+              isPending = false;
             } else if (
               rec.prediction_accurate === false ||
               rec.prediction_accurate === "false"
             ) {
               isCorrect = false;
+              isPending = false;
             } else if (rec.actual_result && rec.actual_result.trim() !== "") {
               // If we have an actual result but no prediction_accurate, we can infer it
               isCorrect =
                 rec.actual_result.toLowerCase().includes("win") &&
                 rec.recommendation.toLowerCase().includes("win");
+              isPending = false;
             }
 
             // Generate detailed failure analysis
@@ -337,6 +377,7 @@ const RecommendationAnalysisTab = ({
               insight: rec.insight,
               analysis: {
                 isCorrect: isCorrect,
+                isPending: isPending,
                 failureReason: failureReason || null,
                 confidenceAnalysis: confidenceAnalysis,
                 analysisType: rec.analysis_type || "",
@@ -349,17 +390,12 @@ const RecommendationAnalysisTab = ({
             matched: matched,
             unmatched: [],
             analysis: {
-              totalRecommendations: matched.length,
-              correctPredictions: matched.filter((m) => m.analysis.isCorrect)
-                .length,
-              incorrectPredictions: matched.filter((m) => !m.analysis.isCorrect)
-                .length,
-              accuracy:
-                matched.length > 0
-                  ? (matched.filter((m) => m.analysis.isCorrect).length /
-                      matched.length) *
-                    100
-                  : 0,
+              total: matched.length,
+              correct: matched.filter((m) => m.analysis.isCorrect).length,
+              wrong: matched.filter(
+                (m) => !m.analysis.isCorrect && !m.analysis.isPending
+              ).length,
+              pending: matched.filter((m) => m.analysis.isPending).length,
             },
           });
         }
@@ -537,7 +573,7 @@ const RecommendationAnalysisTab = ({
       {((storedResults && storedResults.analysis) ||
         (comparisonResults && comparisonResults.analysis)) &&
         selectedBetslip && (
-          <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <div className="text-2xl font-bold text-white">
                 {
@@ -564,6 +600,15 @@ const RecommendationAnalysisTab = ({
                 }
               </div>
               <div className="text-gray-300 text-sm">❌ Wrong</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <div className="text-2xl font-bold text-yellow-400">
+                {
+                  (storedResults?.analysis || comparisonResults?.analysis)
+                    ?.pending
+                }
+              </div>
+              <div className="text-gray-300 text-sm">⏳ Pending</div>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <div className="text-2xl font-bold text-blue-400">
