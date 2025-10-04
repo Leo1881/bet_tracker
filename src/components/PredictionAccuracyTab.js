@@ -114,29 +114,10 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
               </div>
             </div>
 
-            {/* Accuracy by Confidence */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <h4 className="text-lg font-semibold text-white mb-4">
-                Accuracy by Confidence Level
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {Object.entries(metrics.byConfidence).map(([level, data]) => (
-                  <div key={level} className="text-center">
-                    <div className="text-xl font-bold text-blue-400">
-                      {data.accuracy?.toFixed(1) || 0}%
-                    </div>
-                    <div className="text-gray-300 text-sm">
-                      {level} ({data.total || 0} predictions)
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Accuracy by Bet Type */}
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <h4 className="text-lg font-semibold text-white mb-4">
-                Accuracy by Bet Type
+                Accuracy by System Recommendation Type
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {Object.entries(metrics.byBetType).map(([betType, data]) => (
@@ -145,42 +126,13 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
                       {data.accuracy?.toFixed(1) || 0}%
                     </div>
                     <div className="text-gray-300 text-sm">
-                      {betType} ({data.total || 0} predictions)
+                      {betType} ({data.total || 0} total)
+                    </div>
+                    <div className="text-yellow-400 text-xs">
+                      {data.pending || 0} pending
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            {/* Accuracy by Recommendation Type */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <h4 className="text-lg font-semibold text-white mb-4">
-                Accuracy by Recommendation Type
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {Object.entries(metrics.byRecommendationType).map(
-                  ([recType, data]) => (
-                    <div key={recType} className="text-center">
-                      <div
-                        className={`text-xl font-bold ${
-                          recType.toLowerCase().includes("avoid")
-                            ? "text-red-400"
-                            : recType.toLowerCase().includes("win")
-                            ? "text-green-400"
-                            : recType.toLowerCase().includes("over") ||
-                              recType.toLowerCase().includes("under")
-                            ? "text-blue-400"
-                            : "text-gray-400"
-                        }`}
-                      >
-                        {data.accuracy?.toFixed(1) || 0}%
-                      </div>
-                      <div className="text-gray-300 text-sm">
-                        {recType} ({data.total || 0} predictions)
-                      </div>
-                    </div>
-                  )
-                )}
               </div>
             </div>
 

@@ -753,11 +753,10 @@ function App() {
         "Fetched database recommendations:",
         dbRecommendations.length
       );
+      console.log("First few recommendations:", dbRecommendations.slice(0, 3));
 
-      // Filter recommendations that have actual results
-      const recommendationsWithResults = dbRecommendations.filter(
-        (rec) => rec.actual_result && rec.actual_result.trim() !== ""
-      );
+      // Include all recommendations (even those without results yet)
+      const recommendationsWithResults = dbRecommendations;
 
       console.log(
         "Recommendations with results:",
@@ -889,30 +888,130 @@ function App() {
         return group.length > 0 ? (correct / group.length) * 100 : 0;
       };
 
-      // Group by bet type
-      const betTypeGroups = {};
-      recommendationsWithResults.forEach((rec) => {
-        const betType = rec.bet_type || "Unknown";
-        if (!betTypeGroups[betType]) {
-          betTypeGroups[betType] = [];
+      // Group by system recommendation type (what the system predicted)
+      const categorizeSystemRecommendation = (recommendation) => {
+        if (!recommendation) return "Unknown";
+
+        const rec = recommendation.toLowerCase();
+
+        // Win recommendations (team names)
+        if (
+          rec.includes("win") &&
+          !rec.includes("double chance") &&
+          !rec.includes("no clear")
+        ) {
+          return "Win";
         }
-        betTypeGroups[betType].push(rec);
+
+        // Double Chance recommendations
+        if (rec.includes("double chance") || rec.includes(" or draw")) {
+          return "Double Chance";
+        }
+
+        // Over/Under recommendations - specific lines
+        if (rec.includes("over 1.5")) {
+          return "Over 1.5";
+        }
+        if (rec.includes("over 2.5")) {
+          return "Over 2.5";
+        }
+        if (rec.includes("over 3.5")) {
+          return "Over 3.5";
+        }
+        if (rec.includes("over 4.5")) {
+          return "Over 4.5";
+        }
+        if (rec.includes("under 1.5")) {
+          return "Under 1.5";
+        }
+        if (rec.includes("under 2.5")) {
+          return "Under 2.5";
+        }
+        if (rec.includes("under 3.5")) {
+          return "Under 3.5";
+        }
+        if (rec.includes("under 4.5")) {
+          return "Under 4.5";
+        }
+        // Fallback for other over/under
+        if (rec.includes("over")) {
+          return "Over Other";
+        }
+        if (rec.includes("under")) {
+          return "Under Other";
+        }
+
+        // Avoid recommendations
+        if (rec.includes("avoid")) {
+          return "Avoid";
+        }
+
+        // No clear winner/trend
+        if (rec.includes("no clear") || rec.includes("no trend")) {
+          return "No Clear Winner";
+        }
+
+        // Team name recommendations (fallback for team names)
+        if (
+          rec.length > 2 &&
+          !rec.includes("over") &&
+          !rec.includes("under") &&
+          !rec.includes("double chance") &&
+          !rec.includes("no clear") &&
+          !rec.includes("no trend")
+        ) {
+          return "Win";
+        }
+
+        // Default fallback
+        return "Other";
+      };
+
+      const systemRecommendationGroups = {};
+      recommendationsWithResults.forEach((rec) => {
+        const recCategory = categorizeSystemRecommendation(rec.recommendation);
+        console.log(
+          `Recommendation: "${rec.recommendation}" -> Category: "${recCategory}"`
+        );
+        if (!systemRecommendationGroups[recCategory]) {
+          systemRecommendationGroups[recCategory] = [];
+        }
+        systemRecommendationGroups[recCategory].push(rec);
       });
 
-      // Calculate accuracy by bet type using system accuracy
+      console.log(
+        "System recommendation groups:",
+        Object.keys(systemRecommendationGroups)
+      );
+      console.log(
+        "Group counts:",
+        Object.entries(systemRecommendationGroups).map(
+          ([key, value]) => `${key}: ${value.length}`
+        )
+      );
+
+      // Calculate accuracy by system recommendation type using system accuracy
       const accuracyByBetType = {};
-      Object.keys(betTypeGroups).forEach((betType) => {
-        const group = betTypeGroups[betType];
-        const correct = group.filter((rec) =>
-          calculateSystemAccuracy(
+      Object.keys(systemRecommendationGroups).forEach((recCategory) => {
+        const group = systemRecommendationGroups[recCategory];
+        const correct = group.filter((rec) => {
+          // Only count as correct if there's an actual result
+          if (!rec.actual_result || rec.actual_result.trim() === "") {
+            return false; // Pending results don't count as correct
+          }
+          return calculateSystemAccuracy(
             rec.recommendation,
             rec.actual_result,
             rec.recommendation_type
-          )
+          );
+        }).length;
+        const pending = group.filter(
+          (rec) => !rec.actual_result || rec.actual_result.trim() === ""
         ).length;
-        accuracyByBetType[betType] = {
+        accuracyByBetType[recCategory] = {
           total: group.length,
           correct: correct,
+          pending: pending,
           accuracy: group.length > 0 ? (correct / group.length) * 100 : 0,
         };
       });
