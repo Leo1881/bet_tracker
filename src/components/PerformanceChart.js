@@ -7,26 +7,31 @@ const PerformanceChart = ({ teamBets, teamName, allBets }) => {
     let cumulativeWins = 0;
     let cumulativeGames = 0;
 
-    // If we have betTypeBreakdown, we need to get the actual bet data
-    // For now, create a simple mock data based on win rate
     if (!bets || bets.length === 0) {
       return [];
     }
 
     // Process bets in chronological order (oldest first)
-    const sortedBets = [...bets].sort(
-      (a, b) => new Date(a.DATE) - new Date(b.DATE)
-    );
+    // Handle both data structures: Analytics tab (DATE, RESULT) and Team Analytics tab (date, result)
+    const sortedBets = [...bets].sort((a, b) => {
+      const dateA = a.DATE || a.date;
+      const dateB = b.DATE || b.date;
+      return new Date(dateA) - new Date(dateB);
+    });
 
     sortedBets.slice(-20).forEach((bet, index) => {
-      if (bet.RESULT?.toLowerCase().includes("win")) cumulativeWins++;
+      // Handle both data structures
+      const result = bet.RESULT || bet.result;
+      const isWin = result?.toLowerCase().includes("win") || result === "W";
+      
+      if (isWin) cumulativeWins++;
       cumulativeGames++;
 
       data.push({
         x: index + 1,
         y: cumulativeGames > 0 ? (cumulativeWins / cumulativeGames) * 100 : 0,
         game: index + 1,
-        result: bet.RESULT?.toLowerCase().includes("win") ? "win" : "loss",
+        result: isWin ? "win" : "loss",
       });
     });
 
