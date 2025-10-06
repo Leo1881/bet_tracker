@@ -364,6 +364,7 @@ export const getTopTeams = (deduplicatedBets) => {
         recentWinRate: 0,
         lastBetDate: null,
         betTypes: {}, // Add bet type tracking
+        teamKey: teamKey, // Store the team key for later use
       });
     }
 
@@ -505,6 +506,7 @@ export const getTopTeams = (deduplicatedBets) => {
         total: team.totalBets, // Map totalBets to total for compatibility
         compositeScore,
         betTypeBreakdown, // Add the breakdown data
+        individualBets: teamBets.get(team.teamKey) || [], // Add individual bet data for charts
       };
     })
     .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0))

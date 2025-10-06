@@ -1,17 +1,126 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
+import PerformanceChart from "./PerformanceChart";
 
 const AnalyticsTab = ({
   handleAnalyticsSort,
+  handleAnalyticsMultiSort,
   analyticsSortConfig,
   getSortedAnalyticsData,
   expandedAnalyticsTeams,
   toggleAnalyticsTeamExpansion,
 }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState("");
+  const [selectedLeague, setSelectedLeague] = useState("");
+
+  // Get all unique countries and leagues for filters
+  const allData = getSortedAnalyticsData();
+  const countries = [
+    ...new Set(allData.map((team) => team.country).filter(Boolean)),
+  ].sort();
+  const leagues = [
+    ...new Set(allData.map((team) => team.league).filter(Boolean)),
+  ].sort();
+
+  // Filter and search functionality
+  const filteredData = useMemo(() => {
+    let filtered = allData;
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (team) =>
+          team.teamName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          team.team?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Country filter
+    if (selectedCountry) {
+      filtered = filtered.filter((team) => team.country === selectedCountry);
+    }
+
+    // League filter
+    if (selectedLeague) {
+      filtered = filtered.filter((team) => team.league === selectedLeague);
+    }
+
+    return filtered;
+  }, [allData, searchTerm, selectedCountry, selectedLeague]);
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
         Team Performance Analytics
       </h3>
+
+      {/* Search and Filter Controls */}
+      <div className="mb-6 space-y-4">
+        {/* Search Bar */}
+        <div className="flex items-center space-x-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search teams..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Filter Controls */}
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-48">
+            <select
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value)}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Countries</option>
+              {countries.map((country) => (
+                <option key={country} value={country} className="bg-gray-800">
+                  {country}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1 min-w-48">
+            <select
+              value={selectedLeague}
+              onChange={(e) => setSelectedLeague(e.target.value)}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Leagues</option>
+              {leagues.map((league) => (
+                <option key={league} value={league} className="bg-gray-800">
+                  {league}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Clear Filters Button */}
+          {(searchTerm || selectedCountry || selectedLeague) && (
+            <button
+              onClick={() => {
+                setSearchTerm("");
+                setSelectedCountry("");
+                setSelectedLeague("");
+              }}
+              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-red-400 transition-colors"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+        {/* Results Count */}
+        <div className="text-sm text-gray-400">
+          Showing {filteredData.length} of {allData.length} teams
+        </div>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-white/20">
@@ -57,55 +166,94 @@ const AnalyticsTab = ({
               </th>
               <th
                 className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
-                onClick={() => handleAnalyticsSort("total")}
+                onClick={() => handleAnalyticsMultiSort("totalBets")}
+                title="Sort by Total Bets (with Win Rate as secondary)"
               >
                 <div className="flex items-center justify-between">
                   <span>Total Bets</span>
-                  {analyticsSortConfig.key === "total" && (
+                  {analyticsSortConfig.key === "totalBets" && (
                     <span className="ml-2">
                       {analyticsSortConfig.direction === "asc" ? "↑" : "↓"}
+                      {analyticsSortConfig.secondaryKey && (
+                        <span
+                          className="text-xs ml-1"
+                          title={`Secondary: ${analyticsSortConfig.secondaryKey}`}
+                        >
+                          *
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
               </th>
               <th
                 className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
-                onClick={() => handleAnalyticsSort("wins")}
+                onClick={() => handleAnalyticsMultiSort("wins")}
+                title="Sort by Wins (with Win Rate as secondary)"
               >
                 <div className="flex items-center justify-between">
                   <span>Wins</span>
                   {analyticsSortConfig.key === "wins" && (
                     <span className="ml-2">
                       {analyticsSortConfig.direction === "asc" ? "↑" : "↓"}
+                      {analyticsSortConfig.secondaryKey && (
+                        <span
+                          className="text-xs ml-1"
+                          title={`Secondary: ${analyticsSortConfig.secondaryKey}`}
+                        >
+                          *
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
               </th>
               <th
                 className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
-                onClick={() => handleAnalyticsSort("losses")}
+                onClick={() => handleAnalyticsMultiSort("losses")}
+                title="Sort by Losses (with Win Rate as secondary)"
               >
                 <div className="flex items-center justify-between">
                   <span>Losses</span>
                   {analyticsSortConfig.key === "losses" && (
                     <span className="ml-2">
                       {analyticsSortConfig.direction === "asc" ? "↑" : "↓"}
+                      {analyticsSortConfig.secondaryKey && (
+                        <span
+                          className="text-xs ml-1"
+                          title={`Secondary: ${analyticsSortConfig.secondaryKey}`}
+                        >
+                          *
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
               </th>
               <th
                 className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
-                onClick={() => handleAnalyticsSort("winRate")}
+                onClick={() => handleAnalyticsMultiSort("winRate")}
+                title="Sort by Win Rate (with Total Bets as secondary)"
               >
                 <div className="flex items-center justify-between">
                   <span>Win Rate</span>
                   {analyticsSortConfig.key === "winRate" && (
                     <span className="ml-2">
                       {analyticsSortConfig.direction === "asc" ? "↑" : "↓"}
+                      {analyticsSortConfig.secondaryKey && (
+                        <span
+                          className="text-xs ml-1"
+                          title={`Secondary: ${analyticsSortConfig.secondaryKey}`}
+                        >
+                          *
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
+              </th>
+              <th className="px-4 py-2 text-left text-white font-semibold">
+                Performance Chart
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
                 Details
@@ -113,7 +261,7 @@ const AnalyticsTab = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {getSortedAnalyticsData().map((team, index) => (
+            {filteredData.map((team, index) => (
               <React.Fragment key={index}>
                 <tr className="hover:bg-white/5 transition-colors">
                   <td className="px-4 py-2 text-gray-200">{team.team}</td>
@@ -136,6 +284,12 @@ const AnalyticsTab = ({
                     </span>
                   </td>
                   <td className="px-4 py-2">
+                    <PerformanceChart
+                      teamBets={team.individualBets || []}
+                      teamName={team.teamName || team.team}
+                    />
+                  </td>
+                  <td className="px-4 py-2">
                     <button
                       onClick={() => toggleAnalyticsTeamExpansion(team.team)}
                       className="text-blue-400 hover:text-blue-300 transition-colors"
@@ -146,7 +300,7 @@ const AnalyticsTab = ({
                 </tr>
                 {expandedAnalyticsTeams.has(team.team) && (
                   <tr>
-                    <td colSpan="8" className="px-4 py-2 bg-white/5">
+                    <td colSpan="9" className="px-4 py-2 bg-white/5">
                       <div className="ml-4">
                         {team.betTypeBreakdown &&
                         team.betTypeBreakdown.length > 0 ? (

@@ -147,6 +147,7 @@ function App() {
     handleAnalysisSort,
     handleTeamNotesSort,
     handleAnalyticsSort,
+    handleAnalyticsMultiSort,
   } = useSorting(
     {
       sortConfig,
@@ -3695,6 +3696,7 @@ function App() {
           {activeTab === "analytics" && (
             <AnalyticsTab
               handleAnalyticsSort={handleAnalyticsSort}
+              handleAnalyticsMultiSort={handleAnalyticsMultiSort}
               analyticsSortConfig={analyticsSortConfig}
               getSortedAnalyticsData={getSortedAnalyticsData}
               expandedAnalyticsTeams={expandedAnalyticsTeams}

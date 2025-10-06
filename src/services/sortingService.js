@@ -123,6 +123,37 @@ export const createSortHandlers = (sortConfigs, setters) => {
     setAnalyticsSortConfig({ key, direction });
   };
 
+  // Enhanced analytics sort with multi-column support
+  const handleAnalyticsMultiSort = (key) => {
+    let direction = "asc";
+    let secondaryKey = null;
+
+    // Define secondary sort keys for better multi-column sorting
+    if (key === "winRate") {
+      secondaryKey = "totalBets"; // Sort by total bets as secondary
+    } else if (key === "totalBets") {
+      secondaryKey = "winRate"; // Sort by win rate as secondary
+    } else if (key === "wins") {
+      secondaryKey = "winRate"; // Sort by win rate as secondary
+    } else if (key === "losses") {
+      secondaryKey = "winRate"; // Sort by win rate as secondary
+    }
+
+    if (
+      analyticsSortConfig.key === key &&
+      analyticsSortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+
+    setAnalyticsSortConfig({
+      key,
+      direction,
+      secondaryKey,
+      secondaryDirection: direction === "asc" ? "desc" : "asc",
+    });
+  };
+
   const handleScoringSort = (key) => {
     let direction = "asc";
     if (
@@ -144,6 +175,7 @@ export const createSortHandlers = (sortConfigs, setters) => {
     handleAnalysisSort,
     handleTeamNotesSort,
     handleAnalyticsSort,
+    handleAnalyticsMultiSort,
     handleScoringSort,
   };
 };
