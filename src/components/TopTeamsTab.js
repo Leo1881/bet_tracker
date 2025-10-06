@@ -9,7 +9,7 @@ const TopTeamsTab = ({ getTopTeams }) => {
       <div className="text-gray-300 mb-6">
         <p>
           Teams ranked by composite score: Win Rate (50%), Total Wins (30%),
-          Recent Performance (20%)
+          Recent Performance (20%) + Bet Type Specialization Bonus
         </p>
       </div>
 
@@ -34,6 +34,9 @@ const TopTeamsTab = ({ getTopTeams }) => {
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
                 Recent Performance
+              </th>
+              <th className="px-4 py-2 text-left text-white font-semibold">
+                Best Bet Type
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
                 Countries
@@ -103,6 +106,24 @@ const TopTeamsTab = ({ getTopTeams }) => {
                     >
                       {team.recentWinRate.toFixed(1)}% ({team.recentBets} bets)
                     </span>
+                  </div>
+                </td>
+                <td className="px-4 py-2 text-gray-300">
+                  <div className="text-sm">
+                    {team.betTypeBreakdown &&
+                    team.betTypeBreakdown.length > 0 ? (
+                      <div>
+                        <span className="text-blue-400 font-medium">
+                          {team.betTypeBreakdown[0].betType}
+                        </span>
+                        <div className="text-xs text-gray-400">
+                          {team.betTypeBreakdown[0].winRate}% (
+                          {team.betTypeBreakdown[0].totalWithResult} bets)
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-xs">No data</span>
+                    )}
                   </div>
                 </td>
                 <td className="px-4 py-2 text-gray-300">

@@ -458,8 +458,30 @@ export const getTopTeams = (deduplicatedBets) => {
       const totalWinsScore = Math.min((team.wins || 0) * 2, 100) * 0.3; // Cap at 50 wins
       const recentPerformanceScore = (team.recentWinRate || 0) * 0.2;
 
+      // Calculate bet type specialization bonus
+      let betTypeBonus = 0;
+      if (team.betTypes && Object.keys(team.betTypes).length > 0) {
+        // Find the best performing bet type for this team
+        const bestBetType = Object.entries(team.betTypes)
+          .filter(([_, stats]) => stats.totalWithResult >= 3) // At least 3 bets with results
+          .map(([betType, stats]) => ({
+            betType,
+            winRate:
+              stats.totalWithResult > 0
+                ? (stats.wins / stats.totalWithResult) * 100
+                : 0,
+            volume: stats.totalWithResult,
+          }))
+          .sort((a, b) => b.winRate - a.winRate)[0];
+
+        if (bestBetType && bestBetType.winRate > 60) {
+          // Give bonus for teams that excel at specific bet types
+          betTypeBonus = Math.min((bestBetType.winRate - 60) * 0.1, 5); // Max 5 point bonus
+        }
+      }
+
       const compositeScore =
-        winRateScore + totalWinsScore + recentPerformanceScore;
+        winRateScore + totalWinsScore + recentPerformanceScore + betTypeBonus;
 
       // Generate bet type breakdown
       const betTypeBreakdown = Object.entries(team.betTypes || {})
