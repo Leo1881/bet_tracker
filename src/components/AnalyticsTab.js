@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import PerformanceChart from "./PerformanceChart";
+import BetTypeChart from "./BetTypeChart";
 
 const AnalyticsTab = ({
   handleAnalyticsSort,
@@ -253,7 +253,7 @@ const AnalyticsTab = ({
                 </div>
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
-                Performance Chart
+                Bet Type Charts
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
                 Details
@@ -284,10 +284,40 @@ const AnalyticsTab = ({
                     </span>
                   </td>
                   <td className="px-4 py-2">
-                    <PerformanceChart
-                      teamBets={team.individualBets || []}
-                      teamName={team.teamName || team.team}
-                    />
+                    <div className="flex space-x-1">
+                      <div className="flex flex-col items-center">
+                        <div className="text-xs text-gray-400 mb-1">Win</div>
+                        <BetTypeChart
+                          teamBets={team.individualBets || []}
+                          betType="Win"
+                          teamName={team.teamName || team.team}
+                        />
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="text-xs text-gray-400 mb-1">DC</div>
+                        <BetTypeChart
+                          teamBets={team.individualBets || []}
+                          betType="Double Chance"
+                          teamName={team.teamName || team.team}
+                        />
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="text-xs text-gray-400 mb-1">Over</div>
+                        <BetTypeChart
+                          teamBets={team.individualBets || []}
+                          betType="Over"
+                          teamName={team.teamName || team.team}
+                        />
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="text-xs text-gray-400 mb-1">Under</div>
+                        <BetTypeChart
+                          teamBets={team.individualBets || []}
+                          betType="Under"
+                          teamName={team.teamName || team.team}
+                        />
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-2">
                     <button

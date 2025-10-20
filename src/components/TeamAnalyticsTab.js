@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import PerformanceChart from "./PerformanceChart";
+import BetTypeChart from "./BetTypeChart";
 
 const TeamAnalyticsTab = ({
   getTeamBetTypeAnalytics,
@@ -210,7 +210,7 @@ const TeamAnalyticsTab = ({
                   </div>
                 </th>
                 <th className="px-4 py-2 text-left text-white font-semibold">
-                  Performance Chart
+                  Bet Type Charts
                 </th>
                 <th
                   className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
@@ -260,10 +260,42 @@ const TeamAnalyticsTab = ({
                     </td>
                     <td className="px-4 py-2 text-gray-200">{team.avgOdds}</td>
                     <td className="px-4 py-2">
-                      <PerformanceChart
-                        teamBets={team.recentBets || []}
-                        teamName={team.team}
-                      />
+                      <div className="flex space-x-1">
+                        <div className="flex flex-col items-center">
+                          <div className="text-xs text-gray-400 mb-1">Win</div>
+                          <BetTypeChart
+                            teamBets={team.recentBets || []}
+                            betType="Win"
+                            teamName={team.team}
+                          />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-xs text-gray-400 mb-1">DC</div>
+                          <BetTypeChart
+                            teamBets={team.recentBets || []}
+                            betType="Double Chance"
+                            teamName={team.team}
+                          />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-xs text-gray-400 mb-1">Over</div>
+                          <BetTypeChart
+                            teamBets={team.recentBets || []}
+                            betType="Over"
+                            teamName={team.team}
+                          />
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="text-xs text-gray-400 mb-1">
+                            Under
+                          </div>
+                          <BetTypeChart
+                            teamBets={team.recentBets || []}
+                            betType="Under"
+                            teamName={team.team}
+                          />
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-2 text-gray-200">
                       <span className="font-medium text-blue-400">
