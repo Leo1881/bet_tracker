@@ -309,6 +309,27 @@ export const getHeadToHeadData = (deduplicatedBets) => {
 };
 
 /**
+ * Calculate Wilson Score confidence interval for statistical accuracy
+ * @param {number} wins - Number of wins
+ * @param {number} total - Total number of completed bets
+ * @returns {number} Wilson Score (0-1)
+ */
+const calculateWilsonScore = (wins, total) => {
+  if (total === 0) return 0;
+
+  const n = total;
+  const p = wins / total;
+  const z = 1.96; // 95% confidence level
+
+  return (
+    (p +
+      (z * z) / (2 * n) -
+      z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
+    (1 + (z * z) / n)
+  );
+};
+
+/**
  * Get top performing teams
  * @param {Array} deduplicatedBets - Array of deduplicated bets
  * @returns {Array} Array of top performing teams
@@ -452,12 +473,22 @@ export const getTopTeams = (deduplicatedBets) => {
 
   // Convert to array and calculate composite score
   const teamsArray = Array.from(teamStats.values() || [])
-    .filter((team) => team && team.totalBets >= 2) // Only teams with at least 2 bets
+    .filter((team) => team && team.totalBets >= 5) // Only teams with at least 5 bets for statistical reliability
     .map((team) => {
-      // Calculate composite score (win rate 50%, total wins 30%, recent performance 20%)
-      const winRateScore = (team.winRate || 0) * 0.5;
+      // Calculate Wilson Score for statistical accuracy
+      const wilsonScore = calculateWilsonScore(
+        team.wins,
+        team.wins + team.losses
+      );
+      const wilsonWinRate = wilsonScore * 100; // Convert to percentage
+
+      // Calculate composite score using Wilson Score (win rate 50%, total wins 30%, recent performance 20%)
+      const winRateScore = wilsonWinRate * 0.5;
       const totalWinsScore = Math.min((team.wins || 0) * 2, 100) * 0.3; // Cap at 50 wins
       const recentPerformanceScore = (team.recentWinRate || 0) * 0.2;
+
+      // Add volume bonus for statistical reliability (more bets = more reliable)
+      const volumeBonus = Math.min(team.totalBets * 0.2, 5); // Max 5 point bonus for 25+ bets
 
       // Calculate bet type specialization bonus
       let betTypeBonus = 0;
@@ -482,7 +513,11 @@ export const getTopTeams = (deduplicatedBets) => {
       }
 
       const compositeScore =
-        winRateScore + totalWinsScore + recentPerformanceScore + betTypeBonus;
+        winRateScore +
+        totalWinsScore +
+        recentPerformanceScore +
+        betTypeBonus +
+        volumeBonus;
 
       // Generate bet type breakdown
       const betTypeBreakdown = Object.entries(team.betTypes || {})
@@ -505,6 +540,7 @@ export const getTopTeams = (deduplicatedBets) => {
         team: team.teamName, // Map teamName to team for compatibility
         total: team.totalBets, // Map totalBets to total for compatibility
         compositeScore,
+        wilsonWinRate, // Add Wilson Score for reference
         betTypeBreakdown, // Add the breakdown data
         individualBets: teamBets.get(team.teamKey) || [], // Add individual bet data for charts
       };
