@@ -592,11 +592,21 @@ function App() {
   const isTeamBlacklisted = (teamName) => {
     if (!teamName || !blacklistedTeams.length) return false;
     const normalizedTeamName = teamName.toLowerCase().trim();
-    return blacklistedTeams.some(
-      (blacklistedTeam) =>
-        normalizedTeamName.includes(blacklistedTeam) ||
-        blacklistedTeam.includes(normalizedTeamName)
-    );
+    return blacklistedTeams.some((blacklistedTeam) => {
+      // Handle both string and object formats
+      const teamToCheck =
+        typeof blacklistedTeam === "string"
+          ? blacklistedTeam
+          : blacklistedTeam.TEAM_NAME;
+
+      if (!teamToCheck) return false;
+
+      const normalizedBlacklistedTeam = teamToCheck.toLowerCase().trim();
+      return (
+        normalizedTeamName.includes(normalizedBlacklistedTeam) ||
+        normalizedBlacklistedTeam.includes(normalizedTeamName)
+      );
+    });
   };
 
   const getUniqueValues = (field, context = {}) => {
@@ -4443,7 +4453,11 @@ function App() {
           )}
 
           {activeTab === "topTeams" && (
-            <TopTeamsTab getTopTeams={getTopTeams} />
+            <TopTeamsTab
+              getTopTeams={getTopTeams}
+              blacklistedTeams={blacklistedTeams}
+              isTeamBlacklisted={isTeamBlacklisted}
+            />
           )}
 
           {activeTab === "betSlips" && (

@@ -1,6 +1,6 @@
 import React from "react";
 
-const TopTeamsTab = ({ getTopTeams }) => {
+const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
@@ -50,95 +50,115 @@ const TopTeamsTab = ({ getTopTeams }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {getTopTeams().map((team, index) => (
-              <tr key={index} className="hover:bg-white/5">
-                <td className="px-4 py-2 text-gray-300">
-                  <div className="flex items-center">
-                    <span
-                      className={`text-lg font-bold ${
-                        index === 0
-                          ? "text-yellow-400"
-                          : index === 1
-                          ? "text-gray-300"
-                          : index === 2
-                          ? "text-amber-600"
-                          : "text-gray-400"
-                      }`}
-                    >
-                      {index + 1}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-gray-300">
-                  <div className="font-medium text-white">{team.teamName}</div>
-                </td>
-                <td className="px-4 py-2 text-gray-300">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      team.winRate >= 70
-                        ? "bg-green-100 text-green-800"
-                        : team.winRate >= 50
-                        ? "bg-yellow-100 text-yellow-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {team.winRate.toFixed(1)}%
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-gray-300">{team.totalBets}</td>
-                <td className="px-4 py-2 text-gray-300">
-                  <div className="text-sm">
-                    <span className="text-green-400">{team.wins}W</span>
-                    <span className="text-gray-400"> / </span>
-                    <span className="text-red-400">{team.losses}L</span>
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-gray-300">
-                  <div className="text-sm">
+            {getTopTeams().map((team, index) => {
+              const isBlacklisted = isTeamBlacklisted(team.teamName);
+              return (
+                <tr
+                  key={index}
+                  className={`hover:bg-white/5 ${
+                    isBlacklisted
+                      ? "bg-red-900/20 border-l-4 border-red-500"
+                      : ""
+                  }`}
+                >
+                  <td className="px-4 py-2 text-gray-300">
+                    <div className="flex items-center">
+                      <span
+                        className={`text-lg font-bold ${
+                          index === 0
+                            ? "text-yellow-400"
+                            : index === 1
+                            ? "text-gray-300"
+                            : index === 2
+                            ? "text-amber-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
+                    <div className="flex items-center gap-2">
+                      <div className="font-medium text-white">
+                        {team.teamName}
+                      </div>
+                      {isBlacklisted && (
+                        <span className="px-2 py-1 text-xs font-bold bg-red-600 text-white rounded-full">
+                          BLACKLISTED
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        team.recentWinRate >= 70
+                        team.winRate >= 70
                           ? "bg-green-100 text-green-800"
-                          : team.recentWinRate >= 50
+                          : team.winRate >= 50
                           ? "bg-yellow-100 text-yellow-800"
                           : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {team.recentWinRate.toFixed(1)}% ({team.recentBets} bets)
+                      {team.winRate.toFixed(1)}%
                     </span>
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-gray-300">
-                  <div className="text-sm">
-                    {team.betTypeBreakdown &&
-                    team.betTypeBreakdown.length > 0 ? (
-                      <div>
-                        <span className="text-blue-400 font-medium">
-                          {team.betTypeBreakdown[0].betType}
-                        </span>
-                        <div className="text-xs text-gray-400">
-                          {team.betTypeBreakdown[0].winRate}% (
-                          {team.betTypeBreakdown[0].totalWithResult} bets)
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">{team.totalBets}</td>
+                  <td className="px-4 py-2 text-gray-300">
+                    <div className="text-sm">
+                      <span className="text-green-400">{team.wins}W</span>
+                      <span className="text-gray-400"> / </span>
+                      <span className="text-red-400">{team.losses}L</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
+                    <div className="text-sm">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          team.recentWinRate >= 70
+                            ? "bg-green-100 text-green-800"
+                            : team.recentWinRate >= 50
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {team.recentWinRate.toFixed(1)}% ({team.recentBets}{" "}
+                        bets)
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
+                    <div className="text-sm">
+                      {team.betTypeBreakdown &&
+                      team.betTypeBreakdown.length > 0 ? (
+                        <div>
+                          <span className="text-blue-400 font-medium">
+                            {team.betTypeBreakdown[0].betType}
+                          </span>
+                          <div className="text-xs text-gray-400">
+                            {team.betTypeBreakdown[0].winRate}% (
+                            {team.betTypeBreakdown[0].totalWithResult} bets)
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-xs">No data</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-gray-300">
-                  <div className="text-xs">{team.country || "N/A"}</div>
-                </td>
-                <td className="px-4 py-2 text-gray-300">
-                  <div className="text-xs">{team.league || "N/A"}</div>
-                </td>
-                <td className="px-4 py-2 text-gray-300">
-                  <span className="font-medium text-blue-400">
-                    {team.compositeScore.toFixed(1)}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                      ) : (
+                        <span className="text-gray-400 text-xs">No data</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
+                    <div className="text-xs">{team.country || "N/A"}</div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
+                    <div className="text-xs">{team.league || "N/A"}</div>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
+                    <span className="font-medium text-blue-400">
+                      {team.compositeScore.toFixed(1)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
