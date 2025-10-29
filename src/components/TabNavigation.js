@@ -6,6 +6,7 @@ const TabNavigation = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: "betAnalysis", label: "Bet Analysis", icon: "📊" },
     { id: "recommendations", label: "Bet Recommendations", icon: "🎯" },
+    { id: "teamUpload", label: "Team Upload", icon: "📤" },
     { id: "query", label: "Query", icon: "🔍" },
     { id: "betSlips", label: "Bet Slips", icon: "📝" },
     { id: "analytics", label: "Analytics", icon: "📈" },

@@ -34,6 +34,7 @@ import HeadToHeadTab from "./components/HeadToHeadTab";
 import PredictionAccuracyTab from "./components/PredictionAccuracyTab";
 import TeamNotesTab from "./components/TeamNotesTab";
 import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
+import TeamUploadTab from "./components/TeamUploadTab";
 
 function App() {
   // Use custom hook for state management
@@ -4426,6 +4427,15 @@ function App() {
 
           {activeTab === "recommendations" && (
             <RecommendationsTab betRecommendations={betRecommendations} />
+          )}
+
+          {activeTab === "teamUpload" && (
+            <TeamUploadTab
+              scoringAnalysis={scoringAnalysis}
+              teamAnalytics={teamAnalytics}
+              blacklistedTeams={blacklistedTeams}
+              isTeamBlacklisted={isTeamBlacklisted}
+            />
           )}
 
           {activeTab === "predictionAccuracy" && (
