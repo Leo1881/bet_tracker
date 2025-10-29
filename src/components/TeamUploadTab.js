@@ -33,6 +33,10 @@ const TeamUploadTab = ({
 
   // Find team data in scoring analysis
   const findScoringData = (teamName, country, league) => {
+    if (!scoringAnalysis || !Array.isArray(scoringAnalysis)) {
+      return null;
+    }
+    
     const normalizedTeamName = teamName.toLowerCase().trim();
     const normalizedCountry = country.toLowerCase().trim();
     const normalizedLeague = league.toLowerCase().trim();
@@ -57,6 +61,10 @@ const TeamUploadTab = ({
 
   // Find team data in team analytics
   const findTeamAnalyticsData = (teamName, country, league) => {
+    if (!teamAnalytics || !Array.isArray(teamAnalytics)) {
+      return null;
+    }
+    
     const normalizedTeamName = teamName.toLowerCase().trim();
     const normalizedCountry = country.toLowerCase().trim();
     const normalizedLeague = league.toLowerCase().trim();
@@ -102,7 +110,7 @@ const TeamUploadTab = ({
         return;
       }
 
-      const isBlacklisted = isTeamBlacklisted(scoringData?.team || teamAnalyticsData?.teamName);
+      const isBlacklisted = isTeamBlacklisted ? isTeamBlacklisted(scoringData?.team || teamAnalyticsData?.teamName) : false;
       const totalGames = scoringData?.totalGames || teamAnalyticsData?.totalBets || 0;
       const confidence = getConfidenceLevel(totalGames);
       
