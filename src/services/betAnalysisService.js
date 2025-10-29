@@ -613,13 +613,45 @@ export const analyzeScoringPatterns = async (
 };
 
 /**
- * Get scoring recommendation for a match
+ * Calculate Wilson Score confidence interval
+ * @param {number} wins - Number of wins
+ * @param {number} total - Total number of games
+ * @returns {number} Wilson Score (0-1)
+ */
+const calculateWilsonScore = (wins, total) => {
+  if (total === 0) return 0;
+
+  const n = total;
+  const p = wins / total;
+  const z = 1.96; // 95% confidence level
+
+  return (
+    (p +
+      (z * z) / (2 * n) -
+      z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
+    (1 + (z * z) / n)
+  );
+};
+
+/**
+ * Get confidence level based on sample size
+ * @param {number} games - Number of games
+ * @returns {Object} Confidence level info
+ */
+const getConfidenceLevel = (games) => {
+  if (games >= 20) return { level: "High", multiplier: 1.0 };
+  if (games >= 10) return { level: "Medium", multiplier: 0.8 };
+  return { level: "Low", multiplier: 0.6 };
+};
+
+/**
+ * Get scoring recommendation for a match using advanced scoring data
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {string} homeLeague - Home team league
  * @param {string} awayLeague - Away team league
- * @param {Array} scoringData - Scoring analysis data
- * @returns {Object|null} Scoring recommendation
+ * @param {Array} scoringData - Advanced scoring analysis data
+ * @returns {Object|null} Comprehensive scoring recommendation
  */
 export const getScoringRecommendation = (
   homeTeam,
@@ -631,10 +663,15 @@ export const getScoringRecommendation = (
   if (!homeTeam || !awayTeam) return null;
 
   console.log(
-    `Getting scoring recommendation for ${homeTeam} vs ${awayTeam} in ${homeLeague}`
+    `Getting ADVANCED scoring recommendation for ${homeTeam} vs ${awayTeam} in ${homeLeague}`
   );
-  console.log("Available scoring analysis:", scoringData.length, "teams");
+  console.log(
+    "Available advanced scoring analysis:",
+    scoringData.length,
+    "teams"
+  );
 
+  // Find team stats with exact matching
   const homeStats = scoringData.find(
     (stat) =>
       stat.team.toLowerCase() === homeTeam.toLowerCase() &&
@@ -647,7 +684,7 @@ export const getScoringRecommendation = (
       stat.league.toLowerCase() === awayLeague.toLowerCase()
   );
 
-  // Get league averages as fallback
+  // Get league context for both teams
   const homeLeagueStats = scoringData.filter(
     (stat) => stat.league.toLowerCase() === homeLeague.toLowerCase()
   );
@@ -655,75 +692,269 @@ export const getScoringRecommendation = (
     (stat) => stat.league.toLowerCase() === awayLeague.toLowerCase()
   );
 
-  const homeLeagueAvg =
-    homeLeagueStats.length > 0
-      ? homeLeagueStats.reduce(
-          (sum, stat) => sum + parseFloat(stat.over2_5Rate),
-          0
-        ) / homeLeagueStats.length
-      : 0;
-  const awayLeagueAvg =
-    awayLeagueStats.length > 0
-      ? awayLeagueStats.reduce(
-          (sum, stat) => sum + parseFloat(stat.over2_5Rate),
-          0
-        ) / awayLeagueStats.length
-      : 0;
-
-  // Calculate recommendation
-  let homeRate = homeStats ? parseFloat(homeStats.over2_5Rate) : homeLeagueAvg;
-  let awayRate = awayStats ? parseFloat(awayStats.over2_5Rate) : awayLeagueAvg;
-
-  // If both teams have data, average them
-  if (homeStats && awayStats) {
-    const avgRate = (homeRate + awayRate) / 2;
-    console.log(
-      `Both teams found: ${homeTeam} (${homeRate}%), ${awayTeam} (${awayRate}%), Avg: ${avgRate}%`
+  // Calculate league averages for multiple metrics
+  const calculateLeagueAvg = (stats, metric) => {
+    if (stats.length === 0) return 0;
+    return (
+      stats.reduce((sum, stat) => sum + parseFloat(stat[metric] || 0), 0) /
+      stats.length
     );
-    if (avgRate >= 70)
-      return { type: "Strong Over 1.5", confidence: "high", rate: avgRate };
-    if (avgRate >= 55)
-      return {
-        type: "Moderate Over 1.5",
-        confidence: "medium",
-        rate: avgRate,
-      };
-    if (avgRate >= 40)
-      return { type: "Consider Over 0.5", confidence: "low", rate: avgRate };
-    return { type: "Low Scoring Expected", confidence: "low", rate: avgRate };
+  };
+
+  const homeLeagueAvg = {
+    over1_5: calculateLeagueAvg(homeLeagueStats, "over1_5Rate"),
+    over2_5: calculateLeagueAvg(homeLeagueStats, "over2_5Rate"),
+    over3_5: calculateLeagueAvg(homeLeagueStats, "over3_5Rate"),
+    avgGoals: calculateLeagueAvg(homeLeagueStats, "avgGoals"),
+    avgGoalsScored: calculateLeagueAvg(homeLeagueStats, "avgGoalsScored"),
+    avgGoalsConceded: calculateLeagueAvg(homeLeagueStats, "avgGoalsConceded"),
+  };
+
+  const awayLeagueAvg = {
+    over1_5: calculateLeagueAvg(awayLeagueStats, "over1_5Rate"),
+    over2_5: calculateLeagueAvg(awayLeagueStats, "over2_5Rate"),
+    over3_5: calculateLeagueAvg(awayLeagueStats, "over3_5Rate"),
+    avgGoals: calculateLeagueAvg(awayLeagueStats, "avgGoals"),
+    avgGoalsScored: calculateLeagueAvg(awayLeagueStats, "avgGoalsScored"),
+    avgGoalsConceded: calculateLeagueAvg(awayLeagueStats, "avgGoalsConceded"),
+  };
+
+  // Extract team data with fallbacks
+  const getTeamData = (stats, leagueAvg) => {
+    if (!stats) return leagueAvg;
+
+    return {
+      over1_5: parseFloat(stats.over1_5Rate || 0),
+      over2_5: parseFloat(stats.over2_5Rate || 0),
+      over3_5: parseFloat(stats.over3_5Rate || 0),
+      avgGoals: parseFloat(stats.avgGoals || 0),
+      avgGoalsScored: parseFloat(stats.avgGoalsScored || 0),
+      avgGoalsConceded: parseFloat(stats.avgGoalsConceded || 0),
+      totalGames: parseInt(stats.totalGames || 0),
+      homeGames: parseInt(stats.homeGames || 0),
+      awayGames: parseInt(stats.awayGames || 0),
+      homeOver1_5: parseFloat(stats.homeOver1_5Rate || 0),
+      awayOver1_5: parseFloat(stats.awayOver1_5Rate || 0),
+      homeOver2_5: parseFloat(stats.homeOver2_5Rate || 0),
+      awayOver2_5: parseFloat(stats.awayOver2_5Rate || 0),
+      homeAvgGoals: parseFloat(stats.homeAvgGoals || 0),
+      awayAvgGoals: parseFloat(stats.awayAvgGoals || 0),
+      homeAvgGoalsScored: parseFloat(stats.homeAvgGoalsScored || 0),
+      awayAvgGoalsScored: parseFloat(stats.awayAvgGoalsScored || 0),
+      homeAvgGoalsConceded: parseFloat(stats.homeAvgGoalsConceded || 0),
+      awayAvgGoalsConceded: parseFloat(stats.awayAvgGoalsConceded || 0),
+    };
+  };
+
+  const homeData = getTeamData(homeStats, homeLeagueAvg);
+  const awayData = getTeamData(awayStats, awayLeagueAvg);
+
+  // Calculate Wilson Scores for reliability
+  const calculateWilsonRate = (rate, games) => {
+    const wins = Math.round((rate / 100) * games);
+    return calculateWilsonScore(wins, games) * 100;
+  };
+
+  // Get confidence levels
+  const homeConfidence = getConfidenceLevel(homeData.totalGames);
+  const awayConfidence = getConfidenceLevel(awayData.totalGames);
+
+  // Calculate combined metrics with Wilson Score adjustment
+  const combined = {
+    over1_5: {
+      home: homeData.over1_5,
+      away: awayData.over1_5,
+      homeWilson: calculateWilsonRate(homeData.over1_5, homeData.totalGames),
+      awayWilson: calculateWilsonRate(awayData.over1_5, awayData.totalGames),
+      avg: (homeData.over1_5 + awayData.over1_5) / 2,
+      avgWilson:
+        (calculateWilsonRate(homeData.over1_5, homeData.totalGames) +
+          calculateWilsonRate(awayData.over1_5, awayData.totalGames)) /
+        2,
+    },
+    over2_5: {
+      home: homeData.over2_5,
+      away: awayData.over2_5,
+      homeWilson: calculateWilsonRate(homeData.over2_5, homeData.totalGames),
+      awayWilson: calculateWilsonRate(awayData.over2_5, awayData.totalGames),
+      avg: (homeData.over2_5 + awayData.over2_5) / 2,
+      avgWilson:
+        (calculateWilsonRate(homeData.over2_5, homeData.totalGames) +
+          calculateWilsonRate(awayData.over2_5, awayData.totalGames)) /
+        2,
+    },
+    over3_5: {
+      home: homeData.over3_5,
+      away: awayData.over3_5,
+      homeWilson: calculateWilsonRate(homeData.over3_5, homeData.totalGames),
+      awayWilson: calculateWilsonRate(awayData.over3_5, awayData.totalGames),
+      avg: (homeData.over3_5 + awayData.over3_5) / 2,
+      avgWilson:
+        (calculateWilsonRate(homeData.over3_5, homeData.totalGames) +
+          calculateWilsonRate(awayData.over3_5, awayData.totalGames)) /
+        2,
+    },
+    goals: {
+      total: (homeData.avgGoals + awayData.avgGoals) / 2,
+      scored: (homeData.avgGoalsScored + awayData.avgGoalsScored) / 2,
+      conceded: (homeData.avgGoalsConceded + awayData.avgGoalsConceded) / 2,
+    },
+  };
+
+  // Generate comprehensive recommendations
+  const recommendations = [];
+
+  // Over 1.5 Analysis (Most reliable)
+  if (combined.over1_5.avgWilson >= 85) {
+    recommendations.push({
+      type: "Strong Over 1.5",
+      confidence: "high",
+      rate: combined.over1_5.avgWilson,
+      reasoning: `Both teams average ${combined.over1_5.avgWilson.toFixed(
+        1
+      )}% Over 1.5 (Wilson Score)`,
+      riskLevel: "Low",
+    });
+  } else if (combined.over1_5.avgWilson >= 70) {
+    recommendations.push({
+      type: "Moderate Over 1.5",
+      confidence: "medium",
+      rate: combined.over1_5.avgWilson,
+      reasoning: `Combined Over 1.5 rate: ${combined.over1_5.avgWilson.toFixed(
+        1
+      )}% (Wilson Score)`,
+      riskLevel: "Medium",
+    });
   }
 
-  // If only one team has data, use that + league average
-  if (homeStats || awayStats) {
-    const availableRate = homeStats ? homeRate : awayRate;
-    const leagueAvg = homeStats ? awayLeagueAvg : homeLeagueAvg;
-    const avgRate = (availableRate + leagueAvg) / 2;
-
-    if (avgRate >= 70)
-      return { type: "Strong Over 1.5", confidence: "medium", rate: avgRate };
-    if (avgRate >= 55)
-      return {
-        type: "Moderate Over 1.5",
-        confidence: "medium",
-        rate: avgRate,
-      };
-    if (avgRate >= 40)
-      return { type: "Consider Over 0.5", confidence: "low", rate: avgRate };
-    return { type: "Low Scoring Expected", confidence: "low", rate: avgRate };
+  // Over 2.5 Analysis
+  if (combined.over2_5.avgWilson >= 75) {
+    recommendations.push({
+      type: "Strong Over 2.5",
+      confidence: "high",
+      rate: combined.over2_5.avgWilson,
+      reasoning: `Both teams average ${combined.over2_5.avgWilson.toFixed(
+        1
+      )}% Over 2.5 (Wilson Score)`,
+      riskLevel: "Medium",
+    });
+  } else if (combined.over2_5.avgWilson >= 60) {
+    recommendations.push({
+      type: "Consider Over 2.5",
+      confidence: "medium",
+      rate: combined.over2_5.avgWilson,
+      reasoning: `Combined Over 2.5 rate: ${combined.over2_5.avgWilson.toFixed(
+        1
+      )}% (Wilson Score)`,
+      riskLevel: "High",
+    });
   }
 
-  // If neither team has data, use league average
-  const leagueAvg = (homeLeagueAvg + awayLeagueAvg) / 2;
-  console.log(
-    `No team data found. League averages: ${homeLeague} (${homeLeagueAvg}%), ${awayLeague} (${awayLeagueAvg}%), Avg: ${leagueAvg}%`
-  );
-  if (leagueAvg >= 70)
-    return { type: "Strong Over 1.5", confidence: "low", rate: leagueAvg };
-  if (leagueAvg >= 55)
-    return { type: "Moderate Over 1.5", confidence: "low", rate: leagueAvg };
-  if (leagueAvg >= 40)
-    return { type: "Consider Over 0.5", confidence: "low", rate: leagueAvg };
-  return { type: "Low Scoring Expected", confidence: "low", rate: leagueAvg };
+  // Over 3.5 Analysis
+  if (combined.over3_5.avgWilson >= 50) {
+    recommendations.push({
+      type: "High-Scoring Game (Over 3.5)",
+      confidence: "medium",
+      rate: combined.over3_5.avgWilson,
+      reasoning: `Both teams average ${combined.over3_5.avgWilson.toFixed(
+        1
+      )}% Over 3.5 (Wilson Score)`,
+      riskLevel: "High",
+    });
+  }
+
+  // Goals Analysis
+  if (combined.goals.total >= 3.0) {
+    recommendations.push({
+      type: "High Total Goals Expected",
+      confidence: "medium",
+      rate: combined.goals.total,
+      reasoning: `Expected total goals: ${combined.goals.total.toFixed(
+        1
+      )} per game`,
+      riskLevel: "Medium",
+    });
+  }
+
+  // Defensive Analysis
+  if (combined.goals.conceded <= 1.0) {
+    recommendations.push({
+      type: "Low Conceding Teams",
+      confidence: "medium",
+      rate: combined.goals.conceded,
+      reasoning: `Both teams concede only ${combined.goals.conceded.toFixed(
+        1
+      )} goals per game on average`,
+      riskLevel: "Medium",
+    });
+  }
+
+  // Home vs Away Analysis
+  if (homeData.homeOver1_5 >= 80 && awayData.awayOver1_5 >= 80) {
+    recommendations.push({
+      type: "Strong Home/Away Over 1.5",
+      confidence: "high",
+      rate: (homeData.homeOver1_5 + awayData.awayOver1_5) / 2,
+      reasoning: `Home team ${homeData.homeOver1_5.toFixed(
+        1
+      )}% Over 1.5 at home, Away team ${awayData.awayOver1_5.toFixed(
+        1
+      )}% Over 1.5 away`,
+      riskLevel: "Low",
+    });
+  }
+
+  // Return the best recommendation or a summary
+  if (recommendations.length === 0) {
+    return {
+      type: "Insufficient Data",
+      confidence: "low",
+      rate: 0,
+      reasoning: "Not enough reliable data for scoring analysis",
+      riskLevel: "High",
+      details: {
+        homeGames: homeData.totalGames,
+        awayGames: awayData.totalGames,
+        homeConfidence: homeConfidence.level,
+        awayConfidence: awayConfidence.level,
+      },
+    };
+  }
+
+  // Sort by confidence and rate, return the best
+  const bestRecommendation = recommendations.sort((a, b) => {
+    const confidenceOrder = { high: 3, medium: 2, low: 1 };
+    if (confidenceOrder[a.confidence] !== confidenceOrder[b.confidence]) {
+      return confidenceOrder[b.confidence] - confidenceOrder[a.confidence];
+    }
+    return b.rate - a.rate;
+  })[0];
+
+  // Add additional context
+  bestRecommendation.details = {
+    homeTeam: {
+      games: homeData.totalGames,
+      confidence: homeConfidence.level,
+      over1_5: homeData.over1_5,
+      over2_5: homeData.over2_5,
+      avgGoals: homeData.avgGoals,
+    },
+    awayTeam: {
+      games: awayData.totalGames,
+      confidence: awayConfidence.level,
+      over1_5: awayData.over1_5,
+      over2_5: awayData.over2_5,
+      avgGoals: awayData.avgGoals,
+    },
+    leagueContext: {
+      homeLeagueAvg: homeLeagueAvg.over1_5,
+      awayLeagueAvg: awayLeagueAvg.over1_5,
+    },
+    allRecommendations: recommendations,
+  };
+
+  console.log("Advanced scoring recommendation:", bestRecommendation);
+  return bestRecommendation;
 };
 
 /**
