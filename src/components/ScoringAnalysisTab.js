@@ -259,7 +259,7 @@ const ScoringAnalysisTab = ({
           return bValue - aValue;
         }
       })
-      .slice(0, 50);
+      .slice(0, 80);
   };
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
