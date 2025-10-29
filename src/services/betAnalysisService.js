@@ -480,6 +480,10 @@ export const analyzeScoringPatterns = async (
           totalGames: 0,
           totalGoals: 0,
           avgGoals: 0,
+          totalGoalsScored: 0,
+          avgGoalsScored: 0,
+          totalGoalsConceded: 0,
+          avgGoalsConceded: 0,
           over1_5Count: 0,
           over2_5Count: 0,
           over3_5Count: 0,
@@ -488,11 +492,19 @@ export const analyzeScoringPatterns = async (
           over3_5Rate: 0,
           homeGames: 0,
           awayGames: 0,
+          homeGoalsScored: 0,
+          awayGoalsScored: 0,
+          homeGoalsConceded: 0,
+          awayGoalsConceded: 0,
         });
       }
       const homeStats = teamLeagueMap.get(homeKey);
       homeStats.totalGames++;
       homeStats.totalGoals += totalGoals;
+      homeStats.totalGoalsScored += homeScore; // Home team's own goals scored
+      homeStats.homeGoalsScored += homeScore;
+      homeStats.totalGoalsConceded += awayScore; // Home team concedes away team's goals
+      homeStats.homeGoalsConceded += awayScore;
       homeStats.over1_5Count += hasOver1_5 ? 1 : 0;
       homeStats.over2_5Count += hasOver2_5 ? 1 : 0;
       homeStats.over3_5Count += hasOver3_5 ? 1 : 0;
@@ -508,6 +520,10 @@ export const analyzeScoringPatterns = async (
           totalGames: 0,
           totalGoals: 0,
           avgGoals: 0,
+          totalGoalsScored: 0,
+          avgGoalsScored: 0,
+          totalGoalsConceded: 0,
+          avgGoalsConceded: 0,
           over1_5Count: 0,
           over2_5Count: 0,
           over3_5Count: 0,
@@ -516,11 +532,19 @@ export const analyzeScoringPatterns = async (
           over3_5Rate: 0,
           homeGames: 0,
           awayGames: 0,
+          homeGoalsScored: 0,
+          awayGoalsScored: 0,
+          homeGoalsConceded: 0,
+          awayGoalsConceded: 0,
         });
       }
       const awayStats = teamLeagueMap.get(awayKey);
       awayStats.totalGames++;
       awayStats.totalGoals += totalGoals;
+      awayStats.totalGoalsScored += awayScore; // Away team's own goals scored
+      awayStats.awayGoalsScored += awayScore;
+      awayStats.totalGoalsConceded += homeScore; // Away team concedes home team's goals
+      awayStats.awayGoalsConceded += homeScore;
       awayStats.over1_5Count += hasOver1_5 ? 1 : 0;
       awayStats.over2_5Count += hasOver2_5 ? 1 : 0;
       awayStats.over3_5Count += hasOver3_5 ? 1 : 0;
@@ -534,6 +558,30 @@ export const analyzeScoringPatterns = async (
         avgGoals:
           stats.totalGames > 0
             ? (stats.totalGoals / stats.totalGames).toFixed(2)
+            : 0,
+        avgGoalsScored:
+          stats.totalGames > 0
+            ? (stats.totalGoalsScored / stats.totalGames).toFixed(2)
+            : 0,
+        homeAvgGoalsScored:
+          stats.homeGames > 0
+            ? (stats.homeGoalsScored / stats.homeGames).toFixed(2)
+            : 0,
+        awayAvgGoalsScored:
+          stats.awayGames > 0
+            ? (stats.awayGoalsScored / stats.awayGames).toFixed(2)
+            : 0,
+        avgGoalsConceded:
+          stats.totalGames > 0
+            ? (stats.totalGoalsConceded / stats.totalGames).toFixed(2)
+            : 0,
+        homeAvgGoalsConceded:
+          stats.homeGames > 0
+            ? (stats.homeGoalsConceded / stats.homeGames).toFixed(2)
+            : 0,
+        awayAvgGoalsConceded:
+          stats.awayGames > 0
+            ? (stats.awayGoalsConceded / stats.awayGames).toFixed(2)
             : 0,
         over1_5Rate:
           stats.totalGames > 0

@@ -68,6 +68,7 @@ export const getLeagueAnalytics = (deduplicatedBets) => {
       avgOdds:
         stats.betCount > 0 ? (stats.totalOdds / stats.betCount).toFixed(2) : 0,
     }))
+    .filter((league) => league.total >= 5) // Only show leagues with 5+ bets for statistical reliability
     .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
 };
 
@@ -129,6 +130,7 @@ export const getCountryAnalytics = (deduplicatedBets) => {
       avgOdds:
         stats.betCount > 0 ? (stats.totalOdds / stats.betCount).toFixed(2) : 0,
     }))
+    .filter((country) => country.total >= 5) // Only show countries with 5+ bets for statistical reliability
     .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
 };
 
