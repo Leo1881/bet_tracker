@@ -2,7 +2,7 @@
   "name": "bet_tracker",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://leo1881.github.io/bet_tracker",
+  "homepage": ".",
   "proxy": "http://localhost:3001",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",

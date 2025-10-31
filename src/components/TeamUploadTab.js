@@ -5,7 +5,9 @@ const TeamUploadTab = ({
   scoringAnalysis = [], 
   teamAnalytics = [], 
   blacklistedTeams = [],
-  isTeamBlacklisted 
+  isTeamBlacklisted,
+  bets = [],
+  analyzeScoringPatterns
 }) => {
   const [uploadedTeams, setUploadedTeams] = useState([]);
   const [analysisResults, setAnalysisResults] = useState(null);
@@ -31,32 +33,98 @@ const TeamUploadTab = ({
     return { level: "Low", color: "text-red-400", bg: "bg-red-500/20" };
   };
 
-  // Find team data in scoring analysis
+  // Find team data in scoring analysis or calculate from bets
   const findScoringData = (teamName, country, league) => {
-    if (!scoringAnalysis || !Array.isArray(scoringAnalysis)) {
-      return null;
+    // First try to find in pre-calculated scoring analysis
+    if (scoringAnalysis && Array.isArray(scoringAnalysis) && scoringAnalysis.length > 0) {
+      const normalizedTeamName = teamName.toLowerCase().trim();
+      const normalizedCountry = country.toLowerCase().trim();
+      const normalizedLeague = league.toLowerCase().trim();
+
+      const found = scoringAnalysis.find(stat => {
+        const statTeam = stat.team.toLowerCase().trim();
+        const statCountry = stat.country.toLowerCase().trim();
+        const statLeague = stat.league.toLowerCase().trim();
+
+        return (
+          statTeam.includes(normalizedTeamName) ||
+          normalizedTeamName.includes(statTeam)
+        ) && (
+          statCountry.includes(normalizedCountry) ||
+          normalizedCountry.includes(statCountry)
+        ) && (
+          statLeague.includes(normalizedLeague) ||
+          normalizedLeague.includes(statLeague)
+        );
+      });
+      
+      if (found) return found;
     }
     
-    const normalizedTeamName = teamName.toLowerCase().trim();
-    const normalizedCountry = country.toLowerCase().trim();
-    const normalizedLeague = league.toLowerCase().trim();
+    // If not found in scoring analysis, calculate from bets data
+    if (bets && Array.isArray(bets)) {
+      const normalizedTeamName = teamName.toLowerCase().trim();
+      const normalizedCountry = country.toLowerCase().trim();
+      const normalizedLeague = league.toLowerCase().trim();
 
-    return scoringAnalysis.find(stat => {
-      const statTeam = stat.team.toLowerCase().trim();
-      const statCountry = stat.country.toLowerCase().trim();
-      const statLeague = stat.league.toLowerCase().trim();
+      const teamBets = bets.filter(bet => {
+        const betTeam = (bet.TEAM || bet.team || '').toLowerCase().trim();
+        const betCountry = (bet.COUNTRY || bet.country || '').toLowerCase().trim();
+        const betLeague = (bet.LEAGUE || bet.league || '').toLowerCase().trim();
 
-      return (
-        statTeam.includes(normalizedTeamName) ||
-        normalizedTeamName.includes(statTeam)
-      ) && (
-        statCountry.includes(normalizedCountry) ||
-        normalizedCountry.includes(statCountry)
-      ) && (
-        statLeague.includes(normalizedLeague) ||
-        normalizedLeague.includes(statLeague)
-      );
-    });
+        return (
+          betTeam.includes(normalizedTeamName) ||
+          normalizedTeamName.includes(betTeam)
+        ) && (
+          betCountry.includes(normalizedCountry) ||
+          normalizedCountry.includes(betCountry)
+        ) && (
+          betLeague.includes(normalizedLeague) ||
+          normalizedLeague.includes(betLeague)
+        );
+      });
+
+      if (teamBets.length === 0) return null;
+
+      // Calculate scoring stats from bets (same logic as ScoringAnalysisTab)
+      const totalGames = teamBets.length;
+      
+      // Debug: Check what fields are available in the betting data
+      if (teamBets.length > 0) {
+        console.log(`Sample bet data for ${teamName}:`, Object.keys(teamBets[0]));
+        console.log(`Sample bet:`, teamBets[0]);
+      }
+      
+      const over1_5Games = teamBets.filter(bet => {
+        const totalGoals = parseFloat(bet.TOTAL_GOALS || bet.totalGoals || bet.TOTAL_GOAL || bet.total_goals || 0);
+        return totalGoals > 1.5;
+      }).length;
+      const over2_5Games = teamBets.filter(bet => {
+        const totalGoals = parseFloat(bet.TOTAL_GOALS || bet.totalGoals || bet.TOTAL_GOAL || bet.total_goals || 0);
+        return totalGoals > 2.5;
+      }).length;
+      const over3_5Games = teamBets.filter(bet => {
+        const totalGoals = parseFloat(bet.TOTAL_GOALS || bet.totalGoals || bet.TOTAL_GOAL || bet.total_goals || 0);
+        return totalGoals > 3.5;
+      }).length;
+
+      const totalGoals = teamBets.reduce((sum, bet) => {
+        return sum + parseFloat(bet.TOTAL_GOALS || bet.totalGoals || bet.TOTAL_GOAL || bet.total_goals || 0);
+      }, 0);
+
+      return {
+        team: teamName,
+        country: country,
+        league: league,
+        totalGames: totalGames,
+        over1_5Rate: totalGames > 0 ? ((over1_5Games / totalGames) * 100).toFixed(1) : '0.0',
+        over2_5Rate: totalGames > 0 ? ((over2_5Games / totalGames) * 100).toFixed(1) : '0.0',
+        over3_5Rate: totalGames > 0 ? ((over3_5Games / totalGames) * 100).toFixed(1) : '0.0',
+        avgGoals: totalGames > 0 ? (totalGoals / totalGames).toFixed(1) : '0.0'
+      };
+    }
+    
+    return null;
   };
 
   // Find team data in team analytics
@@ -87,8 +155,67 @@ const TeamUploadTab = ({
     });
   };
 
+  // Find team data in main bets data
+  const findBetsData = (teamName, country, league) => {
+    if (!bets || !Array.isArray(bets)) {
+      console.log(`Bets data not available: ${!bets ? 'bets is null/undefined' : 'not an array'}`);
+      return null;
+    }
+    
+    const normalizedTeamName = teamName.toLowerCase().trim();
+    const normalizedCountry = country.toLowerCase().trim();
+    const normalizedLeague = league.toLowerCase().trim();
+
+    console.log(`Looking for: "${normalizedTeamName}" | "${normalizedCountry}" | "${normalizedLeague}"`);
+
+    // Show some sample team names from bets for Wales
+    const walesBets = bets.filter(bet => {
+      const betCountry = (bet.COUNTRY || bet.country || '').toLowerCase().trim();
+      return betCountry.includes('wales') || betCountry.includes('cymru');
+    });
+    
+    if (walesBets.length > 0) {
+      console.log(`Wales teams in bets: ${walesBets.slice(0, 3).map(bet => bet.TEAM || bet.team).join(', ')}`);
+    }
+
+    const teamBets = bets.filter(bet => {
+      const betTeam = (bet.TEAM || bet.team || '').toLowerCase().trim();
+      const betCountry = (bet.COUNTRY || bet.country || '').toLowerCase().trim();
+      const betLeague = (bet.LEAGUE || bet.league || '').toLowerCase().trim();
+
+      return (
+        betTeam.includes(normalizedTeamName) ||
+        normalizedTeamName.includes(betTeam)
+      ) && (
+        betCountry.includes(normalizedCountry) ||
+        normalizedCountry.includes(betCountry)
+      ) && (
+        betLeague.includes(normalizedLeague) ||
+        normalizedLeague.includes(betLeague)
+      );
+    });
+
+    console.log(`Found ${teamBets.length} matching bets for ${teamName}`);
+    if (teamBets.length === 0) return null;
+
+    // Calculate basic stats from bets
+    const wins = teamBets.filter(bet => bet.RESULT === 'W' || bet.result === 'W').length;
+    const losses = teamBets.filter(bet => bet.RESULT === 'L' || bet.result === 'L').length;
+    const totalBets = wins + losses;
+
+    return {
+      teamName: teamName,
+      country: country,
+      league: league,
+      totalBets: totalBets,
+      wins: wins,
+      losses: losses,
+      bets: teamBets
+    };
+  };
+
   // Analyze uploaded teams
-  const analyzeTeams = (teams) => {
+  const analyzeTeams = async (teams) => {
     const results = {
       straightWin: [],
       over1_5: [],
@@ -96,12 +223,56 @@ const TeamUploadTab = ({
       avoid: []
     };
 
+    // Get fresh scoring data using the same function as Scoring Analysis tab
+    let freshScoringData = [];
+    if (analyzeScoringPatterns) {
+      try {
+        freshScoringData = await analyzeScoringPatterns();
+        console.log(`Fresh scoring data loaded: ${freshScoringData.length} teams`);
+      } catch (error) {
+        console.error('Error loading scoring data:', error);
+      }
+    }
+
     teams.forEach(team => {
-      const scoringData = findScoringData(team.TEAM, team.COUNTRY, team.LEAGUE);
-      const teamAnalyticsData = findTeamAnalyticsData(team.TEAM, team.COUNTRY, team.LEAGUE);
+      console.log(`=== Analyzing team: ${team.TEAM} (${team.COUNTRY} - ${team.LEAGUE}) ===`);
       
-      if (!scoringData && !teamAnalyticsData) {
+      // Try to find in fresh scoring data first, then fallback to other sources
+      let scoringData = null;
+      if (freshScoringData && freshScoringData.length > 0) {
+        scoringData = freshScoringData.find(stat => {
+          const statTeam = stat.team.toLowerCase().trim();
+          const statCountry = stat.country.toLowerCase().trim();
+          const statLeague = stat.league.toLowerCase().trim();
+          const teamName = team.TEAM.toLowerCase().trim();
+          const country = team.COUNTRY.toLowerCase().trim();
+          const league = team.LEAGUE.toLowerCase().trim();
+
+          return (
+            statTeam.includes(teamName) || teamName.includes(statTeam)
+          ) && (
+            statCountry.includes(country) || country.includes(statCountry)
+          ) && (
+            statLeague.includes(league) || league.includes(statLeague)
+          );
+        });
+      }
+      
+      // Fallback to other methods if not found in fresh data
+      if (!scoringData) {
+        scoringData = findScoringData(team.TEAM, team.COUNTRY, team.LEAGUE);
+      }
+      
+      const teamAnalyticsData = findTeamAnalyticsData(team.TEAM, team.COUNTRY, team.LEAGUE);
+      const betsData = findBetsData(team.TEAM, team.COUNTRY, team.LEAGUE);
+      
+      console.log(`Scoring data found: ${scoringData ? 'YES' : 'NO'}`);
+      console.log(`Team analytics data found: ${teamAnalyticsData ? 'YES' : 'NO'}`);
+      console.log(`Bets data found: ${betsData ? 'YES' : 'NO'}`);
+      
+      if (!scoringData && !teamAnalyticsData && !betsData) {
         // No data found - add to avoid list
+        console.log(`No data found for ${team.TEAM}`);
         results.avoid.push({
           ...team,
           reason: "No historical data found",
@@ -110,26 +281,29 @@ const TeamUploadTab = ({
         return;
       }
 
-      const isBlacklisted = isTeamBlacklisted ? isTeamBlacklisted(scoringData?.team || teamAnalyticsData?.teamName) : false;
-      const totalGames = scoringData?.totalGames || teamAnalyticsData?.totalBets || 0;
+      const isBlacklisted = isTeamBlacklisted ? isTeamBlacklisted(scoringData?.team || teamAnalyticsData?.teamName || betsData?.teamName) : false;
+      const totalGames = scoringData?.totalGames || teamAnalyticsData?.totalBets || betsData?.totalBets || 0;
       const confidence = getConfidenceLevel(totalGames);
       
-      // Get win rate from team analytics
-      const wins = teamAnalyticsData?.wins || 0;
-      const losses = teamAnalyticsData?.losses || 0;
+      // Get win rate from team analytics or bets data
+      const wins = teamAnalyticsData?.wins || betsData?.wins || 0;
+      const losses = teamAnalyticsData?.losses || betsData?.losses || 0;
       const winRate = (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0;
       const wilsonWinRate = (wins + losses) > 0 ? calculateWilsonScore(wins, wins + losses) * 100 : 0;
       
-      // Get Over/Under data from scoring analysis
+      // Get Over/Under data from scoring analysis (now calculated from bets if needed)
       const over1_5Rate = scoringData ? parseFloat(scoringData.over1_5Rate) : 0;
       const over2_5Rate = scoringData ? parseFloat(scoringData.over2_5Rate) : 0;
       const avgGoals = scoringData ? parseFloat(scoringData.avgGoals) : 0;
       
-      const over1_5Games = scoringData ? Math.round((over1_5Rate / 100) * scoringData.totalGames) : 0;
-      const wilsonOver1_5 = scoringData && scoringData.totalGames > 0 ? calculateWilsonScore(over1_5Games, scoringData.totalGames) * 100 : 0;
+      // Calculate Wilson scores for Over/Under rates
+      const over1_5Games = Math.round((over1_5Rate / 100) * totalGames);
+      const wilsonOver1_5 = totalGames > 0 ? calculateWilsonScore(over1_5Games, totalGames) * 100 : 0;
       
-      const over2_5Games = scoringData ? Math.round((over2_5Rate / 100) * scoringData.totalGames) : 0;
-      const wilsonOver2_5 = scoringData && scoringData.totalGames > 0 ? calculateWilsonScore(over2_5Games, scoringData.totalGames) * 100 : 0;
+      const over2_5Games = Math.round((over2_5Rate / 100) * totalGames);
+      const wilsonOver2_5 = totalGames > 0 ? calculateWilsonScore(over2_5Games, totalGames) * 100 : 0;
+
+      console.log(`Team ${team.TEAM}: Win Rate: ${winRate.toFixed(1)}%, Over 1.5: ${over1_5Rate.toFixed(1)}%, Over 2.5: ${over2_5Rate.toFixed(1)}%, Avg Goals: ${avgGoals.toFixed(1)}, Total Games: ${totalGames}`);
 
       const teamAnalysis = {
         ...team,
@@ -238,7 +412,7 @@ const TeamUploadTab = ({
       }
 
       setUploadedTeams(data);
-      const analysis = analyzeTeams(data);
+      const analysis = await analyzeTeams(data);
       setAnalysisResults(analysis);
       
     } catch (err) {

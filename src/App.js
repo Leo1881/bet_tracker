@@ -35,6 +35,7 @@ import PredictionAccuracyTab from "./components/PredictionAccuracyTab";
 import TeamNotesTab from "./components/TeamNotesTab";
 import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
+import QuickLookupTab from "./components/QuickLookupTab";
 
 function App() {
   // Use custom hook for state management
@@ -4435,6 +4436,16 @@ function App() {
               teamAnalytics={teamAnalytics}
               blacklistedTeams={blacklistedTeams}
               isTeamBlacklisted={isTeamBlacklisted}
+              bets={bets}
+              analyzeScoringPatterns={analyzeScoringPatterns}
+            />
+          )}
+
+          {activeTab === "quickLookup" && (
+            <QuickLookupTab
+              scoringAnalysis={scoringAnalysis}
+              teamAnalytics={teamAnalytics}
+              bets={bets}
             />
           )}
 
