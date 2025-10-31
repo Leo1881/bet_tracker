@@ -334,6 +334,8 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       if (teamBets.length === 0) return null;
 
       // Deduplicate games (same date + teams = same game)
+      // For each unique game, keep the bet that has the clearest home/away info
+      // Prioritize bets where HOME_TEAM or AWAY_TEAM matches the team (not just TEAM_INCLUDED)
       const uniqueGames = new Map();
       teamBets.forEach((bet) => {
         const homeTeam = (bet.HOME_TEAM || "").toLowerCase().trim();
@@ -341,18 +343,42 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
         const date = bet.DATE || "";
         const gameKey = `${date}_${homeTeam}_${awayTeam}`;
         
+        // Check if this bet has clear home/away classification
+        const hasClearHomeAway = (homeTeam === teamNameLower || awayTeam === teamNameLower);
+        
         if (!uniqueGames.has(gameKey)) {
           uniqueGames.set(gameKey, bet);
+        } else {
+          // Prefer bet with clear home/away classification
+          const existingBet = uniqueGames.get(gameKey);
+          const existingHomeTeam = (existingBet.HOME_TEAM || "").toLowerCase().trim();
+          const existingAwayTeam = (existingBet.AWAY_TEAM || "").toLowerCase().trim();
+          const existingHasClearHomeAway = (existingHomeTeam === teamNameLower || existingAwayTeam === teamNameLower);
+          
+          // Replace if new bet has clear home/away but existing doesn't
+          if (hasClearHomeAway && !existingHasClearHomeAway) {
+            uniqueGames.set(gameKey, bet);
+          }
+          // Or if both are clear, prefer Win bets over Over/Under
+          else if (hasClearHomeAway && existingHasClearHomeAway) {
+            const isWinBet = !bet.BET_TYPE?.toLowerCase().includes("over") && !bet.BET_TYPE?.toLowerCase().includes("under");
+            const existingIsWinBet = !existingBet.BET_TYPE?.toLowerCase().includes("over") && !existingBet.BET_TYPE?.toLowerCase().includes("under");
+            if (isWinBet && !existingIsWinBet) {
+              uniqueGames.set(gameKey, bet);
+            }
+          }
         }
       });
 
       const deduplicatedBets = Array.from(uniqueGames.values());
 
+      // Count ALL games (including pending), not just wins/losses
+      const totalBets = deduplicatedBets.length; // All unique games
       const wins = deduplicatedBets.filter((bet) => bet.RESULT?.toLowerCase().includes("win")).length;
       const losses = deduplicatedBets.filter((bet) => bet.RESULT?.toLowerCase().includes("loss")).length;
-      const totalBets = wins + losses;
-      const winRate = totalBets > 0 ? (wins / totalBets) * 100 : 0;
-      const wilsonWinRate = totalBets > 0 ? calculateWilsonScore(wins, totalBets) * 100 : 0;
+      const completedBets = wins + losses; // Only completed games for win rate calculation
+      const winRate = completedBets > 0 ? (wins / completedBets) * 100 : 0;
+      const wilsonWinRate = completedBets > 0 ? calculateWilsonScore(wins, completedBets) * 100 : 0;
 
       // Calculate Over/Under from games with scores (deduplicated)
       const gamesWithScores = deduplicatedBets.filter(
@@ -384,24 +410,51 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       const avgGoals = totalGames > 0 ? totalGoals / totalGames : 0;
 
       // Calculate Home/Away splits
+      // A game counts as "home" if the team is HOME_TEAM, "away" if AWAY_TEAM
+      // For Over/Under bets, TEAM_INCLUDED might match, but we check HOME_TEAM/AWAY_TEAM to determine home/away
       const homeGames = deduplicatedBets.filter((bet) => {
         const betHomeTeam = (bet.HOME_TEAM || "").toLowerCase().trim();
+        // Team is home if HOME_TEAM matches (regardless of TEAM_INCLUDED)
         return betHomeTeam === teamNameLower;
       });
       const awayGames = deduplicatedBets.filter((bet) => {
         const betAwayTeam = (bet.AWAY_TEAM || "").toLowerCase().trim();
+        // Team is away if AWAY_TEAM matches (regardless of TEAM_INCLUDED)
         return betAwayTeam === teamNameLower;
       });
 
+      // Count ALL home/away games (including pending), not just completed
+      const homeTotal = homeGames.length; // All home games
       const homeWins = homeGames.filter((bet) => bet.RESULT?.toLowerCase().includes("win")).length;
       const homeLosses = homeGames.filter((bet) => bet.RESULT?.toLowerCase().includes("loss")).length;
-      const homeTotal = homeWins + homeLosses;
-      const homeWinRate = homeTotal > 0 ? (homeWins / homeTotal) * 100 : 0;
+      const homeCompleted = homeWins + homeLosses; // Only completed for win rate
+      const homeWinRate = homeCompleted > 0 ? (homeWins / homeCompleted) * 100 : 0;
 
+      const awayTotal = awayGames.length; // All away games
       const awayWins = awayGames.filter((bet) => bet.RESULT?.toLowerCase().includes("win")).length;
       const awayLosses = awayGames.filter((bet) => bet.RESULT?.toLowerCase().includes("loss")).length;
-      const awayTotal = awayWins + awayLosses;
-      const awayWinRate = awayTotal > 0 ? (awayWins / awayTotal) * 100 : 0;
+      const awayCompleted = awayWins + awayLosses; // Only completed for win rate
+      const awayWinRate = awayCompleted > 0 ? (awayWins / awayCompleted) * 100 : 0;
+
+      // Debug: Check for games that don't fit home/away
+      const homeAwayTotal = homeTotal + awayTotal;
+      if (totalBets > homeAwayTotal) {
+        console.log(`  Warning: totalBets (${totalBets}) > homeTotal (${homeTotal}) + awayTotal (${awayTotal}) = ${homeAwayTotal}`);
+        console.log(`  This means ${totalBets - homeAwayTotal} games couldn't be classified as home or away`);
+        // Log unclassified games
+        const unclassifiedGames = deduplicatedBets.filter((bet) => {
+          const betHomeTeam = (bet.HOME_TEAM || "").toLowerCase().trim();
+          const betAwayTeam = (bet.AWAY_TEAM || "").toLowerCase().trim();
+          return betHomeTeam !== teamNameLower && betAwayTeam !== teamNameLower;
+        });
+        console.log(`  Unclassified games:`, unclassifiedGames.map(b => ({
+          date: b.DATE,
+          homeTeam: b.HOME_TEAM,
+          awayTeam: b.AWAY_TEAM,
+          teamIncluded: b.TEAM_INCLUDED,
+          betType: b.BET_TYPE
+        })));
+      }
 
       // Calculate average goals from games with scores (for display)
       const avgGoalsDisplay = avgGoals;
@@ -410,6 +463,8 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       console.log(`  Filtered to ${leagueBets.length} bets in this league`);
       console.log(`  Found ${teamBets.length} bets with this team`);
       console.log(`  Deduplicated to ${deduplicatedBets.length} unique games`);
+      console.log(`  Total games (totalBets): ${totalBets}`);
+      console.log(`  Completed games: ${wins + losses}`);
       console.log(`  Games with scores: ${totalGames}`);
       console.log(`  Home games: ${homeTotal} (${homeWins}W/${homeLosses}L)`);
       console.log(`  Away games: ${awayTotal} (${awayWins}W/${awayLosses}L)`);
@@ -494,45 +549,81 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       let totalAwayGames = 0;
 
       leagueResults.forEach((result) => {
-        if (result.calculatedStats) {
-          totalWins += result.calculatedStats.wins || 0;
-          totalLosses += result.calculatedStats.losses || 0;
-          totalBets += result.calculatedStats.totalBets || 0;
-          totalGamesWithScores += result.calculatedStats.totalGames || 0;
+        if (result.calculatedStats || result.analytics) {
+          // For Total View, use calculatedStats.totalBets (deduplicated unique games) when available
+          // because homeTotal/awayTotal are also based on deduplicated games
+          // Only use analytics.totalBets if calculatedStats is not available
+          const leagueTotalBets = result.calculatedStats?.totalBets || result.analytics?.totalBets || 0;
+          totalBets += leagueTotalBets;
+          
+          // For win/loss, use calculatedStats wins/losses if available (more accurate)
+          if (result.calculatedStats) {
+            totalWins += result.calculatedStats.wins || 0;
+            totalLosses += result.calculatedStats.losses || 0;
+            
+            const gamesWithScores = result.calculatedStats.totalGames || 0;
+            totalGamesWithScores += gamesWithScores;
 
-          // Calculate Over/Under from calculated stats
-          const over1_5Games = Math.round((result.calculatedStats.over1_5Rate / 100) * (result.calculatedStats.totalGames || 0));
-          const over2_5Games = Math.round((result.calculatedStats.over2_5Rate / 100) * (result.calculatedStats.totalGames || 0));
-          totalOver1_5Count += over1_5Games;
-          totalOver2_5Count += over2_5Games;
-          totalGoals += (result.calculatedStats.avgGoals || 0) * (result.calculatedStats.totalGames || 0);
+            // Calculate Over/Under from calculated stats
+            const over1_5Games = Math.round((result.calculatedStats.over1_5Rate / 100) * gamesWithScores);
+            const over2_5Games = Math.round((result.calculatedStats.over2_5Rate / 100) * gamesWithScores);
+            totalOver1_5Count += over1_5Games;
+            totalOver2_5Count += over2_5Games;
+            totalGoals += (result.calculatedStats.avgGoals || 0) * gamesWithScores;
 
-          // Home/Away totals - calculate wins from bets directly for accuracy
-          // We need to recalculate home/away from bets to get accurate totals
-          // For now, use win rate calculation but we'll improve this if needed
-          const homeGames = result.calculatedStats.homeTotal || 0;
-          const homeWins = Math.round((result.calculatedStats.homeWinRate / 100) * homeGames);
-          const homeLosses = homeGames - homeWins;
-          
-          const awayGames = result.calculatedStats.awayTotal || 0;
-          const awayWins = Math.round((result.calculatedStats.awayWinRate / 100) * awayGames);
-          const awayLosses = awayGames - awayWins;
-          
-          totalHomeWins += homeWins;
-          totalHomeGames += homeGames;
-          totalHomeLosses += homeLosses;
-          
-          totalAwayWins += awayWins;
-          totalAwayGames += awayGames;
-          totalAwayLosses += awayLosses;
-        } else if (result.analytics) {
-          totalWins += result.analytics.wins || 0;
-          totalLosses += result.analytics.losses || 0;
-          totalBets += result.analytics.totalBets || 0;
+            // Home/Away totals - use the actual values from calculatedStats
+            // homeTotal and awayTotal should already include all games (fixed earlier)
+            const homeGames = result.calculatedStats.homeTotal || 0;
+            const awayGames = result.calculatedStats.awayTotal || 0;
+            
+            // Calculate wins/losses from the win rate percentages
+            // But first check if we have actual wins/losses counts for home/away
+            // Since we don't track home/away wins separately in calculatedStats,
+            // we need to calculate from the win rate
+            // homeWinRate is based on completed games, so we need to apply it to all home games
+            const homeWinRate = result.calculatedStats.homeWinRate || 0;
+            const homeCompleted = homeGames; // homeTotal should already be all home games
+            const homeWins = Math.round((homeWinRate / 100) * homeCompleted);
+            const homeLosses = homeCompleted - homeWins;
+            
+            const awayWinRate = result.calculatedStats.awayWinRate || 0;
+            const awayCompleted = awayGames; // awayTotal should already be all away games
+            const awayWins = Math.round((awayWinRate / 100) * awayCompleted);
+            const awayLosses = awayCompleted - awayWins;
+            
+            totalHomeWins += homeWins;
+            totalHomeGames += homeGames;
+            totalHomeLosses += homeLosses;
+            
+            totalAwayWins += awayWins;
+            totalAwayGames += awayGames;
+            totalAwayLosses += awayLosses;
+          } else if (result.analytics) {
+            // Fallback to analytics for wins/losses
+            totalWins += result.analytics.wins || 0;
+            totalLosses += result.analytics.losses || 0;
+          }
         }
       });
 
+      console.log(`=== Total calculation for ${teamName} ===`);
+      console.log(`  League results: ${leagueResults.length}`);
+      leagueResults.forEach((r, idx) => {
+        // For Total View, prefer calculatedStats (deduplicated) to match home/away totals
+        const leagueTotalBets = r.calculatedStats?.totalBets || r.analytics?.totalBets || 0;
+        console.log(`  League ${idx + 1}: ${r.country} - ${r.league}`);
+        console.log(`    - Has calculatedStats: ${!!r.calculatedStats}`);
+        console.log(`    - Has analytics: ${!!r.analytics}`);
+        console.log(`    - calculatedStats.totalBets: ${r.calculatedStats?.totalBets || 0}`);
+        console.log(`    - analytics.totalBets: ${r.analytics?.totalBets || 0}`);
+        console.log(`    - Using totalBets: ${leagueTotalBets} (prefers calculatedStats for Total View)`);
+      });
+      console.log(`  Sum totalBets: ${totalBets}`);
+      console.log(`  Sum totalGamesWithScores: ${totalGamesWithScores}`);
+      console.log(`  Total wins: ${totalWins}, Total losses: ${totalLosses}`);
+
       // Create total stats object
+      // Use totalBets for total games count (all games), not just games with scores
       const totalWinRate = totalBets > 0 ? (totalWins / totalBets) * 100 : 0;
       const totalWilsonWinRate = totalBets > 0 ? calculateWilsonScore(totalWins, totalBets) * 100 : 0;
       const totalOver1_5Rate = totalGamesWithScores > 0 ? (totalOver1_5Count / totalGamesWithScores) * 100 : 0;
@@ -548,10 +639,10 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
         calculatedStats: {
           wins: totalWins,
           losses: totalLosses,
-          totalBets,
+          totalBets, // This is the correct total games count (ALL games including pending)
           winRate: totalWinRate,
           wilsonWinRate: totalWilsonWinRate,
-          totalGames: totalGamesWithScores,
+          totalGames: totalGamesWithScores, // Games with scores (for Over/Under calculations)
           over1_5Rate: totalOver1_5Rate,
           over2_5Rate: totalOver2_5Rate,
           avgGoals: totalAvgGoals,
@@ -561,6 +652,12 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
           awayTotal: totalAwayGames,
         },
       };
+
+      console.log(`=== Total View final stats for ${teamName} ===`);
+      console.log(`  totalBets (ALL games): ${totalBets}`);
+      console.log(`  totalGamesWithScores: ${totalGamesWithScores}`);
+      console.log(`  Wins: ${totalWins}, Losses: ${totalLosses}`);
+      console.log(`  Setting calculatedStats.totalBets to: ${totalBets}`);
 
       // Add total view first, then league-specific results
       finalResults.push(totalStats);
@@ -653,7 +750,15 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
                       <div className="bg-white/5 border border-white/10 rounded-lg p-3">
                         <p className="text-gray-400 text-xs mb-1">Total Games</p>
                         <p className="text-white font-semibold text-lg">
-                          {result.analytics?.totalBets || result.calculatedStats?.totalBets || 0}
+                          {(() => {
+                            // Always prefer calculatedStats.totalBets (deduplicated unique games) to match home/away totals
+                            // analytics.totalBets counts all bets (multiple bet types per game), which doesn't match home/away
+                            const totalGames = result.calculatedStats?.totalBets || result.analytics?.totalBets || 0;
+                            if (result.isTotalView) {
+                              console.log(`[DISPLAY] Total View - analytics.totalBets: ${result.analytics?.totalBets}, calculatedStats.totalBets: ${result.calculatedStats?.totalBets}, showing: ${totalGames}`);
+                            }
+                            return totalGames;
+                          })()}
                         </p>
                         {(result.analytics || result.calculatedStats) && (
                           <p className="text-gray-500 text-xs mt-1">
