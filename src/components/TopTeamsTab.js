@@ -1,16 +1,118 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 
 const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
+  const [sortConfig, setSortConfig] = useState({
+    key: null, // null means default composite score sort
+    direction: 'desc'
+  });
+
+  const teams = useMemo(() => {
+    const allTeams = getTopTeams();
+    
+    // If no sort is active, return default sorted teams
+    if (!sortConfig.key) {
+      return allTeams;
+    }
+
+    // Create a sorted copy
+    const sorted = [...allTeams].sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortConfig.key) {
+        case 'winRate':
+          aValue = a.winRate || 0;
+          bValue = b.winRate || 0;
+          break;
+        case 'totalBets':
+          aValue = a.totalBets || 0;
+          bValue = b.totalBets || 0;
+          break;
+        case 'winsLosses':
+          // Sort by total wins
+          aValue = a.wins || 0;
+          bValue = b.wins || 0;
+          break;
+        case 'recentPerformance':
+          aValue = a.recentWinRate || 0;
+          bValue = b.recentWinRate || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+
+    return sorted;
+  }, [getTopTeams, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig(prevConfig => {
+      // If clicking the same column, toggle direction
+      if (prevConfig.key === key) {
+        return {
+          key,
+          direction: prevConfig.direction === 'asc' ? 'desc' : 'asc'
+        };
+      }
+      // Otherwise, set new column with descending as default
+      return {
+        key,
+        direction: 'desc'
+      };
+    });
+  };
+
+  const handleReset = () => {
+    setSortConfig({ key: null, direction: 'desc' });
+  };
+
+  const getSortIcon = (columnKey) => {
+    if (sortConfig.key !== columnKey) {
+      return <span className="text-gray-400 text-xs">↕</span>; // Neutral icon when not sorted
+    }
+    return (
+      <span className={sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-blue-400'}>
+        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+      </span>
+    );
+  };
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-      <h3 className="text-lg font-bold text-white mb-4">
-        Top 100 Teams Ranking
-      </h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold text-white">
+          Top 100 Teams Ranking
+        </h3>
+        {sortConfig.key && (
+          <button
+            onClick={handleReset}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Reset to Default Sort
+          </button>
+        )}
+      </div>
       <div className="text-gray-300 mb-6">
         <p>
           Teams ranked by composite score: Win Rate (50%), Total Wins (30%),
           Recent Performance (20%) + Bet Type Specialization Bonus
         </p>
+        {sortConfig.key && (
+          <p className="text-sm text-yellow-400 mt-2">
+            Currently sorted by: {sortConfig.key === 'winRate' ? 'Win Rate' : 
+                                   sortConfig.key === 'totalBets' ? 'Total Bets' :
+                                   sortConfig.key === 'winsLosses' ? 'Wins/Losses' :
+                                   sortConfig.key === 'recentPerformance' ? 'Recent Performance' : ''} 
+            ({sortConfig.direction === 'asc' ? 'Ascending' : 'Descending'})
+          </p>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -23,17 +125,41 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
               <th className="px-4 py-2 text-left text-white font-semibold">
                 Team
               </th>
-              <th className="px-4 py-2 text-left text-white font-semibold">
-                Win Rate
+              <th 
+                className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                onClick={() => handleSort('winRate')}
+              >
+                <div className="flex items-center gap-2">
+                  Win Rate
+                  {getSortIcon('winRate')}
+                </div>
               </th>
-              <th className="px-4 py-2 text-left text-white font-semibold">
-                Total Bets
+              <th 
+                className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                onClick={() => handleSort('totalBets')}
+              >
+                <div className="flex items-center gap-2">
+                  Total Bets
+                  {getSortIcon('totalBets')}
+                </div>
               </th>
-              <th className="px-4 py-2 text-left text-white font-semibold">
-                Wins/Losses
+              <th 
+                className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                onClick={() => handleSort('winsLosses')}
+              >
+                <div className="flex items-center gap-2">
+                  Wins/Losses
+                  {getSortIcon('winsLosses')}
+                </div>
               </th>
-              <th className="px-4 py-2 text-left text-white font-semibold">
-                Recent Performance
+              <th 
+                className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                onClick={() => handleSort('recentPerformance')}
+              >
+                <div className="flex items-center gap-2">
+                  Recent Performance
+                  {getSortIcon('recentPerformance')}
+                </div>
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
                 Best Bet Type
@@ -50,7 +176,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {getTopTeams().map((team, index) => {
+            {teams.map((team, index) => {
               const isBlacklisted = isTeamBlacklisted(team.teamName);
               return (
                 <tr
