@@ -1641,7 +1641,9 @@ function App() {
     const awayWilsonScore = awayTotal > 0 ? calculateWilsonScore(awayWins, awayTotal) : 0;
     const awayWilsonRate = awayWilsonScore * 100;
 
-    // Minimum sample size requirement (at least 3 games for any recommendation)
+    // Minimum sample size requirement: 3 games
+    // Standardized across all bet types for basic recommendations
+    // Note: Over/Under requires 5 games due to needing scoring data (more complex analysis)
     const minSampleSize = 3;
     const hasHomeData = homeTotal >= minSampleSize;
     const hasAwayData = awayTotal >= minSampleSize;
@@ -1986,22 +1988,29 @@ function App() {
     }
 
     // Calculate Double Chance confidence
-    // If we have actual Double Chance bet history with sufficient data, use that
+    // Priority: Use actual Double Chance bet history if available (most accurate)
+    // Fallback: Calculate from Straight Win + Draw Rate (less accurate but still useful)
+    // Thresholds:
+    // - >= 5 bets: Full confidence (standardized minimum for reliable statistics)
+    // - 3-4 bets: Reduced confidence (0.9x multiplier) due to small sample
+    // - < 3 bets: Use fallback formula (Straight Win + Draw Rate)
     let doubleChanceConfidence;
     let reasoning;
 
     if (teamDoubleChanceTotal >= 5) {
-      // Use actual Double Chance Wilson Rate
+      // Use actual Double Chance Wilson Rate (standardized: WilsonRate / 10)
       doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate / 10, 10);
       reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} actual Double Chance bets.`;
     } else if (teamDoubleChanceTotal >= 3) {
-      // Use actual Double Chance data but with lower confidence due to small sample
+      // Use actual Double Chance data but with lower confidence due to small sample (0.9x multiplier)
       doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate / 10 * 0.9, 10);
       reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} Double Chance bets (small sample).`;
     } else {
       // Calculate from Straight Win + Draw Rate
-      // Use Wilson Rate for win rate, add draw rate
-      const doubleChanceRate = teamWilsonRate + effectiveDrawRate;
+      // Double Chance = Win OR Draw, so we add draw rate to win rate
+      // This is mathematically correct: P(Win) + P(Draw) = P(Win OR Draw)
+      // Note: This can exceed 100% if team has high win rate + high draw rate, but cap at 10.0 confidence
+      const doubleChanceRate = Math.min(teamWilsonRate + effectiveDrawRate, 100);
       doubleChanceConfidence = Math.min(doubleChanceRate / 10, 10);
       
       const drawRateSource = totalGames >= minSampleSize 
@@ -2110,14 +2119,18 @@ function App() {
     if (totalGames === 0) {
       return {
         bet: "No clear trend",
-        confidence: 5,
+        confidence: 3, // Standardized low confidence (consistent with other bet types)
         avgGoals: 0,
         totalGames: 0,
         reasoning: "No historical scoring data available",
       };
     }
 
-    // Minimum sample size requirement (at least 5 games for any recommendation)
+    // Minimum sample size requirement: 5 games
+    // Higher than Straight Win/Double Chance (3 games) because Over/Under analysis requires:
+    // - Scoring data (HOME_SCORE and AWAY_SCORE must exist)
+    // - More complex statistical analysis (over/under rates across multiple goal lines)
+    // This ensures more reliable predictions for goal-based betting
     const minSampleSize = 5;
     if (totalGames < minSampleSize) {
       return {
@@ -2166,9 +2179,8 @@ function App() {
 
       // Check OVER recommendation
       if (overWilsonRate >= minThreshold && (overWilsonRate - 50) >= minDifference) {
-        // Confidence based on how far above 50% it is, scaled to 0-10
-        // 60% = 6.0, 70% = 7.0, 80% = 8.0, 90%+ = 9.0-10.0
-        const overConfidence = Math.min(((overWilsonRate - 50) / 40) * 8 + 5, 10);
+        // Standardized confidence calculation: WilsonRate / 10 (consistent with other bet types)
+        const overConfidence = Math.min(overWilsonRate / 10, 10);
         if (overConfidence > highestConfidence) {
           highestConfidence = overConfidence;
           bestRecommendation = {
@@ -2185,8 +2197,8 @@ function App() {
 
       // Check UNDER recommendation
       if (underWilsonRate >= minThreshold && (underWilsonRate - 50) >= minDifference) {
-        // Confidence based on how far above 50% it is
-        const underConfidence = Math.min(((underWilsonRate - 50) / 40) * 8 + 5, 10);
+        // Standardized confidence calculation: WilsonRate / 10 (consistent with other bet types)
+        const underConfidence = Math.min(underWilsonRate / 10, 10);
         if (underConfidence > highestConfidence) {
           highestConfidence = underConfidence;
           bestRecommendation = {
@@ -2206,7 +2218,7 @@ function App() {
     if (!bestRecommendation || highestConfidence < 5) {
       return {
         bet: "No clear trend",
-        confidence: 4, // Low confidence when no clear pattern
+        confidence: 3, // Standardized low confidence (consistent with other bet types)
         avgGoals: combinedAvgGoals,
         totalGames: totalGames,
         reasoning: `No strong over/under pattern found. Combined average: ${combinedAvgGoals.toFixed(1)} goals per game (${totalGames} games).`,
