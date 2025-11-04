@@ -1315,7 +1315,7 @@ function App() {
     const overUnderRate =
       overUnderBets.length > 0 ? overUnderWins / overUnderBets.length : 0;
 
-    // Find the highest win rate to use as baseline (1.0)
+    // Find the highest win rate to use as baseline
     const maxRate = Math.max(
       straightWinRate,
       doubleChanceRate,
@@ -1323,20 +1323,47 @@ function App() {
       0.5
     ); // Minimum 0.5 to avoid division issues
 
-    // Calculate multipliers (normalize to best performing bet type = 1.0)
+    // Calculate small multiplier adjustments (±3-5% max)
+    // Instead of normalizing to best = 1.0 (which creates large differences),
+    // use small adjustments based on performance difference from the best
+    // This keeps confidence as the primary ranking factor, with multipliers as a small boost
+    const maxMultiplierBoost = 0.05; // Maximum 5% boost for best performing type
+    const maxMultiplierPenalty = 0.05; // Maximum 5% penalty for worst performing type
+    
+    // Calculate performance difference from best (in decimal form, e.g., 0.75 - 0.65 = 0.10 = 10%)
+    const straightWinDiff = straightWinRate - maxRate;
+    const doubleChanceDiff = doubleChanceRate - maxRate;
+    const overUnderDiff = overUnderRate - maxRate;
+    
+    // Convert difference to small multiplier adjustment
+    // Use a scaling factor to keep adjustments small (e.g., 0.5 = 50% of difference becomes multiplier adjustment)
+    // Example: If Double Chance wins 75% and Straight Win wins 65% (10% difference = 0.10),
+    // multiplier adjustment = 0.10 * 0.5 = 0.05, so Straight Win gets 0.95 multiplier
+    // This creates a 5% difference instead of the full 10%, keeping confidence as primary factor
+    const adjustmentScale = 0.5; // Scale down the adjustment (50% of the difference)
+    
     const multipliers = {
       straightWin:
         straightWinBets.length >= 10
-          ? Math.max(0.8, Math.min(1.1, straightWinRate / maxRate))
+          ? Math.max(
+              1.0 - maxMultiplierPenalty,
+              Math.min(1.0 + maxMultiplierBoost, 1.0 + (straightWinDiff * adjustmentScale))
+            )
           : 1.0, // Default to 1.0 if insufficient data
       doubleChance:
         doubleChanceBets.length >= 10
-          ? Math.max(0.8, Math.min(1.1, doubleChanceRate / maxRate))
-          : 0.9, // Default to 0.9 if insufficient data
+          ? Math.max(
+              1.0 - maxMultiplierPenalty,
+              Math.min(1.0 + maxMultiplierBoost, 1.0 + (doubleChanceDiff * adjustmentScale))
+            )
+          : 1.0, // Default to 1.0 if insufficient data (no bias)
       overUnder:
         overUnderBets.length >= 10
-          ? Math.max(0.8, Math.min(1.1, overUnderRate / maxRate))
-          : 0.95, // Default to 0.95 if insufficient data
+          ? Math.max(
+              1.0 - maxMultiplierPenalty,
+              Math.min(1.0 + maxMultiplierBoost, 1.0 + (overUnderDiff * adjustmentScale))
+            )
+          : 1.0, // Default to 1.0 if insufficient data (no bias)
     };
 
     // Log the calculated multipliers for debugging
@@ -1446,8 +1473,29 @@ function App() {
       ];
 
       // Calculate risk-adjusted scores for ranking using data-driven multipliers
+      // Use underlying Wilson rate when confidence is capped at 10.0 to preserve actual confidence levels
       const rankedBets = allBets.map((bet) => {
-        let adjustedScore = bet.recommendation.confidence;
+        let baseScore = bet.recommendation.confidence;
+        
+        // If confidence is capped at 10.0, use underlying Wilson rate for ranking
+        // This preserves the actual confidence difference when multiple bets are maxed out
+        // Example: Straight Win with 95% Wilson (capped to 10.0) vs Double Chance with 85% Wilson (capped to 10.0)
+        // We want to use 95% vs 85% for ranking, not 10.0 vs 10.0
+        if (baseScore >= 10.0) {
+          // Check for Wilson rate in different fields based on bet type
+          if (bet.recommendation.wilsonWinRate !== undefined) {
+            // Straight Win or Double Chance: use wilsonWinRate
+            baseScore = bet.recommendation.wilsonWinRate / 10;
+          } else if (bet.recommendation.overWilsonRate !== undefined) {
+            // Over/Under: use overWilsonRate or underWilsonRate
+            baseScore = bet.recommendation.overWilsonRate 
+              ? bet.recommendation.overWilsonRate / 10 
+              : (bet.recommendation.underWilsonRate || 0) / 10;
+          }
+          // If no Wilson rate available, keep using capped confidence (shouldn't happen)
+        }
+        
+        let adjustedScore = baseScore;
 
         // Apply data-driven multipliers based on historical performance
         if (bet.type === "Straight Win") {
@@ -2045,6 +2093,10 @@ function App() {
       successRate: doubleChanceConfidence * 10,
       totalBets: totalGames || teamDoubleChanceTotal || 0,
       reasoning: reasoning,
+      // Add Wilson rate for ranking when confidence is capped
+      wilsonWinRate: teamDoubleChanceTotal >= 3 
+        ? teamDoubleChanceWilsonRate 
+        : teamWilsonRate, // Use Straight Win Wilson rate for fallback case
     };
   };
 
