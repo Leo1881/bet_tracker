@@ -1260,8 +1260,112 @@ function App() {
     }
   };
 
+  // Calculate data-driven multipliers based on historical bet type performance
+  const calculateBetTypeMultipliers = () => {
+    if (!bets || bets.length === 0) {
+      // Default multipliers if no data
+      return {
+        straightWin: 1.0,
+        doubleChance: 0.9,
+        overUnder: 0.95,
+      };
+    }
+
+    // Filter bets with results
+    const betsWithResults = bets.filter(
+      (b) => b.RESULT && b.RESULT.trim() !== ""
+    );
+
+    // Calculate win rates for each bet type
+    const straightWinBets = betsWithResults.filter(
+      (b) =>
+        (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+        !b.BET_TYPE?.toLowerCase().includes("double chance") &&
+        !b.BET_TYPE?.toLowerCase().includes("over") &&
+        !b.BET_TYPE?.toLowerCase().includes("under")
+    );
+    const straightWinWins = straightWinBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const straightWinRate =
+      straightWinBets.length > 0 ? straightWinWins / straightWinBets.length : 0;
+
+    const doubleChanceBets = betsWithResults.filter(
+      (b) =>
+        b.BET_TYPE &&
+        b.BET_TYPE.toLowerCase().includes("double chance")
+    );
+    const doubleChanceWins = doubleChanceBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const doubleChanceRate =
+      doubleChanceBets.length > 0
+        ? doubleChanceWins / doubleChanceBets.length
+        : 0;
+
+    const overUnderBets = betsWithResults.filter(
+      (b) =>
+        b.BET_TYPE &&
+        (b.BET_TYPE.toLowerCase().includes("over") ||
+          b.BET_TYPE.toLowerCase().includes("under"))
+    );
+    const overUnderWins = overUnderBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const overUnderRate =
+      overUnderBets.length > 0 ? overUnderWins / overUnderBets.length : 0;
+
+    // Find the highest win rate to use as baseline (1.0)
+    const maxRate = Math.max(
+      straightWinRate,
+      doubleChanceRate,
+      overUnderRate,
+      0.5
+    ); // Minimum 0.5 to avoid division issues
+
+    // Calculate multipliers (normalize to best performing bet type = 1.0)
+    const multipliers = {
+      straightWin:
+        straightWinBets.length >= 10
+          ? Math.max(0.8, Math.min(1.1, straightWinRate / maxRate))
+          : 1.0, // Default to 1.0 if insufficient data
+      doubleChance:
+        doubleChanceBets.length >= 10
+          ? Math.max(0.8, Math.min(1.1, doubleChanceRate / maxRate))
+          : 0.9, // Default to 0.9 if insufficient data
+      overUnder:
+        overUnderBets.length >= 10
+          ? Math.max(0.8, Math.min(1.1, overUnderRate / maxRate))
+          : 0.95, // Default to 0.95 if insufficient data
+    };
+
+    // Log the calculated multipliers for debugging
+    console.log("Bet Type Performance Multipliers:", {
+      straightWin: {
+        rate: (straightWinRate * 100).toFixed(1) + "%",
+        bets: straightWinBets.length,
+        multiplier: multipliers.straightWin.toFixed(2),
+      },
+      doubleChance: {
+        rate: (doubleChanceRate * 100).toFixed(1) + "%",
+        bets: doubleChanceBets.length,
+        multiplier: multipliers.doubleChance.toFixed(2),
+      },
+      overUnder: {
+        rate: (overUnderRate * 100).toFixed(1) + "%",
+        bets: overUnderBets.length,
+        multiplier: multipliers.overUnder.toFixed(2),
+      },
+    });
+
+    return multipliers;
+  };
+
   const generateBetRecommendations = (analysisResults) => {
     if (!analysisResults || analysisResults.length === 0) return [];
+
+    // Calculate data-driven multipliers based on historical performance
+    const betTypeMultipliers = calculateBetTypeMultipliers();
 
     // Include all bets (including "Avoid" ones) and sort by confidence
     const validBets = analysisResults.sort(
@@ -1341,17 +1445,18 @@ function App() {
         },
       ];
 
-      // Calculate risk-adjusted scores for ranking
+      // Calculate risk-adjusted scores for ranking using data-driven multipliers
       const rankedBets = allBets.map((bet) => {
         let adjustedScore = bet.recommendation.confidence;
 
-        // Apply risk adjustments
-        if (bet.type === "Double Chance") {
-          adjustedScore *= 0.9; // Slightly lower score for safer bet
+        // Apply data-driven multipliers based on historical performance
+        if (bet.type === "Straight Win") {
+          adjustedScore *= betTypeMultipliers.straightWin;
+        } else if (bet.type === "Double Chance") {
+          adjustedScore *= betTypeMultipliers.doubleChance;
         } else if (bet.type === "Over/Under") {
-          adjustedScore *= 0.95; // Medium risk adjustment
+          adjustedScore *= betTypeMultipliers.overUnder;
         }
-        // Straight Win keeps base score (highest risk/reward)
 
         return {
           ...bet,
