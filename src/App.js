@@ -1387,6 +1387,20 @@ function App() {
     return recommendations;
   };
 
+  // Wilson Score calculation for statistical confidence
+  const calculateWilsonScore = (wins, total) => {
+    if (total === 0) return 0;
+    const n = total;
+    const p = wins / total;
+    const z = 1.96; // 95% confidence level
+    return (
+      (p +
+        (z * z) / (2 * n) -
+        z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
+      (1 + (z * z) / n)
+    );
+  };
+
   const analyzeStraightWin = (homeTeam, awayTeam, country, league, betData) => {
     // Check if this is an "Avoid" bet
     if (betData.recommendation && betData.recommendation.includes("Avoid")) {
@@ -1401,68 +1415,127 @@ function App() {
       };
     }
 
-    // Get historical data for both teams
-    const homeTeamBets = (bets || []).filter(
+    // Get historical data - prioritize home/away context
+    // For home team: get bets where they played at home
+    const homeTeamHomeBets = (bets || []).filter(
       (b) =>
-        b.TEAM_INCLUDED === homeTeam &&
+        b.HOME_TEAM === homeTeam &&
         b.COUNTRY === country &&
         b.LEAGUE === league &&
-        b.BET_TYPE === "Win" &&
+        (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
         b.RESULT &&
         b.RESULT.trim() !== ""
     );
 
-    const awayTeamBets = (bets || []).filter(
+    // For away team: get bets where they played away
+    const awayTeamAwayBets = (bets || []).filter(
       (b) =>
-        b.TEAM_INCLUDED === awayTeam &&
+        b.AWAY_TEAM === awayTeam &&
         b.COUNTRY === country &&
         b.LEAGUE === league &&
-        b.BET_TYPE === "Win" &&
+        (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
         b.RESULT &&
         b.RESULT.trim() !== ""
     );
 
-    // Calculate win rates
+    // Fallback: if no home/away specific data, use general team data
+    const homeTeamBets = homeTeamHomeBets.length > 0 
+      ? homeTeamHomeBets 
+      : (bets || []).filter(
+          (b) =>
+            b.TEAM_INCLUDED === homeTeam &&
+            b.COUNTRY === country &&
+            b.LEAGUE === league &&
+            (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+            b.RESULT &&
+            b.RESULT.trim() !== ""
+        );
+
+    const awayTeamBets = awayTeamAwayBets.length > 0
+      ? awayTeamAwayBets
+      : (bets || []).filter(
+          (b) =>
+            b.TEAM_INCLUDED === awayTeam &&
+            b.COUNTRY === country &&
+            b.LEAGUE === league &&
+            (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+            b.RESULT &&
+            b.RESULT.trim() !== ""
+        );
+
+    // Calculate wins and totals
     const homeWins = homeTeamBets.filter((b) =>
       b.RESULT.toLowerCase().includes("win")
     ).length;
-    const homeWinRate =
-      homeTeamBets.length > 0 ? (homeWins / homeTeamBets.length) * 100 : 0;
+    const homeTotal = homeTeamBets.length;
+    const homeWinRate = homeTotal > 0 ? (homeWins / homeTotal) * 100 : 0;
 
     const awayWins = awayTeamBets.filter((b) =>
       b.RESULT.toLowerCase().includes("win")
     ).length;
-    const awayWinRate =
-      awayTeamBets.length > 0 ? (awayWins / awayTeamBets.length) * 100 : 0;
+    const awayTotal = awayTeamBets.length;
+    const awayWinRate = awayTotal > 0 ? (awayWins / awayTotal) * 100 : 0;
 
-    // Determine recommendation
-    if (homeWinRate > awayWinRate + 10) {
-      return {
-        bet: homeTeam,
-        confidence: Math.min(homeWinRate / 10, 10),
-        winRate: homeWinRate,
-        totalBets: homeTeamBets.length,
-        reasoning: `${homeTeam} has ${homeWinRate.toFixed(
-          1
-        )}% win rate vs ${awayTeam}'s ${awayWinRate.toFixed(1)}%`,
-      };
-    } else if (awayWinRate > homeWinRate + 10) {
-      return {
-        bet: awayTeam,
-        confidence: Math.min(awayWinRate / 10, 10),
-        winRate: awayWinRate,
-        totalBets: awayTeamBets.length,
-        reasoning: `${awayTeam} has ${awayWinRate.toFixed(
-          1
-        )}% win rate vs ${homeTeam}'s ${homeWinRate.toFixed(1)}%`,
-      };
-    } else {
+    // Calculate Wilson Scores for statistical confidence
+    const homeWilsonScore = homeTotal > 0 ? calculateWilsonScore(homeWins, homeTotal) : 0;
+    const homeWilsonRate = homeWilsonScore * 100;
+    
+    const awayWilsonScore = awayTotal > 0 ? calculateWilsonScore(awayWins, awayTotal) : 0;
+    const awayWilsonRate = awayWilsonScore * 100;
+
+    // Minimum sample size requirement (at least 3 games for any recommendation)
+    const minSampleSize = 3;
+    const hasHomeData = homeTotal >= minSampleSize;
+    const hasAwayData = awayTotal >= minSampleSize;
+
+    // If insufficient data for both teams, return low confidence
+    if (!hasHomeData && !hasAwayData) {
       return {
         bet: "No clear winner",
-        confidence: 5,
+        confidence: 3, // Low confidence due to insufficient data
         winRate: Math.max(homeWinRate, awayWinRate),
-        totalBets: homeTeamBets.length + awayTeamBets.length,
-        reasoning: "Teams have similar win rates",
+        totalBets: homeTotal + awayTotal,
+        reasoning: `Insufficient data (${homeTotal} home games, ${awayTotal} away games). Need at least ${minSampleSize} games per team.`,
+      };
+    }
+
+    // Use Wilson Score for comparison (more statistically reliable)
+    // Compare Wilson rates instead of raw win rates
+    const wilsonDifference = Math.abs(homeWilsonRate - awayWilsonRate);
+    const minDifference = 5; // Minimum 5% difference in Wilson Score
+
+    // Determine recommendation based on Wilson Score
+    if (hasHomeData && (!hasAwayData || homeWilsonRate > awayWilsonRate + minDifference)) {
+      const confidence = Math.min(homeWilsonRate / 10, 10);
+      return {
+        bet: homeTeam,
+        confidence: confidence,
+        winRate: homeWinRate,
+        wilsonWinRate: homeWilsonRate,
+        totalBets: homeTotal,
+        reasoning: `${homeTeam} has ${homeWinRate.toFixed(1)}% win rate (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}. ${awayTeam} has ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}.`,
+      };
+    } else if (hasAwayData && (!hasHomeData || awayWilsonRate > homeWilsonRate + minDifference)) {
+      const confidence = Math.min(awayWilsonRate / 10, 10);
+      return {
+        bet: awayTeam,
+        confidence: confidence,
+        winRate: awayWinRate,
+        wilsonWinRate: awayWilsonRate,
+        totalBets: awayTotal,
+        reasoning: `${awayTeam} has ${awayWinRate.toFixed(1)}% win rate (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}. ${homeTeam} has ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}.`,
+      };
+    } else {
+      // Teams have similar Wilson Scores - use average confidence
+      const avgWilsonRate = (homeWilsonRate + awayWilsonRate) / 2;
+      const confidence = Math.min(avgWilsonRate / 10, 10);
+      return {
+        bet: "No clear winner",
+        confidence: Math.max(confidence, 3), // At least 3 if we have some data
+        winRate: Math.max(homeWinRate, awayWinRate),
+        wilsonWinRate: avgWilsonRate,
+        totalBets: homeTotal + awayTotal,
+        reasoning: `Teams have similar win rates: ${homeTeam} ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson, ${homeTotal} games) vs ${awayTeam} ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson, ${awayTotal} games). Difference: ${wilsonDifference.toFixed(1)}%`,
       };
     }
   };
@@ -1619,7 +1692,18 @@ function App() {
 
     // Calculate combined average
     const combinedAvgGoals = (homeAvgGoals + awayAvgGoals) / 2;
-    const totalGames = homeTeamGames.length + awayTeamGames.length;
+    
+    // Create a deduplicated set of all games (to avoid double-counting head-to-head matches)
+    const allGamesMap = new Map();
+    [...homeTeamGames, ...awayTeamGames].forEach((game) => {
+      // Use date + home team + away team as unique key
+      const key = `${game.DATE}_${game.HOME_TEAM}_${game.AWAY_TEAM}`;
+      if (!allGamesMap.has(key)) {
+        allGamesMap.set(key, game);
+      }
+    });
+    const allGames = Array.from(allGamesMap.values());
+    const totalGames = allGames.length;
 
     // If no data, return no clear trend
     if (totalGames === 0) {
@@ -1632,18 +1716,58 @@ function App() {
       };
     }
 
-    // Analyze multiple goal lines and find the best recommendation
+    // Minimum sample size requirement (at least 5 games for any recommendation)
+    const minSampleSize = 5;
+    if (totalGames < minSampleSize) {
+      return {
+        bet: "No clear trend",
+        confidence: 3, // Low confidence due to insufficient data
+        avgGoals: combinedAvgGoals,
+        totalGames: totalGames,
+        reasoning: `Insufficient data (${totalGames} games). Need at least ${minSampleSize} games for reliable over/under predictions.`,
+      };
+    }
+
+    // Calculate actual over/under rates from historical games
+    // Count how many games went over/under each line
     const goalLines = [1.5, 2.5, 3.5, 4.5];
     let bestRecommendation = null;
     let highestConfidence = 0;
 
     goalLines.forEach((line) => {
-      // Calculate confidence for OVER this line
-      if (combinedAvgGoals > line + 0.2) {
-        const overConfidence = Math.min(
-          ((combinedAvgGoals - line) / line) * 8 + 6,
-          10
-        );
+      // Count games where total goals exceeded the line
+      const overGames = allGames.filter((b) => {
+        const totalGoals = parseInt(b.HOME_SCORE) + parseInt(b.AWAY_SCORE);
+        return totalGoals > line;
+      }).length;
+
+      // Count games where total goals were under the line
+      const underGames = allGames.filter((b) => {
+        const totalGoals = parseInt(b.HOME_SCORE) + parseInt(b.AWAY_SCORE);
+        return totalGoals < line;
+      }).length;
+
+      // Calculate actual rates
+      const overRate = totalGames > 0 ? (overGames / totalGames) * 100 : 0;
+      const underRate = totalGames > 0 ? (underGames / totalGames) * 100 : 0;
+
+      // Use Wilson Score for statistical confidence
+      const overWilsonScore = overGames > 0 ? calculateWilsonScore(overGames, totalGames) : 0;
+      const overWilsonRate = overWilsonScore * 100;
+      
+      const underWilsonScore = underGames > 0 ? calculateWilsonScore(underGames, totalGames) : 0;
+      const underWilsonRate = underWilsonScore * 100;
+
+      // Calculate confidence based on Wilson Score (similar to Straight Win)
+      // Use a minimum threshold of 60% for confidence
+      const minThreshold = 60; // Minimum 60% rate for any confidence
+      const minDifference = 10; // Must be at least 10% above/below 50%
+
+      // Check OVER recommendation
+      if (overWilsonRate >= minThreshold && (overWilsonRate - 50) >= minDifference) {
+        // Confidence based on how far above 50% it is, scaled to 0-10
+        // 60% = 6.0, 70% = 7.0, 80% = 8.0, 90%+ = 9.0-10.0
+        const overConfidence = Math.min(((overWilsonRate - 50) / 40) * 8 + 5, 10);
         if (overConfidence > highestConfidence) {
           highestConfidence = overConfidence;
           bestRecommendation = {
@@ -1651,19 +1775,17 @@ function App() {
             confidence: overConfidence,
             avgGoals: combinedAvgGoals,
             totalGames: totalGames,
-            reasoning: `Combined average: ${combinedAvgGoals.toFixed(
-              1
-            )} goals per game (${line} line)`,
+            overRate: overRate,
+            overWilsonRate: overWilsonRate,
+            reasoning: `Historical data shows ${overRate.toFixed(1)}% (${overWilsonRate.toFixed(1)}% Wilson) of games go OVER ${line} (${overGames}/${totalGames} games). Combined avg: ${combinedAvgGoals.toFixed(1)} goals.`,
           };
         }
       }
 
-      // Calculate confidence for UNDER this line
-      if (combinedAvgGoals < line - 0.2) {
-        const underConfidence = Math.min(
-          ((line - combinedAvgGoals) / line) * 8 + 6,
-          10
-        );
+      // Check UNDER recommendation
+      if (underWilsonRate >= minThreshold && (underWilsonRate - 50) >= minDifference) {
+        // Confidence based on how far above 50% it is
+        const underConfidence = Math.min(((underWilsonRate - 50) / 40) * 8 + 5, 10);
         if (underConfidence > highestConfidence) {
           highestConfidence = underConfidence;
           bestRecommendation = {
@@ -1671,24 +1793,22 @@ function App() {
             confidence: underConfidence,
             avgGoals: combinedAvgGoals,
             totalGames: totalGames,
-            reasoning: `Combined average: ${combinedAvgGoals.toFixed(
-              1
-            )} goals per game (${line} line)`,
+            underRate: underRate,
+            underWilsonRate: underWilsonRate,
+            reasoning: `Historical data shows ${underRate.toFixed(1)}% (${underWilsonRate.toFixed(1)}% Wilson) of games go UNDER ${line} (${underGames}/${totalGames} games). Combined avg: ${combinedAvgGoals.toFixed(1)} goals.`,
           };
         }
       }
     });
 
     // If no clear recommendation found, return neutral
-    if (!bestRecommendation || highestConfidence < 6) {
+    if (!bestRecommendation || highestConfidence < 5) {
       return {
         bet: "No clear trend",
-        confidence: 5,
+        confidence: 4, // Low confidence when no clear pattern
         avgGoals: combinedAvgGoals,
         totalGames: totalGames,
-        reasoning: `Combined average: ${combinedAvgGoals.toFixed(
-          1
-        )} goals per game`,
+        reasoning: `No strong over/under pattern found. Combined average: ${combinedAvgGoals.toFixed(1)} goals per game (${totalGames} games).`,
       };
     }
 
