@@ -1540,6 +1540,19 @@ function App() {
     }
   };
 
+  // Helper function to identify draws from scores
+  const isDraw = (bet) => {
+    const homeScore = parseInt(bet.HOME_SCORE);
+    const awayScore = parseInt(bet.AWAY_SCORE);
+    return (
+      homeScore !== null &&
+      awayScore !== null &&
+      !isNaN(homeScore) &&
+      !isNaN(awayScore) &&
+      homeScore === awayScore
+    );
+  };
+
   const analyzeDoubleChance = (
     homeTeam,
     awayTeam,
@@ -1569,61 +1582,250 @@ function App() {
       betData
     );
 
-    // Get all historical matches between these teams or in this league to calculate draw rate
-    const allMatches = (bets || []).filter(
+    // Get all games involving these teams (not just head-to-head)
+    const homeTeamGames = (bets || []).filter(
       (b) =>
-        ((b.HOME_TEAM === homeTeam && b.AWAY_TEAM === awayTeam) ||
-          (b.HOME_TEAM === awayTeam && b.AWAY_TEAM === homeTeam)) &&
+        (b.HOME_TEAM === homeTeam || b.AWAY_TEAM === homeTeam) &&
         b.COUNTRY === country &&
         b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        !isNaN(parseInt(b.HOME_SCORE)) &&
+        !isNaN(parseInt(b.AWAY_SCORE))
+    );
+
+    const awayTeamGames = (bets || []).filter(
+      (b) =>
+        (b.HOME_TEAM === awayTeam || b.AWAY_TEAM === awayTeam) &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        !isNaN(parseInt(b.HOME_SCORE)) &&
+        !isNaN(parseInt(b.AWAY_SCORE))
+    );
+
+    // Create a deduplicated set of all games (to avoid double-counting head-to-head matches)
+    const allGamesMap = new Map();
+    [...homeTeamGames, ...awayTeamGames].forEach((game) => {
+      const key = `${game.DATE}_${game.HOME_TEAM}_${game.AWAY_TEAM}`;
+      if (!allGamesMap.has(key)) {
+        allGamesMap.set(key, game);
+      }
+    });
+    const allGames = Array.from(allGamesMap.values());
+
+    // Calculate draw rate from all games involving these teams
+    const draws = allGames.filter((b) => isDraw(b)).length;
+    const totalGames = allGames.length;
+    const drawRate = totalGames > 0 ? (draws / totalGames) * 100 : 0;
+
+    // Calculate league-wide draw rate as fallback
+    const leagueGames = (bets || []).filter(
+      (b) =>
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        !isNaN(parseInt(b.HOME_SCORE)) &&
+        !isNaN(parseInt(b.AWAY_SCORE))
+    );
+
+    // Deduplicate league games
+    const leagueGamesMap = new Map();
+    leagueGames.forEach((game) => {
+      const key = `${game.DATE}_${game.HOME_TEAM}_${game.AWAY_TEAM}`;
+      if (!leagueGamesMap.has(key)) {
+        leagueGamesMap.set(key, game);
+      }
+    });
+    const uniqueLeagueGames = Array.from(leagueGamesMap.values());
+    const leagueDraws = uniqueLeagueGames.filter((b) => isDraw(b)).length;
+    const leagueDrawRate =
+      uniqueLeagueGames.length > 0
+        ? (leagueDraws / uniqueLeagueGames.length) * 100
+        : 0;
+
+    // Use team-specific draw rate if we have enough data (at least 5 games), otherwise use league-wide
+    const minSampleSize = 5;
+    const effectiveDrawRate =
+      totalGames >= minSampleSize ? drawRate : leagueDrawRate;
+
+    // Try to get actual Double Chance bet history for these teams
+    const homeTeamDoubleChanceBets = (bets || []).filter(
+      (b) =>
+        b.TEAM_INCLUDED === homeTeam &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.BET_TYPE &&
+        b.BET_TYPE.toLowerCase().includes("double chance") &&
         b.RESULT &&
         b.RESULT.trim() !== ""
     );
 
-    // Calculate draw rate from historical matches
-    const draws = allMatches.filter((b) =>
-      b.RESULT.toLowerCase().includes("draw")
+    const awayTeamDoubleChanceBets = (bets || []).filter(
+      (b) =>
+        b.TEAM_INCLUDED === awayTeam &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.BET_TYPE &&
+        b.BET_TYPE.toLowerCase().includes("double chance") &&
+        b.RESULT &&
+        b.RESULT.trim() !== ""
+    );
+
+    // Calculate Double Chance win rates from actual bet history
+    const homeDoubleChanceWins = homeTeamDoubleChanceBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
     ).length;
-    const drawRate =
-      allMatches.length > 0 ? (draws / allMatches.length) * 100 : 15; // Default 15% if no data
+    const homeDoubleChanceTotal = homeTeamDoubleChanceBets.length;
+    const homeDoubleChanceWinRate =
+      homeDoubleChanceTotal > 0
+        ? (homeDoubleChanceWins / homeDoubleChanceTotal) * 100
+        : 0;
+    const homeDoubleChanceWilsonScore =
+      homeDoubleChanceTotal > 0
+        ? calculateWilsonScore(homeDoubleChanceWins, homeDoubleChanceTotal)
+        : 0;
+    const homeDoubleChanceWilsonRate = homeDoubleChanceWilsonScore * 100;
 
-    // Calculate Double Chance confidence based on Straight Win + Draw
-    let doubleChanceConfidence;
+    const awayDoubleChanceWins = awayTeamDoubleChanceBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const awayDoubleChanceTotal = awayTeamDoubleChanceBets.length;
+    const awayDoubleChanceWinRate =
+      awayDoubleChanceTotal > 0
+        ? (awayDoubleChanceWins / awayDoubleChanceTotal) * 100
+        : 0;
+    const awayDoubleChanceWilsonScore =
+      awayDoubleChanceTotal > 0
+        ? calculateWilsonScore(awayDoubleChanceWins, awayDoubleChanceTotal)
+        : 0;
+    const awayDoubleChanceWilsonRate = awayDoubleChanceWilsonScore * 100;
+
+    // Determine which team to recommend
     let recommendedTeam;
-    let reasoning;
+    let teamWinRate;
+    let teamWilsonRate;
+    let teamDoubleChanceWinRate;
+    let teamDoubleChanceWilsonRate;
+    let teamDoubleChanceTotal;
 
+    // Use Straight Win analysis to determine the stronger team
     if (straightWinAnalysis.bet === homeTeam) {
       recommendedTeam = homeTeam;
-      doubleChanceConfidence = (straightWinAnalysis.winRate + drawRate) / 10;
-      reasoning = `${homeTeam} has ${straightWinAnalysis.winRate.toFixed(
-        1
-      )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
+      teamWinRate = straightWinAnalysis.winRate || 0;
+      teamWilsonRate = straightWinAnalysis.wilsonWinRate || 0;
+      teamDoubleChanceWinRate = homeDoubleChanceWinRate;
+      teamDoubleChanceWilsonRate = homeDoubleChanceWilsonRate;
+      teamDoubleChanceTotal = homeDoubleChanceTotal;
     } else if (straightWinAnalysis.bet === awayTeam) {
       recommendedTeam = awayTeam;
-      doubleChanceConfidence = (straightWinAnalysis.winRate + drawRate) / 10;
-      reasoning = `${awayTeam} has ${straightWinAnalysis.winRate.toFixed(
-        1
-      )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
+      teamWinRate = straightWinAnalysis.winRate || 0;
+      teamWilsonRate = straightWinAnalysis.wilsonWinRate || 0;
+      teamDoubleChanceWinRate = awayDoubleChanceWinRate;
+      teamDoubleChanceWilsonRate = awayDoubleChanceWilsonRate;
+      teamDoubleChanceTotal = awayDoubleChanceTotal;
     } else {
-      // If no clear winner, use the team with higher win rate
-      const homeWinRate = straightWinAnalysis.winRate;
-      const awayWinRate = straightWinAnalysis.winRate;
-      if (homeWinRate >= awayWinRate) {
+      // No clear winner - calculate individual team stats to compare
+      // Get home team win bets
+      const homeTeamWinBets = (bets || []).filter(
+        (b) =>
+          b.TEAM_INCLUDED === homeTeam &&
+          b.COUNTRY === country &&
+          b.LEAGUE === league &&
+          (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+          b.RESULT &&
+          b.RESULT.trim() !== ""
+      );
+      const homeTeamWins = homeTeamWinBets.filter((b) =>
+        b.RESULT.toLowerCase().includes("win")
+      ).length;
+      const homeTeamTotal = homeTeamWinBets.length;
+      const homeTeamWinRate = homeTeamTotal > 0 ? (homeTeamWins / homeTeamTotal) * 100 : 0;
+      const homeTeamWilsonScore = homeTeamTotal > 0 ? calculateWilsonScore(homeTeamWins, homeTeamTotal) : 0;
+      const homeTeamWilsonRate = homeTeamWilsonScore * 100;
+
+      // Get away team win bets
+      const awayTeamWinBets = (bets || []).filter(
+        (b) =>
+          b.TEAM_INCLUDED === awayTeam &&
+          b.COUNTRY === country &&
+          b.LEAGUE === league &&
+          (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+          b.RESULT &&
+          b.RESULT.trim() !== ""
+      );
+      const awayTeamWins = awayTeamWinBets.filter((b) =>
+        b.RESULT.toLowerCase().includes("win")
+      ).length;
+      const awayTeamTotal = awayTeamWinBets.length;
+      const awayTeamWinRate = awayTeamTotal > 0 ? (awayTeamWins / awayTeamTotal) * 100 : 0;
+      const awayTeamWilsonScore = awayTeamTotal > 0 ? calculateWilsonScore(awayTeamWins, awayTeamTotal) : 0;
+      const awayTeamWilsonRate = awayTeamWilsonScore * 100;
+      
+      // If we have actual Double Chance data, prefer that
+      if (homeDoubleChanceTotal >= 3 && awayDoubleChanceTotal >= 3) {
+        if (homeDoubleChanceWilsonRate >= awayDoubleChanceWilsonRate) {
+          recommendedTeam = homeTeam;
+          teamWinRate = homeTeamWinRate;
+          teamWilsonRate = homeDoubleChanceWilsonRate;
+          teamDoubleChanceWinRate = homeDoubleChanceWinRate;
+          teamDoubleChanceWilsonRate = homeDoubleChanceWilsonRate;
+          teamDoubleChanceTotal = homeDoubleChanceTotal;
+        } else {
+          recommendedTeam = awayTeam;
+          teamWinRate = awayTeamWinRate;
+          teamWilsonRate = awayDoubleChanceWilsonRate;
+          teamDoubleChanceWinRate = awayDoubleChanceWinRate;
+          teamDoubleChanceWilsonRate = awayDoubleChanceWilsonRate;
+          teamDoubleChanceTotal = awayDoubleChanceTotal;
+        }
+      } else if (homeTeamWilsonRate >= awayTeamWilsonRate) {
         recommendedTeam = homeTeam;
-        doubleChanceConfidence = (homeWinRate + drawRate) / 10;
-        reasoning = `${homeTeam} has ${homeWinRate.toFixed(
-          1
-        )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
+        teamWinRate = homeTeamWinRate;
+        teamWilsonRate = homeTeamWilsonRate;
+        teamDoubleChanceWinRate = homeDoubleChanceWinRate;
+        teamDoubleChanceWilsonRate = homeDoubleChanceWilsonRate;
+        teamDoubleChanceTotal = homeDoubleChanceTotal;
       } else {
         recommendedTeam = awayTeam;
-        doubleChanceConfidence = (awayWinRate + drawRate) / 10;
-        reasoning = `${awayTeam} has ${awayWinRate.toFixed(
-          1
-        )}% win rate + ${drawRate.toFixed(1)}% draw rate`;
+        teamWinRate = awayTeamWinRate;
+        teamWilsonRate = awayTeamWilsonRate;
+        teamDoubleChanceWinRate = awayDoubleChanceWinRate;
+        teamDoubleChanceWilsonRate = awayDoubleChanceWilsonRate;
+        teamDoubleChanceTotal = awayDoubleChanceTotal;
       }
     }
 
+    // Calculate Double Chance confidence
+    // If we have actual Double Chance bet history with sufficient data, use that
+    let doubleChanceConfidence;
+    let reasoning;
+
+    if (teamDoubleChanceTotal >= 5) {
+      // Use actual Double Chance Wilson Rate
+      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate / 10, 10);
+      reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} actual Double Chance bets.`;
+    } else if (teamDoubleChanceTotal >= 3) {
+      // Use actual Double Chance data but with lower confidence due to small sample
+      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate / 10 * 0.9, 10);
+      reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} Double Chance bets (small sample).`;
+    } else {
+      // Calculate from Straight Win + Draw Rate
+      // Use Wilson Rate for win rate, add draw rate
+      const doubleChanceRate = teamWilsonRate + effectiveDrawRate;
+      doubleChanceConfidence = Math.min(doubleChanceRate / 10, 10);
+      
+      const drawRateSource = totalGames >= minSampleSize 
+        ? `team-specific (${drawRate.toFixed(1)}% from ${totalGames} games)` 
+        : `league-wide (${leagueDrawRate.toFixed(1)}% from ${uniqueLeagueGames.length} league games)`;
+      
+      reasoning = `${recommendedTeam} has ${teamWinRate.toFixed(1)}% win rate (${teamWilsonRate.toFixed(1)}% Wilson) + ${effectiveDrawRate.toFixed(1)}% draw rate (${drawRateSource}). Total: ${doubleChanceRate.toFixed(1)}%`;
+    }
+
     // Ensure Double Chance confidence is at least as high as Straight Win (logical validation)
+    // Double Chance should always be safer than Straight Win
     doubleChanceConfidence = Math.max(
       doubleChanceConfidence,
       straightWinAnalysis.confidence
@@ -1633,7 +1835,7 @@ function App() {
       bet: `${recommendedTeam} or Draw`,
       confidence: Math.min(doubleChanceConfidence, 10),
       successRate: doubleChanceConfidence * 10,
-      totalBets: allMatches.length,
+      totalBets: totalGames || teamDoubleChanceTotal || 0,
       reasoning: reasoning,
     };
   };
