@@ -175,18 +175,27 @@ const TeamUploadTab = ({
     });
     
     if (walesBets.length > 0) {
-      console.log(`Wales teams in bets: ${walesBets.slice(0, 3).map(bet => bet.TEAM || bet.team).join(', ')}`);
+      console.log(`Wales teams in bets: ${walesBets.slice(0, 3).map(bet => bet.TEAM || bet.team || bet.TEAM_INCLUDED || bet.team_included).join(', ')}`);
     }
 
+    // Check both TEAM_INCLUDED and HOME_TEAM/AWAY_TEAM for matching
     const teamBets = bets.filter(bet => {
-      const betTeam = (bet.TEAM || bet.team || '').toLowerCase().trim();
+      const betTeam = (bet.TEAM_INCLUDED || bet.team_included || bet.TEAM || bet.team || '').toLowerCase().trim();
+      const betHomeTeam = (bet.HOME_TEAM || bet.home_team || '').toLowerCase().trim();
+      const betAwayTeam = (bet.AWAY_TEAM || bet.away_team || '').toLowerCase().trim();
       const betCountry = (bet.COUNTRY || bet.country || '').toLowerCase().trim();
       const betLeague = (bet.LEAGUE || bet.league || '').toLowerCase().trim();
 
-      return (
+      const teamMatches = (
         betTeam.includes(normalizedTeamName) ||
-        normalizedTeamName.includes(betTeam)
-      ) && (
+        normalizedTeamName.includes(betTeam) ||
+        betHomeTeam.includes(normalizedTeamName) ||
+        normalizedTeamName.includes(betHomeTeam) ||
+        betAwayTeam.includes(normalizedTeamName) ||
+        normalizedTeamName.includes(betAwayTeam)
+      );
+
+      return teamMatches && (
         betCountry.includes(normalizedCountry) ||
         normalizedCountry.includes(betCountry)
       ) && (
@@ -199,9 +208,74 @@ const TeamUploadTab = ({
     if (teamBets.length === 0) return null;
 
     // Calculate basic stats from bets
-    const wins = teamBets.filter(bet => bet.RESULT === 'W' || bet.result === 'W').length;
-    const losses = teamBets.filter(bet => bet.RESULT === 'L' || bet.result === 'L').length;
-    const totalBets = wins + losses;
+    const wins = teamBets.filter(bet => {
+      const result = (bet.RESULT || bet.result || '').toUpperCase();
+      return result === 'W' || result.includes('WIN');
+    }).length;
+    
+    const losses = teamBets.filter(bet => {
+      const result = (bet.RESULT || bet.result || '').toUpperCase();
+      return result === 'L' || result.includes('LOSS');
+    }).length;
+    
+    // Calculate draws (when HOME_SCORE === AWAY_SCORE or RESULT === 'D')
+    const draws = teamBets.filter(bet => {
+      const homeScore = parseFloat(bet.HOME_SCORE || bet.home_score || 0);
+      const awayScore = parseFloat(bet.AWAY_SCORE || bet.away_score || 0);
+      const result = (bet.RESULT || bet.result || '').toUpperCase();
+      return (homeScore === awayScore && homeScore > 0) || result === 'D' || result.includes('DRAW');
+    }).length;
+    
+    const totalBets = wins + losses + draws;
+
+    // Calculate double chance stats
+    // For each bet, determine if team was home or away based on HOME_TEAM/AWAY_TEAM
+    const homeBets = teamBets.filter(bet => {
+      const betHomeTeam = (bet.HOME_TEAM || bet.home_team || '').toLowerCase().trim();
+      return betHomeTeam.includes(normalizedTeamName) || normalizedTeamName.includes(betHomeTeam);
+    });
+
+    const awayBets = teamBets.filter(bet => {
+      const betAwayTeam = (bet.AWAY_TEAM || bet.away_team || '').toLowerCase().trim();
+      return betAwayTeam.includes(normalizedTeamName) || normalizedTeamName.includes(betAwayTeam);
+    });
+
+    // Calculate 1X (home win or draw) for home games
+    const homeWins = homeBets.filter(bet => {
+      const homeScore = parseFloat(bet.HOME_SCORE || bet.home_score || 0);
+      const awayScore = parseFloat(bet.AWAY_SCORE || bet.away_score || 0);
+      // Home team wins if homeScore > awayScore and scores are valid
+      return homeScore > awayScore && homeScore > 0;
+    }).length;
+    
+    const homeDraws = homeBets.filter(bet => {
+      const homeScore = parseFloat(bet.HOME_SCORE || bet.home_score || 0);
+      const awayScore = parseFloat(bet.AWAY_SCORE || bet.away_score || 0);
+      const result = (bet.RESULT || bet.result || '').toUpperCase();
+      return (homeScore === awayScore && homeScore > 0) || result === 'D' || result.includes('DRAW');
+    }).length;
+    
+    const doubleChance1X = homeBets.length > 0 ? ((homeWins + homeDraws) / homeBets.length) * 100 : 0;
+
+    // Calculate X2 (draw or away win) for away games
+    const awayWins = awayBets.filter(bet => {
+      const homeScore = parseFloat(bet.HOME_SCORE || bet.home_score || 0);
+      const awayScore = parseFloat(bet.AWAY_SCORE || bet.away_score || 0);
+      // Away team wins if awayScore > homeScore and scores are valid
+      return awayScore > homeScore && awayScore > 0;
+    }).length;
+    
+    const awayDraws = awayBets.filter(bet => {
+      const homeScore = parseFloat(bet.HOME_SCORE || bet.home_score || 0);
+      const awayScore = parseFloat(bet.AWAY_SCORE || bet.away_score || 0);
+      const result = (bet.RESULT || bet.result || '').toUpperCase();
+      return (homeScore === awayScore && homeScore > 0) || result === 'D' || result.includes('DRAW');
+    }).length;
+    
+    const doubleChanceX2 = awayBets.length > 0 ? ((awayWins + awayDraws) / awayBets.length) * 100 : 0;
+
+    // Overall double chance (wins + draws / total)
+    const doubleChanceOverall = totalBets > 0 ? ((wins + draws) / totalBets) * 100 : 0;
 
     return {
       teamName: teamName,
@@ -210,6 +284,10 @@ const TeamUploadTab = ({
       totalBets: totalBets,
       wins: wins,
       losses: losses,
+      draws: draws,
+      doubleChance1X: homeBets.length > 0 ? doubleChance1X : doubleChanceOverall, // Use overall if no home games
+      doubleChanceX2: awayBets.length > 0 ? doubleChanceX2 : doubleChanceOverall, // Use overall if no away games
+      doubleChanceOverall: doubleChanceOverall,
       bets: teamBets
     };
   };
@@ -219,7 +297,7 @@ const TeamUploadTab = ({
     const results = {
       straightWin: [],
       over1_5: [],
-      over2_5: [],
+      doubleChance: [],
       avoid: []
     };
 
@@ -288,6 +366,7 @@ const TeamUploadTab = ({
       // Get win rate from team analytics or bets data
       const wins = teamAnalyticsData?.wins || betsData?.wins || 0;
       const losses = teamAnalyticsData?.losses || betsData?.losses || 0;
+      const draws = betsData?.draws || 0;
       const winRate = (wins + losses) > 0 ? (wins / (wins + losses)) * 100 : 0;
       const wilsonWinRate = (wins + losses) > 0 ? calculateWilsonScore(wins, wins + losses) * 100 : 0;
       
@@ -303,7 +382,71 @@ const TeamUploadTab = ({
       const over2_5Games = Math.round((over2_5Rate / 100) * totalGames);
       const wilsonOver2_5 = totalGames > 0 ? calculateWilsonScore(over2_5Games, totalGames) * 100 : 0;
 
-      console.log(`Team ${team.TEAM}: Win Rate: ${winRate.toFixed(1)}%, Over 1.5: ${over1_5Rate.toFixed(1)}%, Over 2.5: ${over2_5Rate.toFixed(1)}%, Avg Goals: ${avgGoals.toFixed(1)}, Total Games: ${totalGames}`);
+      // Get double chance data from bets data
+      const doubleChanceOverall = betsData?.doubleChanceOverall || 0;
+      const doubleChance1X = betsData?.doubleChance1X || doubleChanceOverall;
+      const doubleChanceX2 = betsData?.doubleChanceX2 || doubleChanceOverall;
+      
+      // Calculate Wilson scores for double chance
+      const doubleChanceSuccesses = Math.round((doubleChanceOverall / 100) * totalGames);
+      const wilsonDoubleChance = totalGames > 0 ? calculateWilsonScore(doubleChanceSuccesses, totalGames) * 100 : 0;
+
+      console.log(`Team ${team.TEAM}: Win Rate: ${winRate.toFixed(1)}%, Over 1.5: ${over1_5Rate.toFixed(1)}%, Over 2.5: ${over2_5Rate.toFixed(1)}%, Double Chance: ${doubleChanceOverall.toFixed(1)}%, Avg Goals: ${avgGoals.toFixed(1)}, Total Games: ${totalGames}`);
+
+      // Determine all categories this team qualifies for
+      const qualifyingCategories = [];
+      
+      if (winRate >= 50 && totalGames >= 3) {
+        qualifyingCategories.push('straightWin');
+      }
+      if (over1_5Rate >= 60 && totalGames >= 3) {
+        qualifyingCategories.push('over1_5');
+      }
+      if (doubleChanceOverall >= 70 && totalGames >= 3) {
+        qualifyingCategories.push('doubleChance');
+      }
+      
+      // Check for perfect rates (regardless of sample size)
+      if (over1_5Rate >= 100 && !qualifyingCategories.includes('over1_5')) {
+        qualifyingCategories.push('over1_5');
+      }
+      if (doubleChanceOverall >= 100 && !qualifyingCategories.includes('doubleChance')) {
+        qualifyingCategories.push('doubleChance');
+      }
+
+      // Determine primary category (priority order: straightWin > over1_5 > doubleChance)
+      let primaryCategory = null;
+      let primaryReason = '';
+      
+      if (isBlacklisted) {
+        primaryCategory = 'avoid';
+        primaryReason = "Team is blacklisted";
+      } else if (qualifyingCategories.length > 0) {
+        // Use priority order to determine primary category
+        if (qualifyingCategories.includes('straightWin')) {
+          primaryCategory = 'straightWin';
+          primaryReason = `Good win rate (${winRate.toFixed(1)}%) with ${totalGames} games`;
+        } else if (qualifyingCategories.includes('over1_5')) {
+          primaryCategory = 'over1_5';
+          primaryReason = over1_5Rate >= 100 
+            ? `Perfect Over 1.5 rate (${over1_5Rate.toFixed(1)}%) with ${totalGames} games`
+            : `Good Over 1.5 rate (${over1_5Rate.toFixed(1)}%) with ${totalGames} games`;
+        } else if (qualifyingCategories.includes('doubleChance')) {
+          primaryCategory = 'doubleChance';
+          primaryReason = doubleChanceOverall >= 100
+            ? `Perfect Double Chance rate (${doubleChanceOverall.toFixed(1)}%) with ${totalGames} games`
+            : `Good Double Chance rate (${doubleChanceOverall.toFixed(1)}%) with ${totalGames} games`;
+        }
+      } else if (totalGames < 3) {
+        primaryCategory = 'avoid';
+        primaryReason = `Insufficient data (${totalGames} games)`;
+      } else {
+        primaryCategory = 'avoid';
+        primaryReason = `Below threshold performance`;
+      }
+
+      // Get other categories (excluding primary and over2_5)
+      const otherCategories = qualifyingCategories.filter(cat => cat !== primaryCategory && cat !== 'over2_5');
 
       const teamAnalysis = {
         ...team,
@@ -317,70 +460,30 @@ const TeamUploadTab = ({
         wilsonOver1_5: wilsonOver1_5.toFixed(1),
         over2_5Rate: over2_5Rate.toFixed(1),
         wilsonOver2_5: wilsonOver2_5.toFixed(1),
+        doubleChanceOverall: doubleChanceOverall.toFixed(1),
+        doubleChance1X: doubleChance1X.toFixed(1),
+        doubleChanceX2: doubleChanceX2.toFixed(1),
+        wilsonDoubleChance: wilsonDoubleChance.toFixed(1),
+        draws: draws,
         totalGames: totalGames,
-        avgGoals: avgGoals.toFixed(1)
+        avgGoals: avgGoals.toFixed(1),
+        primaryCategory: primaryCategory,
+        otherCategories: otherCategories,
+        allCategories: qualifyingCategories
       };
 
-      // Categorize teams - simplified for team discovery
-      if (isBlacklisted) {
-        results.avoid.push({
-          ...teamAnalysis,
-          reason: "Team is blacklisted",
-          category: "blacklisted"
-        });
-      } else if (winRate >= 50 && totalGames >= 3) {
-        results.straightWin.push({
-          ...teamAnalysis,
-          reason: `Good win rate (${winRate.toFixed(1)}%) with ${totalGames} games`,
-          category: "straight_win"
-        });
-      } else if (over1_5Rate >= 60 && totalGames >= 3) {
-        results.over1_5.push({
-          ...teamAnalysis,
-          reason: `Good Over 1.5 rate (${over1_5Rate.toFixed(1)}%) with ${totalGames} games`,
-          category: "over_1_5"
-        });
-      } else if (over2_5Rate >= 50 && totalGames >= 3) {
-        results.over2_5.push({
-          ...teamAnalysis,
-          reason: `Good Over 2.5 rate (${over2_5Rate.toFixed(1)}%) with ${totalGames} games`,
-          category: "over_2_5"
-        });
-      } else if (over1_5Rate >= 100 || over2_5Rate >= 100) {
-        // Perfect rates regardless of sample size
-        if (over1_5Rate >= 100) {
-          results.over1_5.push({
-            ...teamAnalysis,
-            reason: `Perfect Over 1.5 rate (${over1_5Rate.toFixed(1)}%) with ${totalGames} games`,
-            category: "over_1_5"
-          });
-        }
-        if (over2_5Rate >= 100) {
-          results.over2_5.push({
-            ...teamAnalysis,
-            reason: `Perfect Over 2.5 rate (${over2_5Rate.toFixed(1)}%) with ${totalGames} games`,
-            category: "over_2_5"
-          });
-        }
-      } else if (totalGames < 3) {
-        results.avoid.push({
-          ...teamAnalysis,
-          reason: `Insufficient data (${totalGames} games)`,
-          category: "insufficient_data"
-        });
-      } else {
-        results.avoid.push({
-          ...teamAnalysis,
-          reason: `Below threshold performance`,
-          category: "poor_performance"
-        });
-      }
+      // Add team to only its primary category
+      results[primaryCategory].push({
+        ...teamAnalysis,
+        reason: primaryReason,
+        category: primaryCategory
+      });
     });
 
     // Sort each category by Wilson Score
     results.straightWin.sort((a, b) => parseFloat(b.wilsonWinRate) - parseFloat(a.wilsonWinRate));
     results.over1_5.sort((a, b) => parseFloat(b.wilsonOver1_5) - parseFloat(a.wilsonOver1_5));
-    results.over2_5.sort((a, b) => parseFloat(b.wilsonOver2_5) - parseFloat(a.wilsonOver2_5));
+    results.doubleChance.sort((a, b) => parseFloat(b.wilsonDoubleChance) - parseFloat(a.wilsonDoubleChance));
 
     return results;
   };
@@ -423,22 +526,49 @@ const TeamUploadTab = ({
     }
   };
 
+  // Get badge styling for category
+  const getCategoryBadge = (category) => {
+    const badges = {
+      'straightWin': { label: 'Win', color: 'bg-green-600', textColor: 'text-white' },
+      'over1_5': { label: 'O1.5', color: 'bg-blue-600', textColor: 'text-white' },
+      'doubleChance': { label: 'DC', color: 'bg-yellow-600', textColor: 'text-white' }
+    };
+    return badges[category] || { label: category, color: 'bg-gray-600', textColor: 'text-white' };
+  };
+
   // Render team card
   const renderTeamCard = (team, index) => (
     <div key={index} className={`bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors ${
       team.isBlacklisted ? 'border-l-4 border-red-500 bg-red-900/20' : ''
     }`}>
       <div className="flex justify-between items-start mb-2">
-        <div>
-          <div className="font-medium text-white text-sm">
+        <div className="flex-1">
+          <div className="font-medium text-white text-sm flex items-center gap-2 flex-wrap">
             {team.TEAM}
             {team.isBlacklisted && (
-              <span className="ml-2 px-2 py-1 text-xs font-bold bg-red-600 text-white rounded-full">
+              <span className="px-2 py-1 text-xs font-bold bg-red-600 text-white rounded-full">
                 BLACKLISTED
               </span>
             )}
+            {/* Show badges for other categories */}
+            {team.otherCategories && team.otherCategories.filter(cat => cat !== 'over2_5').length > 0 && (
+              <>
+                {team.otherCategories.filter(cat => cat !== 'over2_5').map((cat, idx) => {
+                  const badge = getCategoryBadge(cat);
+                  return (
+                    <span 
+                      key={idx} 
+                      className={`px-2 py-1 text-xs font-semibold ${badge.color} ${badge.textColor} rounded-full`}
+                      title={`Also qualifies for ${badge.label}`}
+                    >
+                      {badge.label}
+                    </span>
+                  );
+                })}
+              </>
+            )}
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-gray-400 mt-1">
             {team.COUNTRY} - {team.LEAGUE} ({team.LOCATION})
           </div>
         </div>
@@ -453,24 +583,34 @@ const TeamUploadTab = ({
       
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <span className="text-gray-400">Games:</span> {team.totalGames}
+          <span className="text-gray-400">Games:</span> <span className="text-gray-300">{team.totalGames}</span>
         </div>
         <div>
-          <span className="text-gray-400">Avg Goals:</span> {team.avgGoals}
+          <span className="text-gray-400">Avg Goals:</span> <span className="text-gray-300">{team.avgGoals}</span>
         </div>
         {team.wilsonWinRate && (
           <div>
-            <span className="text-gray-400">Win Rate:</span> {team.winRate}% ({team.wilsonWinRate}% Wilson)
+            <span className="text-gray-400">Win Rate:</span> <span className="text-gray-300">{team.winRate}% ({team.wilsonWinRate}% Wilson)</span>
           </div>
         )}
         {team.wilsonOver1_5 && (
           <div>
-            <span className="text-gray-400">Over 1.5:</span> {team.over1_5Rate}% ({team.wilsonOver1_5}% Wilson)
+            <span className="text-gray-400">Over 1.5:</span> <span className="text-gray-300">{team.over1_5Rate}% ({team.wilsonOver1_5}% Wilson)</span>
           </div>
         )}
-        {team.wilsonOver2_5 && (
+        {team.wilsonDoubleChance && (
           <div>
-            <span className="text-gray-400">Over 2.5:</span> {team.over2_5Rate}% ({team.wilsonOver2_5}% Wilson)
+            <span className="text-gray-400">Double Chance:</span> <span className="text-gray-300">{team.doubleChanceOverall}% ({team.wilsonDoubleChance}% Wilson)</span>
+          </div>
+        )}
+        {team.doubleChance1X && team.doubleChance1X !== team.doubleChanceOverall && (
+          <div>
+            <span className="text-gray-400">1X (Home):</span> <span className="text-gray-300">{team.doubleChance1X}%</span>
+          </div>
+        )}
+        {team.doubleChanceX2 && team.doubleChanceX2 !== team.doubleChanceOverall && (
+          <div>
+            <span className="text-gray-400">X2 (Away):</span> <span className="text-gray-300">{team.doubleChanceX2}%</span>
           </div>
         )}
       </div>
@@ -526,8 +666,8 @@ const TeamUploadTab = ({
                 <div className="text-gray-400">Over 1.5</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-400">{analysisResults.over2_5.length}</div>
-                <div className="text-gray-400">Over 2.5</div>
+                <div className="text-2xl font-bold text-yellow-400">{analysisResults.doubleChance.length}</div>
+                <div className="text-gray-400">Double Chance</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-red-400">{analysisResults.avoid.length}</div>
@@ -560,14 +700,14 @@ const TeamUploadTab = ({
             </div>
           )}
 
-          {/* Over 2.5 Recommendations */}
-          {analysisResults.over2_5.length > 0 && (
-            <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
-              <h4 className="text-lg font-semibold text-purple-300 mb-3 flex items-center">
-                🔥 Over 2.5 Recommendations ({analysisResults.over2_5.length})
+          {/* Double Chance Recommendations */}
+          {analysisResults.doubleChance.length > 0 && (
+            <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+              <h4 className="text-lg font-semibold text-yellow-300 mb-3 flex items-center">
+                🎲 Double Chance Recommendations ({analysisResults.doubleChance.length})
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {analysisResults.over2_5.map((team, index) => renderTeamCard(team, index))}
+                {analysisResults.doubleChance.map((team, index) => renderTeamCard(team, index))}
               </div>
             </div>
           )}
