@@ -30,11 +30,10 @@ const BetTypeChart = ({ teamBets, betType, teamName }) => {
     return false;
   });
 
-  // Generate chart data from filtered bets
+  // Generate chart data from filtered bets using rolling average
   const generateChartData = (bets) => {
     const data = [];
-    let cumulativeWins = 0;
-    let cumulativeGames = 0;
+    const ROLLING_WINDOW = 5; // Use 5-game rolling window
 
     if (!bets || bets.length === 0) {
       return [];
@@ -47,17 +46,32 @@ const BetTypeChart = ({ teamBets, betType, teamName }) => {
       return new Date(dateA) - new Date(dateB);
     });
 
-    sortedBets.slice(-10).forEach((bet, index) => {
-      // Show last 10 bets for small chart
+    // Get last 10 bets for display
+    const last10Bets = sortedBets.slice(-10);
+
+    last10Bets.forEach((bet, index) => {
       const result = bet.RESULT || bet.result;
       const isWin = result?.toLowerCase().includes("win") || result === "W";
 
-      if (isWin) cumulativeWins++;
-      cumulativeGames++;
+      // Calculate rolling average: look back at last ROLLING_WINDOW games (or fewer if not enough games)
+      // We need to look at the games up to and including the current game
+      const gamesToLookAt = last10Bets.slice(0, index + 1);
+      const windowStart = Math.max(0, gamesToLookAt.length - ROLLING_WINDOW);
+      const windowGames = gamesToLookAt.slice(windowStart);
+      
+      // Count wins in the rolling window
+      const windowWins = windowGames.filter(b => {
+        const r = b.RESULT || b.result;
+        return r?.toLowerCase().includes("win") || r === "W";
+      }).length;
+      
+      const windowTotal = windowGames.length;
+      const rollingWinRate = windowTotal > 0 ? (windowWins / windowTotal) * 100 : 0;
+
 
       data.push({
         x: index + 1,
-        y: cumulativeGames > 0 ? (cumulativeWins / cumulativeGames) * 100 : 0,
+        y: isNaN(rollingWinRate) ? 0 : rollingWinRate,
         game: index + 1,
         result: isWin ? "win" : "loss",
       });
@@ -87,10 +101,10 @@ const BetTypeChart = ({ teamBets, betType, teamName }) => {
   const createPath = (data) => {
     if (data.length < 2) return "";
 
-    const stepX = chartWidth / (data.length - 1);
+    const stepX = data.length > 1 ? chartWidth / (data.length - 1) : 0;
     const points = data.map((point, index) => {
-      const x = padding + index * stepX;
-      const y = padding + chartHeight - (point.y / 100) * chartHeight;
+      const x = data.length > 1 ? padding + index * stepX : padding + chartWidth / 2;
+      const y = padding + chartHeight - ((point.y || 0) / 100) * chartHeight;
       return `${x},${y}`;
     });
 
@@ -147,9 +161,9 @@ const BetTypeChart = ({ teamBets, betType, teamName }) => {
 
         {/* Data points */}
         {chartData.map((point, index) => {
-          const stepX = chartWidth / (chartData.length - 1);
-          const x = padding + index * stepX;
-          const y = padding + chartHeight - (point.y / 100) * chartHeight;
+          const stepX = chartData.length > 1 ? chartWidth / (chartData.length - 1) : 0;
+          const x = chartData.length > 1 ? padding + index * stepX : padding + chartWidth / 2;
+          const y = padding + chartHeight - ((point.y || 0) / 100) * chartHeight;
 
           return (
             <circle
@@ -166,11 +180,11 @@ const BetTypeChart = ({ teamBets, betType, teamName }) => {
         {/* Current point highlight */}
         {chartData.length > 0 && (
           <circle
-            cx={padding + chartWidth}
+            cx={chartData.length > 1 ? padding + chartWidth : padding + chartWidth / 2}
             cy={
               padding +
               chartHeight -
-              (chartData[chartData.length - 1].y / 100) * chartHeight
+              ((chartData[chartData.length - 1].y || 0) / 100) * chartHeight
             }
             r="1.5"
             fill={lineColor}
@@ -187,7 +201,7 @@ const BetTypeChart = ({ teamBets, betType, teamName }) => {
       <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
         <div className="font-medium">{teamName}</div>
         <div>{betType} bets</div>
-        <div>Last {chartData.length} games</div>
+        <div>Last {chartData.length} games (5-game rolling avg)</div>
         <div>Current: {currentWinRate.toFixed(1)}%</div>
         <div>
           Trend: {trend > 0 ? "+" : ""}
