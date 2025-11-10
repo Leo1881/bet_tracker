@@ -12,6 +12,7 @@ const TabNavigation = ({ activeTab, setActiveTab }) => {
     { id: "betSlips", label: "Bet Slips", icon: "📝" },
     { id: "analytics", label: "Analytics", icon: "📈" },
     { id: "performance", label: "Performance", icon: "⚡" },
+    { id: "odds", label: "Odds", icon: "💰" },
     { id: "topTeams", label: "Top Teams", icon: "🏆" },
     { id: "betTypeAnalytics", label: "Team Analytics", icon: "👥" },
     { id: "scoringAnalysis", label: "Scoring Analysis", icon: "⚽" },

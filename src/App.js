@@ -13,7 +13,12 @@ import { useBetAnalysis } from "./hooks/useBetAnalysis";
 import { useQuery } from "./hooks/useQuery";
 import { usePDF } from "./hooks/usePDF";
 import { useAnalyticsFunctions } from "./hooks/useAnalyticsFunctions";
-import { getOddsAnalytics as getOddsAnalyticsService } from "./services/oddsAnalyticsService";
+import {
+  getOddsAnalytics as getOddsAnalyticsService,
+  getFilteredOddsAnalytics as getFilteredOddsAnalyticsService,
+  getBetsForOddsRange as getBetsForOddsRangeService,
+  getTeamOddsAnalytics as getTeamOddsAnalyticsService,
+} from "./services/oddsAnalyticsService";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -217,195 +222,16 @@ function App() {
   };
 
   const getFilteredOddsAnalytics = () => {
-    const oddsRanges = {
-      "1.0-1.5": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
-      "1.5-2.0": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
-      "2.0-3.0": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
-      "3.0-5.0": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
-      "5.0+": { bets: 0, wins: 0, losses: 0, pending: 0, totalOdds: 0 },
-    };
-
-    console.log("Total bets to analyze for odds analytics:", bets.length);
-
-    bets.forEach((bet, index) => {
-      // Filter out specific bet types for odds analytics only
-      const betType = bet.BET_TYPE?.toLowerCase() || "";
-      const betSelection = bet.BET_SELECTION?.toLowerCase() || "";
-      const teamIncluded = bet.TEAM_INCLUDED?.toLowerCase() || "";
-
-      if (
-        betType.includes("over 1.5") ||
-        betType.includes("over 0.5") ||
-        betType.includes("both") ||
-        betSelection.includes("over 1.5") ||
-        betSelection.includes("over 0.5") ||
-        betSelection.includes("both") ||
-        teamIncluded.includes("over 1.5") ||
-        teamIncluded.includes("over 0.5") ||
-        teamIncluded.includes("both")
-      ) {
-        console.log(
-          `Skipping bet for odds analytics - excluded: ${bet.BET_TYPE} | ${bet.BET_SELECTION} | ${bet.TEAM_INCLUDED}`
-        );
-        return;
-      }
-
-      const odds1 = parseFloat(bet.ODDS1) || 0;
-      const odds2 = parseFloat(bet.ODDS2) || 0;
-
-      // Determine which odds to use based on the team you bet on
-      let betOdds = 0;
-      const teamBet = bet.TEAM_INCLUDED;
-      const homeTeam = bet.HOME_TEAM;
-      const awayTeam = bet.AWAY_TEAM;
-
-      // If you bet on the home team, use odds1
-      if (
-        teamBet &&
-        homeTeam &&
-        teamBet.toLowerCase().includes(homeTeam.toLowerCase())
-      ) {
-        betOdds = odds1;
-      }
-      // If you bet on the away team, use odds2
-      else if (
-        teamBet &&
-        awayTeam &&
-        teamBet.toLowerCase().includes(awayTeam.toLowerCase())
-      ) {
-        betOdds = odds2;
-      }
-      // Fallback: use the higher odds (assuming you bet on the underdog)
-      else {
-        betOdds = Math.max(odds1, odds2);
-      }
-
-      if (betOdds <= 0) {
-        return; // Skip bets without odds
-      }
-
-      let range;
-      if (betOdds <= 1.5) range = "1.0-1.5";
-      else if (betOdds <= 2.0) range = "1.5-2.0";
-      else if (betOdds <= 3.0) range = "2.0-3.0";
-      else if (betOdds <= 5.0) range = "3.0-5.0";
-      else range = "5.0+";
-
-      oddsRanges[range].bets++;
-      oddsRanges[range].totalOdds += betOdds;
-
-      if (bet.RESULT?.toLowerCase().includes("win")) {
-        oddsRanges[range].wins++;
-      } else if (bet.RESULT?.toLowerCase().includes("loss")) {
-        oddsRanges[range].losses++;
-      } else if (bet.RESULT?.toLowerCase().includes("pending")) {
-        oddsRanges[range].pending++;
-      }
-    });
-
-    const result = Object.entries(oddsRanges)
-      .map(([range, stats]) => ({
-        range,
-        ...stats,
-        total: stats.wins + stats.losses + stats.pending,
-        winRate:
-          stats.wins + stats.losses > 0
-            ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)
-            : 0,
-        avgOdds: stats.bets > 0 ? (stats.totalOdds / stats.bets).toFixed(2) : 0,
-      }))
-      .filter((item) => item.bets > 0) // Only show ranges with bets
-      .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
-
-    return result;
+    return getFilteredOddsAnalyticsService(bets);
   };
 
   const getBetsForOddsRange = (range) => {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis;
-    console.log(
-      `Getting bets for range ${range}, total deduplicated bets: ${deduplicatedBets.length}`
-    );
+    return getBetsForOddsRangeService(deduplicatedBets, range);
+  };
 
-    const filteredBets = deduplicatedBets.filter((bet) => {
-      // Filter out specific bet types for odds analytics only
-      const betType = bet.BET_TYPE?.toLowerCase() || "";
-      const betSelection = bet.BET_SELECTION?.toLowerCase() || "";
-      const teamIncluded = bet.TEAM_INCLUDED?.toLowerCase() || "";
-
-      if (
-        betType.includes("over 1.5") ||
-        betType.includes("over 0.5") ||
-        betType.includes("both") ||
-        betSelection.includes("over 1.5") ||
-        betSelection.includes("over 0.5") ||
-        betSelection.includes("both") ||
-        teamIncluded.includes("over 1.5") ||
-        teamIncluded.includes("over 0.5") ||
-        teamIncluded.includes("both")
-      ) {
-        return false;
-      }
-
-      const odds1 = parseFloat(bet.ODDS1) || 0;
-      const odds2 = parseFloat(bet.ODDS2) || 0;
-
-      // Determine which odds to use based on the team you bet on
-      let betOdds = 0;
-      const teamBet = bet.TEAM_INCLUDED;
-      const homeTeam = bet.HOME_TEAM;
-      const awayTeam = bet.AWAY_TEAM;
-
-      // If you bet on the home team, use odds1
-      if (
-        teamBet &&
-        homeTeam &&
-        teamBet.toLowerCase().includes(homeTeam.toLowerCase())
-      ) {
-        betOdds = odds1;
-      }
-      // If you bet on the away team, use odds2
-      else if (
-        teamBet &&
-        awayTeam &&
-        teamBet.toLowerCase().includes(awayTeam.toLowerCase())
-      ) {
-        betOdds = odds2;
-      }
-      // Fallback: use the higher odds (assuming you bet on the underdog)
-      else {
-        betOdds = Math.max(odds1, odds2);
-      }
-
-      if (betOdds <= 0) return false;
-
-      let betRange;
-      if (betOdds <= 1.5) betRange = "1.0-1.5";
-      else if (betOdds <= 2.0) betRange = "1.5-2.0";
-      else if (betOdds <= 3.0) betRange = "2.0-3.0";
-      else if (betOdds <= 5.0) betRange = "3.0-5.0";
-      else betRange = "5.0+";
-
-      return betRange === range;
-    });
-
-    console.log(`Bets found for range ${range}:`, filteredBets.length);
-    console.log("Sample bets for debugging:", filteredBets.slice(0, 3));
-
-    // Additional deduplication step for the expanded view
-    const uniqueBets = new Map();
-    filteredBets.forEach((bet) => {
-      const uniqueKey = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.LEAGUE}_${bet.BET_TYPE}_${bet.TEAM_INCLUDED}`;
-      if (!uniqueBets.has(uniqueKey)) {
-        uniqueBets.set(uniqueKey, bet);
-      }
-    });
-
-    const finalBets = Array.from(uniqueBets.values());
-    console.log(
-      `After additional deduplication: ${filteredBets.length} -> ${finalBets.length} bets`
-    );
-
-    return finalBets;
+  const getTeamOddsAnalytics = () => {
+    return getTeamOddsAnalyticsService(bets);
   };
 
   const toggleOddsRangeExpansion = (range) => {
@@ -4367,6 +4193,7 @@ function App() {
               expandedOddsRanges={expandedOddsRanges}
               toggleOddsRangeExpansion={toggleOddsRangeExpansion}
               getBetsForOddsRange={getBetsForOddsRange}
+              getTeamOddsAnalytics={getTeamOddsAnalytics}
               formatDate={formatDateString}
               getStatusColor={getStatusColorClass}
             />
