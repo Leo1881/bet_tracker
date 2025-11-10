@@ -1214,8 +1214,251 @@ function App() {
     return multipliers;
   };
 
+  // Helper function to get odds performance notification for a recommendation
+  const getOddsPerformanceNotification = (
+    recommendation,
+    betType,
+    betData,
+    teamOddsAnalytics
+  ) => {
+    console.log(`[Odds Performance] Function called for betType: ${betType}, recommendation.bet: ${recommendation?.bet}`);
+    
+    // Skip if recommendation is AVOID
+    if (
+      recommendation.bet === "AVOID" ||
+      recommendation.bet === "No clear winner" ||
+      !recommendation.bet
+    ) {
+      console.log(`[Odds Performance] Early return - AVOID or No clear winner`);
+      return null;
+    }
+
+    // Always use TEAM_INCLUDED - this is the team you're betting on, not the recommended team
+    // The odds performance should show how well you've done betting on this team at these odds
+    let teamName = betData.TEAM_INCLUDED;
+    
+    if (!teamName) {
+      console.log(`[Odds Performance] No TEAM_INCLUDED found, cannot determine team for odds lookup`);
+      return {
+        type: "no_data",
+        message: "No odds history available for this team",
+      };
+    }
+    
+    console.log(`[Odds Performance] Using TEAM_INCLUDED for odds lookup: ${teamName}`);
+
+    // Map bet type
+    let mappedBetType = "Win"; // default
+    if (betType === "Straight Win") {
+      mappedBetType = "Win";
+    } else if (betType === "Double Chance") {
+      mappedBetType = "Double Chance";
+    } else if (betType === "Over/Under") {
+      mappedBetType = "Over/Under";
+    }
+
+    // Determine odds for the team
+    let betOdds = 0;
+    const odds1 = parseFloat(betData.ODDS1) || 0;
+    const odds2 = parseFloat(betData.ODDS2) || 0;
+
+    if (
+      teamName &&
+      betData.HOME_TEAM &&
+      teamName.toLowerCase().includes(betData.HOME_TEAM.toLowerCase())
+    ) {
+      betOdds = odds1;
+    } else if (
+      teamName &&
+      betData.AWAY_TEAM &&
+      teamName.toLowerCase().includes(betData.AWAY_TEAM.toLowerCase())
+    ) {
+      betOdds = odds2;
+    } else {
+      // Fallback: use the higher odds
+      betOdds = Math.max(odds1, odds2);
+    }
+
+    if (betOdds <= 0) {
+      return null;
+    }
+
+    // Map odds to range
+    let oddsRange = "1.0-1.5";
+    if (betOdds <= 1.5) oddsRange = "1.0-1.5";
+    else if (betOdds <= 2.0) oddsRange = "1.5-2.0";
+    else if (betOdds <= 3.0) oddsRange = "2.0-3.0";
+    else if (betOdds <= 5.0) oddsRange = "3.0-5.0";
+    else oddsRange = "5.0+";
+
+    // Find team in odds analytics - match by team name, country, and league
+    // First try exact match with country/league, then fallback to team name only
+    console.log(`[Odds Performance] Looking for team: ${teamName}, Country: ${betData.COUNTRY}, League: ${betData.LEAGUE}`);
+    console.log(`[Odds Performance] Available teams in analytics:`, teamOddsAnalytics.map(t => ({
+      name: t.teamName,
+      country: t.country,
+      league: t.league,
+      totalLosses: t.totalLosses
+    })));
+    
+    let teamOddsData = teamOddsAnalytics.find(
+      (team) =>
+        team.teamName &&
+        teamName &&
+        team.teamName.toLowerCase() === teamName.toLowerCase() &&
+        team.country &&
+        betData.COUNTRY &&
+        team.country.toLowerCase() === betData.COUNTRY.toLowerCase() &&
+        team.league &&
+        betData.LEAGUE &&
+        team.league.toLowerCase() === betData.LEAGUE.toLowerCase()
+    );
+    
+    // Fallback to team name only if no exact match found
+    if (!teamOddsData) {
+      console.log(`[Odds Performance] No exact match found, trying team name only`);
+      teamOddsData = teamOddsAnalytics.find(
+        (team) =>
+          team.teamName &&
+          teamName &&
+          team.teamName.toLowerCase() === teamName.toLowerCase()
+      );
+      if (teamOddsData) {
+        console.log(`[Odds Performance] Found team by name only: ${teamOddsData.teamName} (${teamOddsData.country} - ${teamOddsData.league})`);
+      }
+    } else {
+      console.log(`[Odds Performance] Found exact match: ${teamOddsData.teamName} (${teamOddsData.country} - ${teamOddsData.league})`);
+    }
+
+    if (!teamOddsData) {
+      return {
+        type: "no_data",
+        message: "No odds history available for this team",
+      };
+    }
+
+    // Find the odds range data for this team
+    const rangeData = teamOddsData.oddsRanges.find(
+      (r) => r.range === oddsRange
+    );
+
+    if (!rangeData) {
+      return {
+        type: "no_data",
+        message: "No odds history available for this team",
+      };
+    }
+
+    // Check bet type performance at this odds range
+    const lossBetTypes = rangeData.betTypes?.losses || {};
+    const winBetTypes = rangeData.betTypes?.wins || {};
+    
+    // Debug: Log all bet types in losses to see what's stored
+    console.log(`[Odds Performance] Team: ${teamName}, Range: ${oddsRange}, Mapped Bet Type: ${mappedBetType}`);
+    console.log(`[Odds Performance] All loss bet types:`, lossBetTypes);
+    console.log(`[Odds Performance] Total losses in range: ${rangeData.losses}`);
+    
+    // Try to find the bet type - check both exact match and case-insensitive
+    let lossesForBetType = 0;
+    let winsForBetType = 0;
+    
+    // First try exact match
+    if (lossBetTypes[mappedBetType] !== undefined) {
+      lossesForBetType = lossBetTypes[mappedBetType];
+    } else {
+      // Try case-insensitive match
+      const betTypeKey = Object.keys(lossBetTypes).find(
+        (key) => key.toLowerCase() === mappedBetType.toLowerCase()
+      );
+      if (betTypeKey) {
+        lossesForBetType = lossBetTypes[betTypeKey];
+      }
+    }
+    
+    if (winBetTypes[mappedBetType] !== undefined) {
+      winsForBetType = winBetTypes[mappedBetType];
+    } else {
+      const betTypeKey = Object.keys(winBetTypes).find(
+        (key) => key.toLowerCase() === mappedBetType.toLowerCase()
+      );
+      if (betTypeKey) {
+        winsForBetType = winBetTypes[betTypeKey];
+      }
+    }
+    
+    const totalForBetType = lossesForBetType + winsForBetType;
+    
+    console.log(`[Odds Performance] Losses for ${mappedBetType}: ${lossesForBetType}, Wins: ${winsForBetType}`);
+
+    // Check if this is an outlier range
+    const isOutlier = teamOddsData.outlierRanges && teamOddsData.outlierRanges.length > 0
+      ? teamOddsData.outlierRanges.some((or) => or.range === oddsRange)
+      : false;
+    const isMostCommon = oddsRange === teamOddsData.mostCommonRange;
+
+    // Build notification
+    let notification = {
+      type: "info",
+      message: "",
+      oddsRange: oddsRange,
+      betOdds: betOdds.toFixed(2),
+      isOutlier: isOutlier,
+      isMostCommon: isMostCommon,
+    };
+
+    // Check if this bet type has losses at this range
+    if (totalForBetType > 0) {
+      const winRateForBetType = (winsForBetType / totalForBetType) * 100;
+      const lossRateForBetType = (lossesForBetType / totalForBetType) * 100;
+      
+      if (lossesForBetType > 0) {
+        // ANY losses = red warning
+        notification.type = "warning";
+        notification.message = `⚠️ ${mappedBetType} bets at odds ${oddsRange} for ${teamName}: ${winsForBetType}W / ${lossesForBetType}L (${winRateForBetType.toFixed(0)}% win rate)`;
+      } else {
+        // No losses = blue info
+        notification.type = "info";
+        notification.message = `✅ ${mappedBetType} bets at odds ${oddsRange} for ${teamName}: ${winsForBetType}W / 0L (100% win rate)`;
+      }
+    } else {
+      // No bet type specific data - check if we should show general range info
+      // But if there are losses in the general range, we should still warn
+      if (rangeData.losses > 0) {
+        notification.type = "warning";
+        notification.message = `⚠️ ${mappedBetType} bets at odds ${oddsRange} for ${teamName}: No specific data, but range has ${rangeData.wins}W / ${rangeData.losses}L`;
+      }
+    }
+
+    // If no bet type specific info and no warning set, provide general range info
+    if (notification.type === "info" && !notification.message) {
+      if (isOutlier) {
+        notification.type = "warning";
+        notification.message = `⚠️ Odds ${betOdds.toFixed(2)} (${oddsRange}) are outlier range - ${teamName} normally bets at ${teamOddsData.mostCommonRange}`;
+      } else if (rangeData.losses > 0) {
+        // If there are losses in the range, show red warning
+        notification.type = "warning";
+        notification.message = `⚠️ Odds ${betOdds.toFixed(2)} (${oddsRange}) - ${teamName} has ${rangeData.bets} bets at this range (${rangeData.wins}W / ${rangeData.losses}L)`;
+      } else if (isMostCommon) {
+        // No losses = blue info
+        notification.type = "info";
+        notification.message = `✅ Odds ${betOdds.toFixed(2)} (${oddsRange}) are in normal range - ${teamName} has ${rangeData.bets} bets at this range (${rangeData.wins}W / 0L)`;
+      } else {
+        // No losses = blue info
+        notification.type = "info";
+        notification.message = `ℹ️ Odds ${betOdds.toFixed(2)} (${oddsRange}) - ${teamName} has ${rangeData.bets} bets at this range (${rangeData.wins}W / 0L)`;
+      }
+    }
+
+    return notification;
+  };
+
   const generateBetRecommendations = (analysisResults) => {
     if (!analysisResults || analysisResults.length === 0) return [];
+
+    // Calculate team odds analytics once for all recommendations
+    // Use deduplicated bets to avoid counting duplicate bets multiple times
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis;
+    const teamOddsAnalytics = getTeamOddsAnalytics(deduplicatedBets);
 
     // Calculate data-driven multipliers based on historical performance
     const betTypeMultipliers = calculateBetTypeMultipliers();
@@ -1345,6 +1588,31 @@ function App() {
       const primary = rankedBets[0];
       const secondary = rankedBets[1];
       const tertiary = rankedBets[2];
+
+      // Add odds performance notifications to each recommendation
+      console.log(`[Odds Performance] Adding notifications for match: ${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`);
+      console.log(`[Odds Performance] Primary: ${primary.type}, bet: ${primary.recommendation?.bet}`);
+      console.log(`[Odds Performance] Secondary: ${secondary.type}, bet: ${secondary.recommendation?.bet}`);
+      console.log(`[Odds Performance] Tertiary: ${tertiary.type}, bet: ${tertiary.recommendation?.bet}`);
+      
+      primary.oddsPerformance = getOddsPerformanceNotification(
+        primary.recommendation,
+        primary.type,
+        bet,
+        teamOddsAnalytics
+      );
+      secondary.oddsPerformance = getOddsPerformanceNotification(
+        secondary.recommendation,
+        secondary.type,
+        bet,
+        teamOddsAnalytics
+      );
+      tertiary.oddsPerformance = getOddsPerformanceNotification(
+        tertiary.recommendation,
+        tertiary.type,
+        bet,
+        teamOddsAnalytics
+      );
 
       return {
         rank: index + 1,

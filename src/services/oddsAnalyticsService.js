@@ -306,9 +306,20 @@ export const getTeamOddsAnalytics = (bets) => {
     return [];
   }
 
+  // Deduplicate bets within this function to ensure no duplicates
+  // Use a key that doesn't include BET_ID to properly deduplicate
+  const uniqueBets = new Map();
+  bets.forEach((bet) => {
+    const dedupKey = `${bet.DATE}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}_${bet.LEAGUE}_${bet.BET_TYPE}_${bet.BET_SELECTION}_${bet.TEAM_INCLUDED}`;
+    if (!uniqueBets.has(dedupKey)) {
+      uniqueBets.set(dedupKey, bet);
+    }
+  });
+  const deduplicatedBets = Array.from(uniqueBets.values());
+
   const teamStats = new Map();
 
-  bets.forEach((bet) => {
+  deduplicatedBets.forEach((bet) => {
     // Filter out specific bet types for odds analytics only
     const betType = bet.BET_TYPE?.toLowerCase() || "";
     const betSelection = bet.BET_SELECTION?.toLowerCase() || "";
@@ -330,6 +341,12 @@ export const getTeamOddsAnalytics = (bets) => {
 
     const teamName = bet.TEAM_INCLUDED;
     if (!teamName) return;
+
+    const country = bet.COUNTRY || "";
+    const league = bet.LEAGUE || "";
+    
+    // Create unique key: team_country_league to avoid combining teams from different leagues
+    const teamKey = `${teamName.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
 
     const odds1 = parseFloat(bet.ODDS1) || 0;
     const odds2 = parseFloat(bet.ODDS2) || 0;
@@ -363,12 +380,12 @@ export const getTeamOddsAnalytics = (bets) => {
     else if (betOdds <= 5.0) range = "3.0-5.0";
     else range = "5.0+";
 
-    // Initialize team if not exists
-    if (!teamStats.has(teamName)) {
-      teamStats.set(teamName, {
+    // Initialize team if not exists (using unique key)
+    if (!teamStats.has(teamKey)) {
+      teamStats.set(teamKey, {
         teamName,
-        country: bet.COUNTRY || "",
-        league: bet.LEAGUE || "",
+        country: country,
+        league: league,
         oddsRanges: {
           "1.0-1.5": {
             bets: 0,
@@ -412,13 +429,29 @@ export const getTeamOddsAnalytics = (bets) => {
       });
     }
 
-    const team = teamStats.get(teamName);
+    const team = teamStats.get(teamKey);
     const rangeData = team.oddsRanges[range];
     rangeData.bets++;
     team.totalBets++;
 
-    // Get bet type for tracking (use BET_TYPE or BET_SELECTION, keep original case)
-    const betTypeForTracking = bet.BET_TYPE || bet.BET_SELECTION || "Unknown";
+    // Get bet type for tracking - normalize to "Win", "Double Chance", or "Over/Under"
+    let betTypeForTracking = "Unknown";
+    const betTypeValue = (bet.BET_TYPE || "").toLowerCase();
+    const betSelectionValue = (bet.BET_SELECTION || "").toLowerCase();
+    
+    if (betTypeValue.includes("win") && !betTypeValue.includes("double chance")) {
+      betTypeForTracking = "Win";
+    } else if (betTypeValue.includes("double chance") || betSelectionValue.includes("x") || betSelectionValue.includes("1x") || betSelectionValue.includes("x2") || betSelectionValue.includes("12")) {
+      betTypeForTracking = "Double Chance";
+    } else if (betTypeValue.includes("over") || betTypeValue.includes("under") || betSelectionValue.includes("over") || betSelectionValue.includes("under")) {
+      betTypeForTracking = "Over/Under";
+    } else if (bet.BET_TYPE) {
+      // Fallback to original BET_TYPE if it exists
+      betTypeForTracking = bet.BET_TYPE;
+    } else if (bet.BET_SELECTION) {
+      // Last resort: use BET_SELECTION
+      betTypeForTracking = bet.BET_SELECTION;
+    }
 
     if (bet.RESULT?.toLowerCase().includes("win")) {
       rangeData.wins++;

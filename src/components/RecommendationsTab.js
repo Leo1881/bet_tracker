@@ -127,6 +127,19 @@ const RecommendationsTab = ({ betRecommendations }) => {
                   <div className="text-gray-400 text-xs mt-1">
                     Risk: {rec.primary.riskLevel}
                   </div>
+                  {rec.primary.oddsPerformance && (
+                    <div
+                      className={`text-xs mt-2 px-2 py-1 rounded ${
+                        rec.primary.oddsPerformance.type === "warning"
+                          ? "bg-red-500/20 border border-red-500/50 text-red-300"
+                          : rec.primary.oddsPerformance.type === "no_data"
+                          ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
+                          : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
+                      }`}
+                    >
+                      {rec.primary.oddsPerformance.message}
+                    </div>
+                  )}
                 </div>
 
                 {/* Secondary Recommendation */}
@@ -163,6 +176,19 @@ const RecommendationsTab = ({ betRecommendations }) => {
                   <div className="text-gray-400 text-xs mt-1">
                     Risk: {rec.secondary.riskLevel}
                   </div>
+                  {rec.secondary.oddsPerformance && (
+                    <div
+                      className={`text-xs mt-2 px-2 py-1 rounded ${
+                        rec.secondary.oddsPerformance.type === "warning"
+                          ? "bg-red-500/20 border border-red-500/50 text-red-300"
+                          : rec.secondary.oddsPerformance.type === "no_data"
+                          ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
+                          : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
+                      }`}
+                    >
+                      {rec.secondary.oddsPerformance.message}
+                    </div>
+                  )}
                 </div>
 
                 {/* Tertiary Recommendation */}
@@ -199,6 +225,19 @@ const RecommendationsTab = ({ betRecommendations }) => {
                   <div className="text-gray-400 text-xs mt-1">
                     Risk: {rec.tertiary.riskLevel}
                   </div>
+                  {rec.tertiary.oddsPerformance && (
+                    <div
+                      className={`text-xs mt-2 px-2 py-1 rounded ${
+                        rec.tertiary.oddsPerformance.type === "warning"
+                          ? "bg-red-500/20 border border-red-500/50 text-red-300"
+                          : rec.tertiary.oddsPerformance.type === "no_data"
+                          ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
+                          : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
+                      }`}
+                    >
+                      {rec.tertiary.oddsPerformance.message}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
