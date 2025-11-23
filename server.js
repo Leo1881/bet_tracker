@@ -250,6 +250,21 @@ app.get("/api/team-notes", async (req, res) => {
 // Get attached predictions
 app.get("/api/attached-predictions", async (req, res) => {
   try {
+    // Check if table exists first
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'attached_predictions'
+      );
+    `);
+
+    if (!tableCheck.rows[0].exists) {
+      // Table doesn't exist, return empty array
+      console.log("attached_predictions table does not exist, returning empty array");
+      return res.json([]);
+    }
+
     const query = `
       SELECT 
         id,
@@ -289,7 +304,10 @@ app.get("/api/attached-predictions", async (req, res) => {
     res.json(predictions);
   } catch (error) {
     console.error("Error fetching attached predictions:", error);
-    res.status(500).json({ error: error.message });
+    // Return empty array instead of 500 error for any database issues
+    // This prevents the app from breaking if the table doesn't exist or DB is unavailable
+    console.log("Returning empty array due to error:", error.message);
+    return res.json([]);
   }
 });
 

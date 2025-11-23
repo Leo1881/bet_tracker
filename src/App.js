@@ -1086,6 +1086,80 @@ function App() {
     }
   };
 
+  // Wilson Score calculation for statistical confidence
+  const calculateWilsonScore = (wins, total) => {
+    if (total === 0) return 0;
+    const n = total;
+    const p = wins / total;
+    const z = 1.96; // 95% confidence level
+    return (
+      (p +
+        (z * z) / (2 * n) -
+        z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
+      (1 + (z * z) / n)
+    );
+  };
+
+  // Calculate team-specific bet type performance (win rates for each bet type for a specific team)
+  const getTeamBetTypePerformance = (teamName, country, league, betType) => {
+    if (!bets || bets.length === 0) return null;
+
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis;
+    const betsWithResults = deduplicatedBets.filter(
+      (b) => b.RESULT && b.RESULT.trim() !== ""
+    );
+
+    // Filter bets for this specific team in this league/country
+    let teamBets = [];
+    
+    if (betType === "Straight Win") {
+      teamBets = betsWithResults.filter(
+        (b) =>
+          b.TEAM_INCLUDED === teamName &&
+          b.COUNTRY === country &&
+          b.LEAGUE === league &&
+          (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+          !b.BET_TYPE?.toLowerCase().includes("double chance") &&
+          !b.BET_TYPE?.toLowerCase().includes("over") &&
+          !b.BET_TYPE?.toLowerCase().includes("under")
+      );
+    } else if (betType === "Double Chance") {
+      teamBets = betsWithResults.filter(
+        (b) =>
+          b.TEAM_INCLUDED === teamName &&
+          b.COUNTRY === country &&
+          b.LEAGUE === league &&
+          b.BET_TYPE &&
+          b.BET_TYPE.toLowerCase().includes("double chance")
+      );
+    } else if (betType === "Over/Under") {
+      teamBets = betsWithResults.filter(
+        (b) =>
+          b.TEAM_INCLUDED === teamName &&
+          b.COUNTRY === country &&
+          b.LEAGUE === league &&
+          b.BET_TYPE &&
+          (b.BET_TYPE.toLowerCase().includes("over") ||
+            b.BET_TYPE.toLowerCase().includes("under"))
+      );
+    }
+
+    if (teamBets.length === 0) return null;
+
+    const wins = teamBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win")
+    ).length;
+    const winRate = wins / teamBets.length;
+    const wilsonScore = calculateWilsonScore(wins, teamBets.length);
+
+    return {
+      winRate: winRate,
+      wilsonRate: wilsonScore,
+      totalBets: teamBets.length,
+      wins: wins,
+    };
+  };
+
   // Calculate data-driven multipliers based on historical bet type performance
   const calculateBetTypeMultipliers = () => {
     if (!bets || bets.length === 0) {
@@ -1483,13 +1557,69 @@ function App() {
       const league = bet.LEAGUE;
 
       // Extract recent form data before analysis
+      // Support both new individual result columns and old aggregate columns (backward compatibility)
+      const getFormDataFromResults = (result5, result4, result3, result2, result1) => {
+        const results = [result5, result4, result3, result2, result1]
+          .filter(r => r && typeof r === 'string')
+          .map(r => r.toUpperCase().trim());
+        
+        return {
+          wins: results.filter(r => r === 'W').length,
+          draws: results.filter(r => r === 'D').length,
+          losses: results.filter(r => r === 'L').length,
+          sequence: results // Store sequence for advanced analysis
+        };
+      };
+
+      // Try new individual result columns first, fallback to old aggregate columns
+      const homeFormFromResults = getFormDataFromResults(
+        bet.LAST_5_RESULT_HOME,
+        bet.LAST_4_RESULT_HOME,
+        bet.LAST_3_RESULT_HOME,
+        bet.LAST_2_RESULT_HOME,
+        bet.LAST_1_RESULT_HOME
+      );
+      
+      const awayFormFromResults = getFormDataFromResults(
+        bet.LAST_5_RESULT_AWAY,
+        bet.LAST_4_RESULT_AWAY,
+        bet.LAST_3_RESULT_AWAY,
+        bet.LAST_2_RESULT_AWAY,
+        bet.LAST_1_RESULT_AWAY
+      );
+
+      // Debug: Log sequence data if available
+      if (homeFormFromResults.sequence.length > 0 || awayFormFromResults.sequence.length > 0) {
+        console.log(`[Form Analysis] ${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}:`, {
+          homeSequence: homeFormFromResults.sequence.length > 0 ? homeFormFromResults.sequence : 'Using aggregate columns',
+          homeCounts: `${homeFormFromResults.wins}W ${homeFormFromResults.draws}D ${homeFormFromResults.losses}L`,
+          awaySequence: awayFormFromResults.sequence.length > 0 ? awayFormFromResults.sequence : 'Using aggregate columns',
+          awayCounts: `${awayFormFromResults.wins}W ${awayFormFromResults.draws}D ${awayFormFromResults.losses}L`
+        });
+      }
+
+      // Use new columns if available, otherwise use old aggregate columns
       const recentFormData = {
-        homeWins: parseInt(bet.LAST_5_WINS_HOME) || 0,
-        homeDraws: parseInt(bet.LAST_5_DRAWS_HOME) || 0,
-        homeLosses: parseInt(bet.LAST_5_LOSSES_HOME) || 0,
-        awayWins: parseInt(bet.LAST_5_WINS_AWAY) || 0,
-        awayDraws: parseInt(bet.LAST_5_DRAWS_AWAY) || 0,
-        awayLosses: parseInt(bet.LAST_5_LOSSES_AWAY) || 0,
+        homeWins: homeFormFromResults.sequence.length > 0 
+          ? homeFormFromResults.wins 
+          : (parseInt(bet.LAST_5_WINS_HOME) || 0),
+        homeDraws: homeFormFromResults.sequence.length > 0 
+          ? homeFormFromResults.draws 
+          : (parseInt(bet.LAST_5_DRAWS_HOME) || 0),
+        homeLosses: homeFormFromResults.sequence.length > 0 
+          ? homeFormFromResults.losses 
+          : (parseInt(bet.LAST_5_LOSSES_HOME) || 0),
+        homeSequence: homeFormFromResults.sequence, // Store sequence for sequence-based analysis
+        awayWins: awayFormFromResults.sequence.length > 0 
+          ? awayFormFromResults.wins 
+          : (parseInt(bet.LAST_5_WINS_AWAY) || 0),
+        awayDraws: awayFormFromResults.sequence.length > 0 
+          ? awayFormFromResults.draws 
+          : (parseInt(bet.LAST_5_DRAWS_AWAY) || 0),
+        awayLosses: awayFormFromResults.sequence.length > 0 
+          ? awayFormFromResults.losses 
+          : (parseInt(bet.LAST_5_LOSSES_AWAY) || 0),
+        awaySequence: awayFormFromResults.sequence, // Store sequence for sequence-based analysis
       };
 
       // Analyze straight win recommendation
@@ -1614,11 +1744,132 @@ function App() {
         teamOddsAnalytics
       );
 
+      // Calculate Best Bet - considers team-specific bet type performance
+      // Determine which team is being bet on for each recommendation
+      const getTeamForRecommendation = (rec) => {
+        if (rec.recommendation.bet === "AVOID" || rec.recommendation.bet === "No clear winner") {
+          return null;
+        }
+        // For Straight Win, the bet is the team name
+        if (rec.type === "Straight Win") {
+          return rec.recommendation.bet;
+        }
+        // For Double Chance, check if it mentions home or away team
+        if (rec.type === "Double Chance") {
+          if (rec.recommendation.bet.toLowerCase().includes(homeTeam.toLowerCase())) {
+            return homeTeam;
+          } else if (rec.recommendation.bet.toLowerCase().includes(awayTeam.toLowerCase())) {
+            return awayTeam;
+          }
+        }
+        // For Over/Under, we can't determine a specific team, so use the team from the original bet
+        if (rec.type === "Over/Under") {
+          return bet.TEAM_INCLUDED || homeTeam;
+        }
+        return bet.TEAM_INCLUDED || homeTeam;
+      };
+
+      // Calculate best bet score for each recommendation
+      const bestBetScores = rankedBets.map((betOption) => {
+        const teamForBet = getTeamForRecommendation(betOption);
+        let bestBetScore = betOption.adjustedScore; // Start with adjusted score
+
+        // If we can identify the team, factor in team-specific bet type performance
+        if (teamForBet && betOption.recommendation.bet !== "AVOID" && betOption.recommendation.bet !== "No clear winner") {
+          const teamPerformance = getTeamBetTypePerformance(
+            teamForBet,
+            country,
+            league,
+            betOption.type
+          );
+
+          if (teamPerformance && teamPerformance.totalBets >= 3) {
+            // Factor in team-specific performance
+            // If team has good performance (win rate > 50%), boost the score
+            // If team has poor performance (win rate < 40%), penalize the score
+            const performanceMultiplier = teamPerformance.winRate >= 0.5
+              ? 1.0 + (teamPerformance.winRate - 0.5) * 0.4 // Boost up to 20% for 100% win rate
+              : 1.0 - (0.5 - teamPerformance.winRate) * 0.6; // Penalize up to 30% for 0% win rate
+
+            // Apply multiplier, but cap the impact
+            bestBetScore = bestBetScore * Math.max(0.7, Math.min(1.2, performanceMultiplier));
+
+            // Add sample size bonus (more bets = more reliable)
+            if (teamPerformance.totalBets >= 10) {
+              bestBetScore *= 1.05; // 5% bonus for 10+ bets
+            } else if (teamPerformance.totalBets >= 5) {
+              bestBetScore *= 1.02; // 2% bonus for 5+ bets
+            }
+          } else if (teamPerformance && teamPerformance.totalBets < 3) {
+            // Insufficient data - small penalty
+            bestBetScore *= 0.95;
+          }
+        }
+
+        // Factor in odds value (expected value)
+        const recommendationOdds = odds; // Use the main odds for now
+        const impliedProbability = 1 / recommendationOdds;
+        const confidenceProbability = betOption.recommendation.confidence / 10;
+        
+        // If confidence suggests higher probability than odds imply, that's value
+        const valueMultiplier = confidenceProbability > impliedProbability
+          ? 1.0 + (confidenceProbability - impliedProbability) * 0.3 // Up to 30% boost for value
+          : 1.0 - (impliedProbability - confidenceProbability) * 0.2; // Up to 20% penalty for poor value
+
+        bestBetScore = bestBetScore * Math.max(0.8, Math.min(1.3, valueMultiplier));
+
+        // Factor in risk level (lower risk = slightly higher score for best bet)
+        if (betOption.riskLevel === "Low" || betOption.riskLevel === "Medium") {
+          bestBetScore *= 1.03; // 3% boost for lower risk
+        }
+
+        // Factor in opponent strength for Best Bet selection
+        // Get opponent position and form
+        const opponentPosition = teamForBet === homeTeam
+          ? (bet.AWAY_TEAM_POSITION_NUMBER || bet.AWAY_TEAM_POSITION)
+          : (bet.HOME_TEAM_POSITION_NUMBER || bet.HOME_TEAM_POSITION);
+        const opponentForm = teamForBet === homeTeam
+          ? (recentFormData ? {
+              wins: recentFormData.awayWins || 0,
+              draws: recentFormData.awayDraws || 0,
+              losses: recentFormData.awayLosses || 0
+            } : null)
+          : (recentFormData ? {
+              wins: recentFormData.homeWins || 0,
+              draws: recentFormData.homeDraws || 0,
+              losses: recentFormData.homeLosses || 0
+            } : null);
+        
+        const opponentStrengthImpact = calculateOpponentStrengthImpact(opponentPosition, opponentForm);
+        // For Best Bet, favor bets against weaker opponents
+        // Strong opponent (low multiplier) = reduce score, Weak opponent (high multiplier) = boost score
+        bestBetScore = bestBetScore * Math.max(0.9, Math.min(1.1, opponentStrengthImpact));
+
+        return {
+          ...betOption,
+          bestBetScore: bestBetScore,
+          teamForBet: teamForBet,
+        };
+      });
+
+      // Sort by best bet score and select the top one
+      bestBetScores.sort((a, b) => b.bestBetScore - a.bestBetScore);
+      const bestBet = bestBetScores[0];
+
+      // Add odds performance notification to best bet
+      bestBet.oddsPerformance = getOddsPerformanceNotification(
+        bestBet.recommendation,
+        bestBet.type,
+        bet,
+        teamOddsAnalytics
+      );
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
         league: bet.LEAGUE,
         country: bet.COUNTRY,
+        bestBet: bestBet,
         primary: primary,
         secondary: secondary,
         tertiary: tertiary,
@@ -1637,35 +1888,115 @@ function App() {
     return recommendations;
   };
 
-  // Wilson Score calculation for statistical confidence
-  const calculateWilsonScore = (wins, total) => {
-    if (total === 0) return 0;
-    const n = total;
-    const p = wins / total;
-    const z = 1.96; // 95% confidence level
-    return (
-      (p +
-        (z * z) / (2 * n) -
-        z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
-      (1 + (z * z) / n)
-    );
+  // Calculate opponent strength impact based on league position and recent form
+  // Returns a multiplier (0.85 to 1.15) based on opponent strength
+  const calculateOpponentStrengthImpact = (opponentPosition, opponentRecentForm) => {
+    let multiplier = 1.0; // Neutral base
+    
+    // Factor 1: League Position Impact
+    if (opponentPosition) {
+      const pos = parseInt(opponentPosition);
+      if (pos <= 3) {
+        // Top 3 opponent - reduce confidence (strong opponent)
+        multiplier *= 0.92; // 8% reduction
+      } else if (pos <= 6) {
+        // Top 6 opponent - slight reduction
+        multiplier *= 0.96; // 4% reduction
+      } else if (pos >= 15) {
+        // Bottom 3 opponent - boost confidence (weak opponent)
+        multiplier *= 1.08; // 8% boost
+      } else if (pos >= 12) {
+        // Bottom half opponent - slight boost
+        multiplier *= 1.04; // 4% boost
+      }
+    }
+    
+    // Factor 2: Recent Form Impact (opponent's last 5 games)
+    if (opponentRecentForm) {
+      const { wins, draws, losses } = opponentRecentForm;
+      const totalGames = wins + draws + losses;
+      
+      if (totalGames >= 3) {
+        // Calculate opponent's recent form score
+        const formScore = (wins + 0.5 * draws) / totalGames;
+        
+        // If opponent has poor form (low wins), boost our confidence
+        if (formScore < 0.3) {
+          // Opponent struggling (0-1 wins in last 5) - boost confidence
+          multiplier *= 1.06; // 6% boost
+        } else if (formScore < 0.4) {
+          // Opponent poor form (1-2 wins) - slight boost
+          multiplier *= 1.03; // 3% boost
+        } else if (formScore > 0.7) {
+          // Opponent strong form (3+ wins) - reduce confidence
+          multiplier *= 0.94; // 6% reduction
+        } else if (formScore > 0.6) {
+          // Opponent good form (2-3 wins) - slight reduction
+          multiplier *= 0.97; // 3% reduction
+        }
+      }
+    }
+    
+    // Cap the multiplier between 0.85 and 1.15
+    return Math.max(0.85, Math.min(1.15, multiplier));
+  };
+
+  // Get opponent status description for reasoning
+  const getOpponentStatusDescription = (opponentPosition, opponentRecentForm) => {
+    const statusParts = [];
+    
+    if (opponentPosition) {
+      const pos = parseInt(opponentPosition);
+      if (pos <= 3) {
+        statusParts.push(`top 3`);
+      } else if (pos <= 6) {
+        statusParts.push(`top 6`);
+      } else if (pos >= 15) {
+        statusParts.push(`bottom 3`);
+      } else if (pos >= 12) {
+        statusParts.push(`bottom half`);
+      }
+    }
+    
+    if (opponentRecentForm) {
+      const { wins, draws, losses } = opponentRecentForm;
+      const totalGames = wins + draws + losses;
+      
+      if (totalGames >= 3) {
+        const formScore = (wins + 0.5 * draws) / totalGames;
+        if (formScore < 0.3) {
+          statusParts.push(`struggling form (${wins}W-${draws}D-${losses}L in last 5)`);
+        } else if (formScore < 0.4) {
+          statusParts.push(`poor form (${wins}W-${draws}D-${losses}L in last 5)`);
+        } else if (formScore > 0.7) {
+          statusParts.push(`strong form (${wins}W-${draws}D-${losses}L in last 5)`);
+        } else if (formScore > 0.6) {
+          statusParts.push(`good form (${wins}W-${draws}D-${losses}L in last 5)`);
+        }
+      }
+    }
+    
+    return statusParts.length > 0 ? ` (Opponent: ${statusParts.join(', ')})` : '';
   };
 
   // Calculate recent form impact on confidence
   // Returns a multiplier (0.8 to 1.2) based on recent form
+  // Enhanced with sequence-based analysis and recency weighting
   const calculateRecentFormImpact = (recentForm, isHomeTeam, isAwayTeam) => {
     if (!recentForm) return 1.0; // No form data = neutral impact
 
-    let wins, draws, losses;
+    let wins, draws, losses, sequence;
     
     if (isHomeTeam) {
       wins = recentForm.homeWins || 0;
       draws = recentForm.homeDraws || 0;
       losses = recentForm.homeLosses || 0;
+      sequence = recentForm.homeSequence || [];
     } else if (isAwayTeam) {
       wins = recentForm.awayWins || 0;
       draws = recentForm.awayDraws || 0;
       losses = recentForm.awayLosses || 0;
+      sequence = recentForm.awaySequence || [];
     } else {
       return 1.0; // Not applicable
     }
@@ -1676,23 +2007,108 @@ function App() {
     // Calculate recent form score (wins + 0.5*draws) / total
     const formScore = (wins + 0.5 * draws) / totalGames;
     
-    // Calculate win rate
-    const winRate = totalGames > 0 ? wins / totalGames : 0;
-    
-    // Calculate momentum (recent trend)
-    // Strong momentum: 3+ wins in last 5, or 4+ wins in last 5
-    // Poor momentum: 3+ losses in last 5, or 4+ losses in last 5
-    const strongMomentum = wins >= 3 && losses <= 1;
-    const poorMomentum = losses >= 3 && wins <= 1;
-    
     // Base multiplier from form score (0.5 = 0.9x, 1.0 = 1.1x)
     let multiplier = 0.9 + (formScore * 0.4); // Range: 0.9 to 1.3
     
-    // Apply momentum adjustments
-    if (strongMomentum) {
-      multiplier *= 1.05; // Boost for strong momentum (max ~1.36)
-    } else if (poorMomentum) {
-      multiplier *= 0.92; // Reduce for poor momentum (min ~0.83)
+    // Enhanced analysis if we have sequence data
+    if (sequence && sequence.length > 0) {
+      // Debug: Log sequence-based analysis
+      console.log(`[Form Impact] Using sequence-based analysis: ${sequence.join(' ')} (${wins}W ${draws}D ${losses}L)`);
+      
+      // Recency weighting: most recent games weighted more heavily
+      // Weights: [0.6, 0.7, 0.8, 0.9, 1.0] for games 5 to 1 (oldest to newest)
+      const recencyWeights = [0.6, 0.7, 0.8, 0.9, 1.0];
+      let weightedScore = 0;
+      let totalWeight = 0;
+      
+      sequence.forEach((result, index) => {
+        const weight = recencyWeights[sequence.length - 1 - index] || 1.0;
+        totalWeight += weight;
+        if (result === 'W') {
+          weightedScore += weight * 1.0;
+        } else if (result === 'D') {
+          weightedScore += weight * 0.5;
+        } else if (result === 'L') {
+          weightedScore += weight * 0.0;
+        }
+      });
+      
+      if (totalWeight > 0) {
+        const weightedFormScore = weightedScore / totalWeight;
+        // Use weighted score for more accurate multiplier
+        multiplier = 0.9 + (weightedFormScore * 0.4);
+      }
+      
+      // Sequence-based momentum detection
+      // Check last 3 games for stronger momentum signal
+      const last3Games = sequence.slice(-3);
+      const last3Wins = last3Games.filter(r => r === 'W').length;
+      const last3Losses = last3Games.filter(r => r === 'L').length;
+      
+      // Strong recent momentum: 2+ wins in last 3
+      if (last3Wins >= 2 && last3Losses === 0) {
+        multiplier *= 1.06; // Boost for strong recent momentum
+      }
+      // Poor recent momentum: 2+ losses in last 3
+      else if (last3Losses >= 2 && last3Wins === 0) {
+        multiplier *= 0.90; // Reduce for poor recent momentum
+      }
+      
+      // Trend analysis: improving vs declining
+      // Compare first half vs second half of sequence
+      if (sequence.length >= 4) {
+        const firstHalf = sequence.slice(0, Math.floor(sequence.length / 2));
+        const secondHalf = sequence.slice(Math.floor(sequence.length / 2));
+        
+        const firstHalfScore = firstHalf.reduce((score, r) => {
+          if (r === 'W') return score + 1.0;
+          if (r === 'D') return score + 0.5;
+          return score;
+        }, 0) / firstHalf.length;
+        
+        const secondHalfScore = secondHalf.reduce((score, r) => {
+          if (r === 'W') return score + 1.0;
+          if (r === 'D') return score + 0.5;
+          return score;
+        }, 0) / secondHalf.length;
+        
+        // Improving trend: second half better than first half
+        if (secondHalfScore > firstHalfScore + 0.2) {
+          multiplier *= 1.04; // Boost for improving trend
+        }
+        // Declining trend: second half worse than first half
+        else if (secondHalfScore < firstHalfScore - 0.2) {
+          multiplier *= 0.94; // Reduce for declining trend
+        }
+      }
+      
+      // Streak detection: consecutive wins or losses
+      const lastGame = sequence[sequence.length - 1];
+      let streakLength = 1;
+      for (let i = sequence.length - 2; i >= 0; i--) {
+        if (sequence[i] === lastGame) {
+          streakLength++;
+        } else {
+          break;
+        }
+      }
+      
+      // Boost for winning streaks, reduce for losing streaks
+      if (lastGame === 'W' && streakLength >= 2) {
+        multiplier *= 1.02; // Small boost for winning streak
+      } else if (lastGame === 'L' && streakLength >= 2) {
+        multiplier *= 0.98; // Small reduction for losing streak
+      }
+    } else {
+      // Fallback to aggregate-based momentum (backward compatibility)
+      const strongMomentum = wins >= 3 && losses <= 1;
+      const poorMomentum = losses >= 3 && wins <= 1;
+      
+      if (strongMomentum) {
+        multiplier *= 1.05; // Boost for strong momentum
+      } else if (poorMomentum) {
+        multiplier *= 0.92; // Reduce for poor momentum
+      }
     }
     
     // Cap the multiplier between 0.8 and 1.2
@@ -1806,6 +2222,20 @@ function App() {
     const wilsonDifference = Math.abs(homeWilsonRate - awayWilsonRate);
     const minDifference = 5; // Minimum 5% difference in Wilson Score
 
+    // Get opponent data for strength analysis
+    const homeOpponentPosition = betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION;
+    const awayOpponentPosition = betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION;
+    const homeOpponentForm = recentFormData ? {
+      wins: recentFormData.awayWins || 0,
+      draws: recentFormData.awayDraws || 0,
+      losses: recentFormData.awayLosses || 0
+    } : null;
+    const awayOpponentForm = recentFormData ? {
+      wins: recentFormData.homeWins || 0,
+      draws: recentFormData.homeDraws || 0,
+      losses: recentFormData.homeLosses || 0
+    } : null;
+
     // Determine recommendation based on Wilson Score
     if (hasHomeData && (!hasAwayData || homeWilsonRate > awayWilsonRate + minDifference)) {
       let confidence = Math.min(homeWilsonRate / 10, 10);
@@ -1813,9 +2243,14 @@ function App() {
       const homeFormImpact = calculateRecentFormImpact(recentFormData, true, false);
       confidence = Math.min(confidence * homeFormImpact, 10);
       
+      // Apply opponent strength impact (away team is opponent)
+      const opponentStrengthImpact = calculateOpponentStrengthImpact(homeOpponentPosition, homeOpponentForm);
+      confidence = Math.min(confidence * opponentStrengthImpact, 10);
+      
       const formNote = homeFormImpact !== 1.0 
         ? ` (Recent form: ${homeFormImpact > 1.0 ? '+' : ''}${((homeFormImpact - 1) * 100).toFixed(0)}%)`
         : '';
+      const opponentNote = getOpponentStatusDescription(homeOpponentPosition, homeOpponentForm);
       
       return {
         bet: homeTeam,
@@ -1823,7 +2258,7 @@ function App() {
         winRate: homeWinRate,
         wilsonWinRate: homeWilsonRate,
         totalBets: homeTotal,
-        reasoning: `${homeTeam} has ${homeWinRate.toFixed(1)}% win rate (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}. ${awayTeam} has ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}.${formNote}`,
+        reasoning: `${homeTeam} has ${homeWinRate.toFixed(1)}% win rate (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}. ${awayTeam} has ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}.${formNote}${opponentNote}`,
       };
     } else if (hasAwayData && (!hasHomeData || awayWilsonRate > homeWilsonRate + minDifference)) {
       let confidence = Math.min(awayWilsonRate / 10, 10);
@@ -1831,9 +2266,14 @@ function App() {
       const awayFormImpact = calculateRecentFormImpact(recentFormData, false, true);
       confidence = Math.min(confidence * awayFormImpact, 10);
       
+      // Apply opponent strength impact (home team is opponent)
+      const opponentStrengthImpact = calculateOpponentStrengthImpact(awayOpponentPosition, awayOpponentForm);
+      confidence = Math.min(confidence * opponentStrengthImpact, 10);
+      
       const formNote = awayFormImpact !== 1.0 
         ? ` (Recent form: ${awayFormImpact > 1.0 ? '+' : ''}${((awayFormImpact - 1) * 100).toFixed(0)}%)`
         : '';
+      const opponentNote = getOpponentStatusDescription(awayOpponentPosition, awayOpponentForm);
       
       return {
         bet: awayTeam,
@@ -1841,10 +2281,10 @@ function App() {
         winRate: awayWinRate,
         wilsonWinRate: awayWilsonRate,
         totalBets: awayTotal,
-        reasoning: `${awayTeam} has ${awayWinRate.toFixed(1)}% win rate (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}. ${homeTeam} has ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}.${formNote}`,
+        reasoning: `${awayTeam} has ${awayWinRate.toFixed(1)}% win rate (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}. ${homeTeam} has ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}.${formNote}${opponentNote}`,
       };
     } else {
-      // Teams have similar Wilson Scores - compare recent form
+      // Teams have similar Wilson Scores - compare recent form and opponent strength
       const avgWilsonRate = (homeWilsonRate + awayWilsonRate) / 2;
       let confidence = Math.min(avgWilsonRate / 10, 10);
       
@@ -1858,13 +2298,30 @@ function App() {
         confidence = Math.min(confidence * betterFormImpact, 10);
       }
       
+      // Consider opponent strength - if one team has a significantly weaker opponent, boost confidence slightly
+      const homeOpponentStrength = calculateOpponentStrengthImpact(homeOpponentPosition, homeOpponentForm);
+      const awayOpponentStrength = calculateOpponentStrengthImpact(awayOpponentPosition, awayOpponentForm);
+      
+      // If there's a clear opponent strength difference, adjust confidence
+      if (Math.abs(homeOpponentStrength - awayOpponentStrength) > 0.05) {
+        // Home team has weaker opponent (higher multiplier) - boost home confidence
+        if (homeOpponentStrength > awayOpponentStrength) {
+          confidence = Math.min(confidence * 1.02, 10);
+        } else {
+          // Away team has weaker opponent - boost away confidence
+          confidence = Math.min(confidence * 1.02, 10);
+        }
+      }
+      
+      const opponentNote = ` Opponent analysis: ${homeTeam} faces ${getOpponentStatusDescription(homeOpponentPosition, homeOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}; ${awayTeam} faces ${getOpponentStatusDescription(awayOpponentPosition, awayOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}.`;
+      
       return {
         bet: "No clear winner",
         confidence: Math.max(confidence, 3), // At least 3 if we have some data
         winRate: Math.max(homeWinRate, awayWinRate),
         wilsonWinRate: avgWilsonRate,
         totalBets: homeTotal + awayTotal,
-        reasoning: `Teams have similar win rates: ${homeTeam} ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson, ${homeTotal} games) vs ${awayTeam} ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson, ${awayTotal} games). Difference: ${wilsonDifference.toFixed(1)}%`,
+        reasoning: `Teams have similar win rates: ${homeTeam} ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson, ${homeTotal} games) vs ${awayTeam} ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson, ${awayTotal} games). Difference: ${wilsonDifference.toFixed(1)}%.${opponentNote}`,
       };
     }
   };
@@ -2175,10 +2632,34 @@ function App() {
     const formImpact = calculateRecentFormImpact(recentFormData, isHomeTeam, isAwayTeam);
     doubleChanceConfidence = Math.min(doubleChanceConfidence * formImpact, 10);
     
+    // Apply opponent strength impact
+    const opponentPosition = isHomeTeam 
+      ? (betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION)
+      : (betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION);
+    const opponentForm = isHomeTeam 
+      ? (recentFormData ? {
+          wins: recentFormData.awayWins || 0,
+          draws: recentFormData.awayDraws || 0,
+          losses: recentFormData.awayLosses || 0
+        } : null)
+      : (recentFormData ? {
+          wins: recentFormData.homeWins || 0,
+          draws: recentFormData.homeDraws || 0,
+          losses: recentFormData.homeLosses || 0
+        } : null);
+    const opponentStrengthImpact = calculateOpponentStrengthImpact(opponentPosition, opponentForm);
+    doubleChanceConfidence = Math.min(doubleChanceConfidence * opponentStrengthImpact, 10);
+    
     // Add form note to reasoning if applicable
     if (formImpact !== 1.0) {
       const formNote = ` Recent form: ${formImpact > 1.0 ? '+' : ''}${((formImpact - 1) * 100).toFixed(0)}%`;
       reasoning += formNote;
+    }
+    
+    // Add opponent status note
+    const opponentNote = getOpponentStatusDescription(opponentPosition, opponentForm);
+    if (opponentNote) {
+      reasoning += opponentNote;
     }
 
     return {
@@ -2401,11 +2882,51 @@ function App() {
     
     bestRecommendation.confidence = Math.min(bestRecommendation.confidence * formMultiplier, 10);
     
+    // Apply opponent strength impact for Over/Under
+    // Strong teams tend to score more (favor OVER), weak teams concede more (favor OVER)
+    // Weak teams score less (favor UNDER), strong teams concede less (favor UNDER)
+    const homeOpponentPosition = betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION;
+    const awayOpponentPosition = betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION;
+    const homeOpponentForm = recentFormData ? {
+      wins: recentFormData.awayWins || 0,
+      draws: recentFormData.awayDraws || 0,
+      losses: recentFormData.awayLosses || 0
+    } : null;
+    const awayOpponentForm = recentFormData ? {
+      wins: recentFormData.homeWins || 0,
+      draws: recentFormData.homeDraws || 0,
+      losses: recentFormData.homeLosses || 0
+    } : null;
+    
+    // Average opponent strength (both teams' opponents)
+    const homeOpponentStrength = calculateOpponentStrengthImpact(homeOpponentPosition, homeOpponentForm);
+    const awayOpponentStrength = calculateOpponentStrengthImpact(awayOpponentPosition, awayOpponentForm);
+    const avgOpponentStrength = (homeOpponentStrength + awayOpponentStrength) / 2;
+    
+    // For OVER: weak opponents (higher multiplier) favor more goals
+    // For UNDER: strong opponents (lower multiplier) favor fewer goals
+    let opponentMultiplier = 1.0;
+    if (isOverBet) {
+      // Weak opponents = higher multiplier = more goals expected
+      opponentMultiplier = avgOpponentStrength;
+    } else {
+      // Strong opponents = lower multiplier = fewer goals expected
+      opponentMultiplier = 2.0 - avgOpponentStrength; // Invert
+    }
+    
+    // Cap the multiplier
+    opponentMultiplier = Math.max(0.95, Math.min(1.05, opponentMultiplier));
+    bestRecommendation.confidence = Math.min(bestRecommendation.confidence * opponentMultiplier, 10);
+    
     // Add form note to reasoning if applicable
     if (formMultiplier !== 1.0) {
       const formNote = ` Recent form: ${formMultiplier > 1.0 ? '+' : ''}${((formMultiplier - 1) * 100).toFixed(0)}%`;
       bestRecommendation.reasoning += formNote;
     }
+    
+    // Add opponent strength note
+    const opponentNote = ` Opponent strength: ${homeTeam} faces ${getOpponentStatusDescription(homeOpponentPosition, homeOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}; ${awayTeam} faces ${getOpponentStatusDescription(awayOpponentPosition, awayOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}.`;
+    bestRecommendation.reasoning += opponentNote;
 
     return bestRecommendation;
   };

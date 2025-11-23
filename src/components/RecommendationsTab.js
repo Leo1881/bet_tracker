@@ -13,6 +13,9 @@ const RecommendationsTab = ({ betRecommendations }) => {
         </p>
         <ul className="list-disc list-inside mt-2 space-y-1">
           <li>
+            <span className="text-purple-300">⭐ BEST BET</span> - Optimal bet considering team-specific performance, confidence, odds value, and risk
+          </li>
+          <li>
             <span className="text-yellow-300">🥇 PRIMARY</span> - Best bet with
             highest confidence
           </li>
@@ -73,6 +76,24 @@ const RecommendationsTab = ({ betRecommendations }) => {
                           {rec.recentFormData.homeLosses}L
                         </span>
                       </div>
+                      {/* Show sequence if available */}
+                      {rec.recentFormData.homeSequence && rec.recentFormData.homeSequence.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1 text-xs">
+                          <span className="text-gray-400">Sequence:</span>
+                          {rec.recentFormData.homeSequence.map((result, idx) => (
+                            <span
+                              key={idx}
+                              className={`font-mono ${
+                                result === 'W' ? 'text-green-400' :
+                                result === 'D' ? 'text-yellow-400' :
+                                'text-red-400'
+                              }`}
+                            >
+                              {result}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <span className="text-gray-300">Away Team:</span>
@@ -87,12 +108,81 @@ const RecommendationsTab = ({ betRecommendations }) => {
                           {rec.recentFormData.awayLosses}L
                         </span>
                       </div>
+                      {/* Show sequence if available */}
+                      {rec.recentFormData.awaySequence && rec.recentFormData.awaySequence.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1 text-xs">
+                          <span className="text-gray-400">Sequence:</span>
+                          {rec.recentFormData.awaySequence.map((result, idx) => (
+                            <span
+                              key={idx}
+                              className={`font-mono ${
+                                result === 'W' ? 'text-green-400' :
+                                result === 'D' ? 'text-yellow-400' :
+                                'text-red-400'
+                              }`}
+                            >
+                              {result}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className={`grid grid-cols-1 md:grid-cols-2 ${rec.bestBet ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+                {/* Best Bet Card */}
+                {rec.bestBet && (
+                  <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border-2 border-purple-400/40 rounded-lg p-4 shadow-lg">
+                    <div className="flex items-center mb-2">
+                      <span className="text-2xl mr-2">⭐</span>
+                      <span className="text-purple-300 font-bold">BEST BET</span>
+                    </div>
+                    <div className="text-white font-medium mb-1">
+                      {rec.bestBet.type}
+                    </div>
+                    <div
+                      className={`text-sm font-semibold ${
+                        rec.bestBet.recommendation.bet === "AVOID"
+                          ? "text-red-400"
+                          : "text-purple-300"
+                      }`}
+                    >
+                      {rec.bestBet.recommendation.bet === "AVOID"
+                        ? `AVOID (${rec.bestBet.recommendation.confidence.toFixed(
+                            1
+                          )}/10)`
+                        : `${
+                            rec.bestBet.recommendation.bet
+                          } (${rec.bestBet.recommendation.confidence.toFixed(
+                            1
+                          )}/10)`}
+                    </div>
+                    {rec.bestBet.recommendation.bet === "AVOID" && (
+                      <div className="text-red-300 text-xs mt-1">
+                        {rec.bestBet.recommendation.reasoning}
+                      </div>
+                    )}
+                    <div className="text-gray-300 text-xs mt-1">
+                      Risk: {rec.bestBet.riskLevel}
+                    </div>
+                    {rec.bestBet.oddsPerformance && (
+                      <div
+                        className={`text-xs mt-2 px-2 py-1 rounded ${
+                          rec.bestBet.oddsPerformance.type === "warning"
+                            ? "bg-red-500/20 border border-red-500/50 text-red-300"
+                            : rec.bestBet.oddsPerformance.type === "no_data"
+                            ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
+                            : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
+                        }`}
+                      >
+                        {rec.bestBet.oddsPerformance.message}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Primary Recommendation */}
                 <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/30 rounded-lg p-4">
                   <div className="flex items-center mb-2">
