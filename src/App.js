@@ -1543,8 +1543,39 @@ function App() {
       (a, b) => b.confidenceScore - a.confidenceScore
     );
 
+    // Filter out bets with no form data (both teams have 0W 0D 0L)
+    // This prevents showing recommendations for games with insufficient data
+    const betsWithFormData = validBets.filter((bet) => {
+      // Check if we have form data from new columns
+      const hasHomeSequence = bet.LAST_5_RESULT_HOME || bet.LAST_4_RESULT_HOME || 
+                              bet.LAST_3_RESULT_HOME || bet.LAST_2_RESULT_HOME || 
+                              bet.LAST_1_RESULT_HOME;
+      const hasAwaySequence = bet.LAST_5_RESULT_AWAY || bet.LAST_4_RESULT_AWAY || 
+                              bet.LAST_3_RESULT_AWAY || bet.LAST_2_RESULT_AWAY || 
+                              bet.LAST_1_RESULT_AWAY;
+      
+      // If using new sequence columns, check if at least one team has data
+      if (hasHomeSequence || hasAwaySequence) {
+        return true; // At least one team has sequence data
+      }
+      
+      // Fallback to old aggregate columns
+      const homeWins = parseInt(bet.LAST_5_WINS_HOME) || 0;
+      const homeDraws = parseInt(bet.LAST_5_DRAWS_HOME) || 0;
+      const homeLosses = parseInt(bet.LAST_5_LOSSES_HOME) || 0;
+      const awayWins = parseInt(bet.LAST_5_WINS_AWAY) || 0;
+      const awayDraws = parseInt(bet.LAST_5_DRAWS_AWAY) || 0;
+      const awayLosses = parseInt(bet.LAST_5_LOSSES_AWAY) || 0;
+      
+      const homeHasData = homeWins + homeDraws + homeLosses > 0;
+      const awayHasData = awayWins + awayDraws + awayLosses > 0;
+      
+      // Include if at least one team has form data
+      return homeHasData || awayHasData;
+    });
+
     // Generate comprehensive recommendations for each bet
-    const recommendations = validBets.slice(0, 40).map((bet, index) => {
+    const recommendations = betsWithFormData.slice(0, 40).map((bet, index) => {
       const odds = parseFloat(bet.ODDS1) || 2.0;
       const confidence = bet.confidenceScore || 5.0;
 
@@ -3299,6 +3330,10 @@ function App() {
     try {
       setIsAnalyzing(true);
 
+      // Clear previous results to avoid showing old data mixed with new
+      setAnalysisResults([]);
+      setBetRecommendations([]);
+
       // Fetch new bets from Sheet3
       const fetchedNewBets = await fetchNewBets();
       setNewBets(fetchedNewBets);
@@ -3306,16 +3341,22 @@ function App() {
       if (!fetchedNewBets || fetchedNewBets.length === 0) {
         console.log("No new bets found or fetch failed");
         setAnalysisResults([]);
+        setBetRecommendations([]);
         return;
       }
 
+      console.log(`Analyzing ${fetchedNewBets.length} new bets from Sheet3`);
+
       // Use the service to analyze new bets
       const { results } = await analyzeNewBetsService(fetchedNewBets);
+
+      console.log(`Analysis complete: ${results.length} results`);
 
       setAnalysisResults(results);
 
       // Generate bet recommendations using the local function
       const recommendations = generateBetRecommendations(results);
+      console.log(`Generated ${recommendations.length} recommendations (filtered from ${results.length} results)`);
       setBetRecommendations(recommendations);
     } catch (error) {
       console.error("Error analyzing new bets:", error);
