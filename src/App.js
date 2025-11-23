@@ -19,6 +19,7 @@ import {
   getBetsForOddsRange as getBetsForOddsRangeService,
   getTeamOddsAnalytics as getTeamOddsAnalyticsService,
 } from "./services/oddsAnalyticsService";
+import { getTopTeams } from "./services/analyticsService";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -3259,6 +3260,41 @@ function App() {
     return getBestPerformersService();
   };
 
+  // Get best team for the currently filtered league/country
+  const getBestTeamForFilteredLeague = () => {
+    // Only show if both country and league filters are active
+    if (!filters.country || !filters.league) {
+      return null;
+    }
+
+    // Get filtered bets
+    const filteredBets = getDeduplicatedFilteredBets();
+    
+    // Get top teams from filtered bets using the service function directly
+    const topTeams = getTopTeams(filteredBets);
+    
+    // Filter teams to match the exact country and league
+    const teamsInLeague = topTeams.filter(
+      (team) =>
+        team.country === filters.country &&
+        team.league === filters.league &&
+        team.totalBets >= 3 // Minimum 3 bets for consideration
+    );
+
+    if (teamsInLeague.length === 0) {
+      return null;
+    }
+
+    // Sort by win rate (descending), then by total bets (descending)
+    const bestTeam = teamsInLeague.sort((a, b) => {
+      const winRateDiff = parseFloat(b.winRate) - parseFloat(a.winRate);
+      if (Math.abs(winRateDiff) > 5) return winRateDiff; // Significant difference
+      return b.totalBets - a.totalBets; // More bets = more reliable
+    })[0];
+
+    return bestTeam;
+  };
+
   const analyzeNewBets = async () => {
     try {
       setIsAnalyzing(true);
@@ -4854,65 +4890,83 @@ function App() {
         </div>
 
         {/* Analytics Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-6">
-          {(() => {
-            const performers = getBestPerformers();
-            return (
-              <>
+        {(() => {
+          const performers = getBestPerformers();
+          const bestTeamForLeague = getBestTeamForFilteredLeague();
+          const showBestTeam = bestTeamForLeague !== null;
+          
+          return (
+            <div className={`grid grid-cols-2 md:grid-cols-2 ${showBestTeam ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 md:gap-6 mb-6`}>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
+                  Best League
+                </div>
+                <div className="text-lg md:text-2xl font-bold text-white">
+                  {performers.bestLeague.leagueDisplay ||
+                    performers.bestLeague.league ||
+                    "N/A"}
+                </div>
+                <div className="text-xs md:text-sm text-gray-300">
+                  {performers.bestLeague.winRate || 0}% Win Rate
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
+                  Best Country
+                </div>
+                <div className="text-lg md:text-2xl font-bold text-white">
+                  {performers.bestCountry.country || "N/A"}
+                </div>
+                <div className="text-xs md:text-sm text-gray-300">
+                  {performers.bestCountry.winRate || 0}% Win Rate
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-sm md:text-lg font-bold text-blue-400 mb-1 md:mb-2">
+                  Most Bets
+                </div>
+                <div className="text-lg md:text-2xl font-bold text-white">
+                  {performers.mostBetsLeague.leagueDisplay ||
+                    performers.mostBetsLeague.league ||
+                    "N/A"}
+                </div>
+                <div className="text-xs md:text-sm text-gray-300">
+                  {performers.mostBetsLeague.total || 0} Bets
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-sm md:text-lg font-bold text-red-400 mb-1 md:mb-2">
+                  Worst League
+                </div>
+                <div className="text-lg md:text-2xl font-bold text-white">
+                  {performers.worstLeague.leagueDisplay ||
+                    performers.worstLeague.league ||
+                    "N/A"}
+                </div>
+                <div className="text-xs md:text-sm text-gray-300">
+                  {performers.worstLeague.winRate || 0}% Win Rate
+                </div>
+              </div>
+              {/* 5th card: Best Team for filtered league - only shows when filters are active */}
+              {showBestTeam && (
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-                  <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
-                    Best League
+                  <div className="text-sm md:text-lg font-bold text-purple-400 mb-1 md:mb-2">
+                    Best Team ({filters.league})
                   </div>
                   <div className="text-lg md:text-2xl font-bold text-white">
-                    {performers.bestLeague.leagueDisplay ||
-                      performers.bestLeague.league ||
-                      "N/A"}
+                    {bestTeamForLeague.teamName || "N/A"}
                   </div>
                   <div className="text-xs md:text-sm text-gray-300">
-                    {performers.bestLeague.winRate || 0}% Win Rate
+                    {bestTeamForLeague.winRate || 0}% Win Rate
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {bestTeamForLeague.totalBets || 0} Bets
                   </div>
                 </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-                  <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
-                    Best Country
-                  </div>
-                  <div className="text-lg md:text-2xl font-bold text-white">
-                    {performers.bestCountry.country || "N/A"}
-                  </div>
-                  <div className="text-xs md:text-sm text-gray-300">
-                    {performers.bestCountry.winRate || 0}% Win Rate
-                  </div>
-                </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-                  <div className="text-sm md:text-lg font-bold text-blue-400 mb-1 md:mb-2">
-                    Most Bets
-                  </div>
-                  <div className="text-lg md:text-2xl font-bold text-white">
-                    {performers.mostBetsLeague.leagueDisplay ||
-                      performers.mostBetsLeague.league ||
-                      "N/A"}
-                  </div>
-                  <div className="text-xs md:text-sm text-gray-300">
-                    {performers.mostBetsLeague.total || 0} Bets
-                  </div>
-                </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-                  <div className="text-sm md:text-lg font-bold text-red-400 mb-1 md:mb-2">
-                    Worst League
-                  </div>
-                  <div className="text-lg md:text-2xl font-bold text-white">
-                    {performers.worstLeague.leagueDisplay ||
-                      performers.worstLeague.league ||
-                      "N/A"}
-                  </div>
-                  <div className="text-xs md:text-sm text-gray-300">
-                    {performers.worstLeague.winRate || 0}% Win Rate
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </div>
+              )}
+            </div>
+          );
+        })()}
 
         <FilterControls
           showFilters={showFilters}
