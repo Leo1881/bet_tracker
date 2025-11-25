@@ -1,5 +1,52 @@
 import React, { useState } from "react";
 
+const normalizeTeamName = (name = "") => {
+  if (!name) return "";
+
+  return name
+    .toLowerCase()
+    .replace(/[\.\-]/g, " ")
+    .replace(/\b(women|woman|ladies|lady|femenino|femenina)\b/g, " ")
+    .replace(/\b(cf|fc|club|de|the|team|cd|sd|ud|ac|sc|afc)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const hasWomenKeyword = (name = "") =>
+  /\b(women|woman|ladies|lady|femenino|femenina)\b/i.test(name);
+
+const isSameTeamName = (teamName = "", searchTerm = "") => {
+  if (!teamName || !searchTerm) return false;
+
+  const teamIsWomen = hasWomenKeyword(teamName);
+  const searchIsWomen = hasWomenKeyword(searchTerm);
+
+  if (teamIsWomen !== searchIsWomen) {
+    return false;
+  }
+
+  const normalizedTeam = normalizeTeamName(teamName);
+  const normalizedSearch = normalizeTeamName(searchTerm);
+
+  if (!normalizedTeam || !normalizedSearch) return false;
+
+  return normalizedTeam === normalizedSearch;
+};
+
+const buildTeamKey = (teamName = "", country = "", league = "") => {
+  const normalizedTeam = normalizeTeamName(teamName);
+  const countryKey = (country || "").toLowerCase().trim();
+  const leagueKey = (league || "").toLowerCase().trim();
+
+  if (!normalizedTeam || !countryKey || !leagueKey) {
+    return null;
+  }
+
+  const genderSuffix = hasWomenKeyword(teamName) ? "women" : "standard";
+
+  return `${normalizedTeam}_${genderSuffix}_${countryKey}_${leagueKey}`;
+};
+
 const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -142,48 +189,136 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
    * Search for teams
    */
   const handleSearch = () => {
-    if (!searchTerm.trim()) {
+    const trimmedSearchTerm = searchTerm.trim();
+
+    if (!trimmedSearchTerm) {
       setSearchResults([]);
       return;
     }
 
-    const searchLower = searchTerm.toLowerCase().trim();
+    // Helper function to check if team name matches search term (supports CF/FC suffixes but keeps Women teams separate)
+    const matchesSearch = (teamName) => {
+      return isSameTeamName(teamName, trimmedSearchTerm);
+    };
 
-    // Helper function to check if team name matches search term exactly (no partial matches)
-    const matchesSearch = (teamName, searchTerm) => {
-      const nameLower = teamName.toLowerCase().trim();
-      // Only exact match - this prevents "Real Madrid Women" from matching "real madrid"
-      return nameLower === searchTerm;
+    const matchesTeamName = matchesSearch;
+
+    const getBetOutcome = (bet) => {
+      const result = (bet.RESULT || "").toLowerCase().trim();
+
+      if (result.includes("win")) return "win";
+      if (result.includes("loss")) return "loss";
+      if (result.includes("draw")) return "draw";
+      if (
+        result === "" ||
+        result === "-" ||
+        result.includes("pending") ||
+        result.includes("unknown")
+      ) {
+        return "pending";
+      }
+      return "pending";
+    };
+
+    const determineTeamPosition = (bet) => {
+      const teamIncluded = bet.TEAM_INCLUDED || "";
+      if (!matchesTeamName(teamIncluded)) {
+        return null;
+      }
+
+      const betSelectionRaw = bet.BET_SELECTION || "";
+      const betSelection = betSelectionRaw.toLowerCase();
+      const selectionNoSpaces = betSelection.replace(/\s+/g, "");
+
+      if (betSelection.includes("home win") || betSelection.includes("home")) {
+        return "home";
+      }
+      if (betSelection.includes("away win") || betSelection.includes("away")) {
+        return "away";
+      }
+
+      const has1 = selectionNoSpaces.includes("1");
+      const has2 = selectionNoSpaces.includes("2");
+      const hasX = selectionNoSpaces.includes("x");
+
+      if (has1 && !has2) return "home";
+      if (has2 && !has1) return "away";
+
+      if (
+        selectionNoSpaces.includes("1x") ||
+        selectionNoSpaces.includes("x1") ||
+        (has1 && hasX && !has2)
+      ) {
+        return "home";
+      }
+      if (
+        selectionNoSpaces.includes("x2") ||
+        selectionNoSpaces.includes("2x") ||
+        (has2 && hasX && !has1)
+      ) {
+        return "away";
+      }
+
+      return null;
+    };
+
+    const isWinBet = (bet) => {
+      if (!matchesTeamName(bet.TEAM_INCLUDED || "")) return false;
+      const betType = (bet.BET_TYPE || "").toLowerCase();
+      const betSelection = (bet.BET_SELECTION || "").toLowerCase();
+
+      if (betType.includes("double")) return false;
+      if (betType.includes("over") || betType.includes("under")) return false;
+
+      if (betType === "" || betType === "win" || betType.includes("win")) {
+        const selectionNoSpaces = betSelection.replace(/\s+/g, "");
+        if (betSelection.includes("home win") || betSelection.includes("away win")) {
+          return true;
+        }
+        if (
+          selectionNoSpaces === "1" ||
+          selectionNoSpaces === "2" ||
+          selectionNoSpaces === "1win" ||
+          selectionNoSpaces === "2win"
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const isDoubleChanceBet = (bet) => {
+      if (!matchesTeamName(bet.TEAM_INCLUDED || "")) return false;
+      const betType = (bet.BET_TYPE || "").toLowerCase();
+      return betType.includes("double chance");
     };
 
     // Search in team analytics
     const analyticsMatches = (teamAnalytics || []).filter((team) => {
-      const teamName = (team.teamName || team.team || "").toLowerCase();
-      return matchesSearch(teamName, searchLower);
+      const teamName = team.teamName || team.team || "";
+      return matchesSearch(teamName);
     });
 
     // Search in scoring analysis
     const scoringMatches = (scoringAnalysis || []).filter((team) => {
-      const teamName = (team.team || "").toLowerCase();
-      return matchesSearch(teamName, searchLower);
+      const teamName = team.team || "";
+      return matchesSearch(teamName);
     });
 
     // Also search directly in bets data to find all leagues (teamAnalytics may be filtered to top 100)
     const allLeaguesFromBets = new Map();
     if (bets && Array.isArray(bets)) {
       bets.forEach((bet) => {
-        const teamIncluded = (bet.TEAM_INCLUDED || "").toLowerCase();
-        const homeTeam = (bet.HOME_TEAM || "").toLowerCase();
-        const awayTeam = (bet.AWAY_TEAM || "").toLowerCase();
+        const teamIncluded = bet.TEAM_INCLUDED || "";
+        const homeTeam = bet.HOME_TEAM || "";
+        const awayTeam = bet.AWAY_TEAM || "";
         const country = bet.COUNTRY || "";
         const league = bet.LEAGUE || "";
 
         // Check if this bet involves the searched team (in any position) - exact match only
         let matchedTeamName = null;
         const matchesSearchInBets = (name) => {
-          const nameLower = name.toLowerCase().trim();
-          // Exact match only - prevents "Real Madrid Women" matching "real madrid"
-          return nameLower === searchLower;
+          return isSameTeamName(name, trimmedSearchTerm);
         };
         
         if (matchesSearchInBets(teamIncluded)) {
@@ -196,8 +331,8 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
 
         if (matchedTeamName && country && league) {
           // Use the matched team name (preserve original casing)
-          const key = `${matchedTeamName.toLowerCase().trim()}_${country.toLowerCase().trim()}_${league.toLowerCase().trim()}`;
-          if (!allLeaguesFromBets.has(key)) {
+          const key = buildTeamKey(matchedTeamName, country, league);
+          if (key && !allLeaguesFromBets.has(key)) {
             allLeaguesFromBets.set(key, {
               teamName: matchedTeamName.trim(),
               country: country.trim(),
@@ -237,8 +372,12 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       const country = (team.country || "").trim();
       const league = (team.league || "").trim();
       
-      // Create unique key: team_country_league (normalize for matching)
-      const key = `${teamName.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
+      const key = buildTeamKey(teamName, country, league);
+      
+      if (!key) {
+        console.log(`Analytics: Skipping entry for ${teamName} - ${country} - ${league} (invalid key)`);
+        return;
+      }
       
       console.log(`Analytics: Adding key "${key}" for ${teamName} - ${country} - ${league}`);
       
@@ -279,8 +418,12 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       const country = (team.country || "").trim();
       const league = (team.league || "").trim();
       
-      // Create unique key: team_country_league (normalize for matching)
-      const key = `${teamName.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
+      const key = buildTeamKey(teamName, country, league);
+      
+      if (!key) {
+        console.log(`Scoring: Skipping entry for ${teamName} - ${country} - ${league} (invalid key)`);
+        return;
+      }
       
       console.log(`Scoring: Checking key "${key}" for ${teamName} - ${country} - ${league}`);
       
@@ -308,7 +451,8 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
     const calculateStatsFromBets = (teamName, country, league) => {
       if (!bets || !Array.isArray(bets)) return null;
 
-      const teamNameLower = teamName.toLowerCase().trim();
+      const normalizedSearchName = teamName.trim();
+      const matchesTeamName = (name) => isSameTeamName(name, normalizedSearchName);
       const countryLower = country.toLowerCase().trim();
       const leagueLower = league.toLowerCase().trim();
 
@@ -319,18 +463,13 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
         return betCountry === countryLower && betLeague === leagueLower;
       });
 
-      // Then find bets where this team appears
+      // Then find bets where this team appears (use normalized matching to handle CF/FC suffixes)
       const teamBets = leagueBets.filter((bet) => {
-        const betTeamIncluded = (bet.TEAM_INCLUDED || "").toLowerCase().trim();
-        const betHomeTeam = (bet.HOME_TEAM || "").toLowerCase().trim();
-        const betAwayTeam = (bet.AWAY_TEAM || "").toLowerCase().trim();
-        
-        // Check if team matches in any position (exact match only)
-        return (
-          betTeamIncluded === teamNameLower ||
-          betHomeTeam === teamNameLower ||
-          betAwayTeam === teamNameLower
+        const betNames = [bet.TEAM_INCLUDED, bet.HOME_TEAM, bet.AWAY_TEAM].filter(
+          Boolean
         );
+
+        return betNames.some((name) => matchesTeamName(name));
       });
 
       if (teamBets.length === 0) return null;
@@ -413,22 +552,25 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       // Prioritize bets where HOME_TEAM or AWAY_TEAM matches the team (not just TEAM_INCLUDED)
       const uniqueGames = new Map();
       deduplicatedTeamBets.forEach((bet) => {
-        const homeTeam = (bet.HOME_TEAM || "").toLowerCase().trim();
-        const awayTeam = (bet.AWAY_TEAM || "").toLowerCase().trim();
+        const homeTeam = bet.HOME_TEAM || "";
+        const awayTeam = bet.AWAY_TEAM || "";
         const date = bet.DATE || "";
-        const gameKey = `${date}_${homeTeam}_${awayTeam}`;
+        const gameKey = `${date}_${homeTeam.toLowerCase().trim()}_${awayTeam
+          .toLowerCase()
+          .trim()}`;
         
         // Check if this bet has clear home/away classification
-        const hasClearHomeAway = (homeTeam === teamNameLower || awayTeam === teamNameLower);
+        const position = determineTeamPosition(bet);
+        const hasClearHomeAway = position === "home" || position === "away";
         
         if (!uniqueGames.has(gameKey)) {
           uniqueGames.set(gameKey, bet);
         } else {
           // Prefer bet with clear home/away classification
           const existingBet = uniqueGames.get(gameKey);
-          const existingHomeTeam = (existingBet.HOME_TEAM || "").toLowerCase().trim();
-          const existingAwayTeam = (existingBet.AWAY_TEAM || "").toLowerCase().trim();
-          const existingHasClearHomeAway = (existingHomeTeam === teamNameLower || existingAwayTeam === teamNameLower);
+          const existingPosition = determineTeamPosition(existingBet);
+          const existingHasClearHomeAway =
+            existingPosition === "home" || existingPosition === "away";
           
           // Replace if new bet has clear home/away but existing doesn't
           if (hasClearHomeAway && !existingHasClearHomeAway) {
@@ -464,13 +606,16 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       const wilsonWinRate = completedBets > 0 ? calculateWilsonScore(wins, completedBets) * 100 : 0;
 
       // Calculate Double Chance stats
-      const doubleChanceBets = deduplicatedTeamBets.filter((bet) => {
-        const betType = (bet.BET_TYPE || "").toLowerCase();
-        return betType.includes("double chance");
-      });
+      const doubleChanceBets = deduplicatedTeamBets.filter((bet) =>
+        isDoubleChanceBet(bet)
+      );
       const doubleChanceTotal = doubleChanceBets.length;
-      const doubleChanceWins = doubleChanceBets.filter((bet) => bet.RESULT?.toLowerCase().includes("win")).length;
-      const doubleChanceLosses = doubleChanceBets.filter((bet) => bet.RESULT?.toLowerCase().includes("loss")).length;
+      const doubleChanceWins = doubleChanceBets.filter(
+        (bet) => getBetOutcome(bet) === "win"
+      ).length;
+      const doubleChanceLosses = doubleChanceBets.filter(
+        (bet) => getBetOutcome(bet) === "loss"
+      ).length;
       const doubleChanceCompleted = doubleChanceWins + doubleChanceLosses;
       const doubleChanceWinRate = doubleChanceCompleted > 0 ? (doubleChanceWins / doubleChanceCompleted) * 100 : 0;
       const doubleChanceWilsonRate = doubleChanceCompleted > 0 ? calculateWilsonScore(doubleChanceWins, doubleChanceCompleted) * 100 : 0;
@@ -486,8 +631,11 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
           !isNaN(parseFloat(bet.AWAY_SCORE))
       );
 
+      let over0_5Count = 0;
       let over1_5Count = 0;
       let over2_5Count = 0;
+      let under5_5Count = 0;
+      let under4_5Count = 0;
       let totalGoals = 0;
 
       gamesWithScores.forEach((bet) => {
@@ -495,61 +643,61 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
         const awayScore = parseFloat(bet.AWAY_SCORE || 0);
         const gameTotal = homeScore + awayScore;
         totalGoals += gameTotal;
+        if (gameTotal > 0) over0_5Count++;
         if (gameTotal > 1) over1_5Count++;
         if (gameTotal > 2) over2_5Count++;
+        if (gameTotal < 5.5) under5_5Count++;
+        if (gameTotal < 4.5) under4_5Count++;
       });
 
       const totalGames = gamesWithScores.length;
+      const over0_5Rate = totalGames > 0 ? (over0_5Count / totalGames) * 100 : 0;
       const over1_5Rate = totalGames > 0 ? (over1_5Count / totalGames) * 100 : 0;
       const over2_5Rate = totalGames > 0 ? (over2_5Count / totalGames) * 100 : 0;
+      const under5_5Rate = totalGames > 0 ? (under5_5Count / totalGames) * 100 : 0;
+      const under4_5Rate = totalGames > 0 ? (under4_5Count / totalGames) * 100 : 0;
       const avgGoals = totalGames > 0 ? totalGoals / totalGames : 0;
 
-      // Calculate Home/Away splits
-      // A game counts as "home" if the team is HOME_TEAM, "away" if AWAY_TEAM
-      // For Over/Under bets, TEAM_INCLUDED might match, but we check HOME_TEAM/AWAY_TEAM to determine home/away
-      const homeGames = deduplicatedBets.filter((bet) => {
-        const betHomeTeam = (bet.HOME_TEAM || "").toLowerCase().trim();
-        // Team is home if HOME_TEAM matches (regardless of TEAM_INCLUDED)
-        return betHomeTeam === teamNameLower;
-      });
-      const awayGames = deduplicatedBets.filter((bet) => {
-        const betAwayTeam = (bet.AWAY_TEAM || "").toLowerCase().trim();
-        // Team is away if AWAY_TEAM matches (regardless of TEAM_INCLUDED)
-        return betAwayTeam === teamNameLower;
-      });
+      // Calculate Home/Away splits using Win bets only
+      const winBets = deduplicatedTeamBets.filter((bet) => isWinBet(bet));
+      const homeWinBets = winBets.filter(
+        (bet) => determineTeamPosition(bet) === "home"
+      );
+      const awayWinBets = winBets.filter(
+        (bet) => determineTeamPosition(bet) === "away"
+      );
 
-      // Count ALL home/away games (including pending), not just completed
-      const homeTotal = homeGames.length; // All home games
-      const homeWins = homeGames.filter((bet) => bet.RESULT?.toLowerCase().includes("win")).length;
-      const homeLosses = homeGames.filter((bet) => bet.RESULT?.toLowerCase().includes("loss")).length;
-      const homeCompleted = homeWins + homeLosses; // Only completed for win rate
+      const homeTotal = homeWinBets.length;
+      let homeWins = 0;
+      let homeLosses = 0;
+      let homeCompleted = 0;
+      homeWinBets.forEach((bet) => {
+        const outcome = getBetOutcome(bet);
+        if (outcome === "win") {
+          homeWins++;
+          homeCompleted++;
+        } else if (outcome === "loss") {
+          homeLosses++;
+          homeCompleted++;
+        }
+      });
       const homeWinRate = homeCompleted > 0 ? (homeWins / homeCompleted) * 100 : 0;
 
-      const awayTotal = awayGames.length; // All away games
-      const awayWins = awayGames.filter((bet) => bet.RESULT?.toLowerCase().includes("win")).length;
-      const awayLosses = awayGames.filter((bet) => bet.RESULT?.toLowerCase().includes("loss")).length;
-      const awayCompleted = awayWins + awayLosses; // Only completed for win rate
+      const awayTotal = awayWinBets.length;
+      let awayWins = 0;
+      let awayLosses = 0;
+      let awayCompleted = 0;
+      awayWinBets.forEach((bet) => {
+        const outcome = getBetOutcome(bet);
+        if (outcome === "win") {
+          awayWins++;
+          awayCompleted++;
+        } else if (outcome === "loss") {
+          awayLosses++;
+          awayCompleted++;
+        }
+      });
       const awayWinRate = awayCompleted > 0 ? (awayWins / awayCompleted) * 100 : 0;
-
-      // Debug: Check for games that don't fit home/away
-      const homeAwayTotal = homeTotal + awayTotal;
-      if (uniqueGamesCount > homeAwayTotal) {
-        console.log(`  Warning: uniqueGamesCount (${uniqueGamesCount}) > homeTotal (${homeTotal}) + awayTotal (${awayTotal}) = ${homeAwayTotal}`);
-        console.log(`  This means ${uniqueGamesCount - homeAwayTotal} games couldn't be classified as home or away`);
-        // Log unclassified games
-        const unclassifiedGames = deduplicatedBets.filter((bet) => {
-          const betHomeTeam = (bet.HOME_TEAM || "").toLowerCase().trim();
-          const betAwayTeam = (bet.AWAY_TEAM || "").toLowerCase().trim();
-          return betHomeTeam !== teamNameLower && betAwayTeam !== teamNameLower;
-        });
-        console.log(`  Unclassified games:`, unclassifiedGames.map(b => ({
-          date: b.DATE,
-          homeTeam: b.HOME_TEAM,
-          awayTeam: b.AWAY_TEAM,
-          teamIncluded: b.TEAM_INCLUDED,
-          betType: b.BET_TYPE
-        })));
-      }
 
       // Calculate average goals from games with scores (for display)
       const avgGoalsDisplay = avgGoals;
@@ -599,6 +747,9 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
         totalGames, // Games with scores (for Over/Under)
         over1_5Rate,
         over2_5Rate,
+        over0_5Rate,
+        under5_5Rate,
+        under4_5Rate,
         avgGoals: avgGoalsDisplay,
         homeWinRate,
         awayWinRate,
@@ -666,8 +817,11 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       let totalUniqueGames = 0;
       let totalBetsCount = 0;
       let totalGamesWithScores = 0;
+      let totalOver0_5Count = 0;
       let totalOver1_5Count = 0;
       let totalOver2_5Count = 0;
+      let totalUnder5_5Count = 0;
+      let totalUnder4_5Count = 0;
       let totalGoals = 0;
       let totalHomeWins = 0;
       let totalHomeLosses = 0;
@@ -704,10 +858,26 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
             totalGamesWithScores += gamesWithScores;
 
             // Calculate Over/Under from calculated stats
-            const over1_5Games = Math.round((result.calculatedStats.over1_5Rate / 100) * gamesWithScores);
-            const over2_5Games = Math.round((result.calculatedStats.over2_5Rate / 100) * gamesWithScores);
+            const over0_5Games = Math.round(
+              (result.calculatedStats.over0_5Rate / 100) * gamesWithScores
+            );
+            const over1_5Games = Math.round(
+              (result.calculatedStats.over1_5Rate / 100) * gamesWithScores
+            );
+            const over2_5Games = Math.round(
+              (result.calculatedStats.over2_5Rate / 100) * gamesWithScores
+            );
+            const under5_5Games = Math.round(
+              (result.calculatedStats.under5_5Rate / 100) * gamesWithScores
+            );
+            const under4_5Games = Math.round(
+              (result.calculatedStats.under4_5Rate / 100) * gamesWithScores
+            );
+            totalOver0_5Count += over0_5Games;
             totalOver1_5Count += over1_5Games;
             totalOver2_5Count += over2_5Games;
+            totalUnder5_5Count += under5_5Games;
+            totalUnder4_5Count += under4_5Games;
             totalGoals += (result.calculatedStats.avgGoals || 0) * gamesWithScores;
 
             // Home/Away totals - use the actual values from calculatedStats
@@ -765,8 +935,16 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       const completedBets = totalWins + totalLosses;
       const totalWinRate = completedBets > 0 ? (totalWins / completedBets) * 100 : 0;
       const totalWilsonWinRate = completedBets > 0 ? calculateWilsonScore(totalWins, completedBets) * 100 : 0;
-      const totalOver1_5Rate = totalGamesWithScores > 0 ? (totalOver1_5Count / totalGamesWithScores) * 100 : 0;
-      const totalOver2_5Rate = totalGamesWithScores > 0 ? (totalOver2_5Count / totalGamesWithScores) * 100 : 0;
+      const totalOver0_5Rate =
+        totalGamesWithScores > 0 ? (totalOver0_5Count / totalGamesWithScores) * 100 : 0;
+      const totalOver1_5Rate =
+        totalGamesWithScores > 0 ? (totalOver1_5Count / totalGamesWithScores) * 100 : 0;
+      const totalOver2_5Rate =
+        totalGamesWithScores > 0 ? (totalOver2_5Count / totalGamesWithScores) * 100 : 0;
+      const totalUnder5_5Rate =
+        totalGamesWithScores > 0 ? (totalUnder5_5Count / totalGamesWithScores) * 100 : 0;
+      const totalUnder4_5Rate =
+        totalGamesWithScores > 0 ? (totalUnder4_5Count / totalGamesWithScores) * 100 : 0;
       const totalAvgGoals = totalGamesWithScores > 0 ? totalGoals / totalGamesWithScores : 0;
       const totalHomeWinRate = totalHomeGames > 0 ? (totalHomeWins / totalHomeGames) * 100 : 0;
       const totalAwayWinRate = totalAwayGames > 0 ? (totalAwayWins / totalAwayGames) * 100 : 0;
@@ -787,8 +965,11 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
           winRate: totalWinRate,
           wilsonWinRate: totalWilsonWinRate,
           totalGames: totalGamesWithScores, // Games with scores (for Over/Under calculations)
+          over0_5Rate: totalOver0_5Rate,
           over1_5Rate: totalOver1_5Rate,
           over2_5Rate: totalOver2_5Rate,
+          under5_5Rate: totalUnder5_5Rate,
+          under4_5Rate: totalUnder4_5Rate,
           avgGoals: totalAvgGoals,
           homeWinRate: totalHomeWinRate,
           awayWinRate: totalAwayWinRate,
@@ -979,28 +1160,60 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
                   )}
                   
                   {/* Over/Under Stats */}
-                  {(result.scoring || result.calculatedStats) && (
+                  {(result.scoring || result.calculatedStats) && (() => {
+                    const stats = result.calculatedStats || result.scoring || {};
+                    const totalGoalGames = stats.totalGames || 0;
+
+                    return (
                     <>
+                      <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                        <p className="text-gray-400 text-xs mb-1">Over 0.5</p>
+                        <p className="text-white font-semibold text-lg">
+                          {parseFloat(stats.over0_5Rate || 0).toFixed(1)}%
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          {totalGoalGames} games with goals over 0.5
+                        </p>
+                      </div>
                       <div className="bg-white/5 border border-white/10 rounded-lg p-3">
                         <p className="text-gray-400 text-xs mb-1">Over 1.5</p>
                         <p className="text-white font-semibold text-lg">
-                          {parseFloat(result.scoring?.over1_5Rate || result.calculatedStats?.over1_5Rate || 0).toFixed(1)}%
+                          {parseFloat(stats.over1_5Rate || 0).toFixed(1)}%
                         </p>
                         <p className="text-gray-500 text-xs mt-1">
-                          {result.scoring?.totalGames || result.calculatedStats?.totalGames || 0} games with goals over 1.5
+                          {totalGoalGames} games with goals over 1.5
                         </p>
                       </div>
                       <div className="bg-white/5 border border-white/10 rounded-lg p-3">
                         <p className="text-gray-400 text-xs mb-1">Over 2.5</p>
                         <p className="text-white font-semibold text-lg">
-                          {parseFloat(result.scoring?.over2_5Rate || result.calculatedStats?.over2_5Rate || 0).toFixed(1)}%
+                          {parseFloat(stats.over2_5Rate || 0).toFixed(1)}%
                         </p>
                         <p className="text-gray-500 text-xs mt-1">
-                          {result.scoring?.totalGames || result.calculatedStats?.totalGames || 0} games with goals over 2.5
+                          {totalGoalGames} games with goals over 2.5
+                        </p>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                        <p className="text-gray-400 text-xs mb-1">Under 5.5</p>
+                        <p className="text-white font-semibold text-lg">
+                          {parseFloat(stats.under5_5Rate || 0).toFixed(1)}%
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          {totalGoalGames} games with goals under 5.5
+                        </p>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                        <p className="text-gray-400 text-xs mb-1">Under 4.5</p>
+                        <p className="text-white font-semibold text-lg">
+                          {parseFloat(stats.under4_5Rate || 0).toFixed(1)}%
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          {totalGoalGames} games with goals under 4.5
                         </p>
                       </div>
                     </>
-                  )}
+                    );
+                  })()}
 
                   {/* Average Goals */}
                   {(result.scoring || result.calculatedStats) && (
