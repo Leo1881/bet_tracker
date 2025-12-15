@@ -42,6 +42,7 @@ import TeamNotesTab from "./components/TeamNotesTab";
 import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
 import QuickLookupTab from "./components/QuickLookupTab";
+import PatternAnalysisTab from "./components/PatternAnalysisTab";
 
 function App() {
   // Use custom hook for state management
@@ -354,9 +355,14 @@ function App() {
     if (filters.team) {
       filtered = filtered.filter(
         (bet) =>
-          bet.HOME_TEAM?.toLowerCase() === filters.team.toLowerCase() ||
-          bet.AWAY_TEAM?.toLowerCase() === filters.team.toLowerCase() ||
-          bet.TEAM_INCLUDED?.toLowerCase() === filters.team.toLowerCase()
+          // Only filter by TEAM_INCLUDED - this is the team you bet on/for
+          // HOME_TEAM/AWAY_TEAM are just the match participants, not necessarily the team you bet on
+          bet.TEAM_INCLUDED?.toLowerCase() === filters.team.toLowerCase() ||
+          // Fallback: if TEAM_INCLUDED is missing, check HOME_TEAM/AWAY_TEAM
+          (!bet.TEAM_INCLUDED && (
+            bet.HOME_TEAM?.toLowerCase() === filters.team.toLowerCase() ||
+            bet.AWAY_TEAM?.toLowerCase() === filters.team.toLowerCase()
+          ))
       );
     }
 
@@ -1703,10 +1709,34 @@ function App() {
         },
       ];
 
+      // Helper function to determine which team is being bet on for each recommendation
+      const getTeamForRecommendation = (rec) => {
+        if (rec.recommendation.bet === "AVOID" || rec.recommendation.bet === "No clear winner") {
+          return null;
+        }
+        // For Straight Win, the bet is the team name
+        if (rec.type === "Straight Win") {
+          return rec.recommendation.bet;
+        }
+        // For Double Chance, check if it mentions home or away team
+        if (rec.type === "Double Chance") {
+          if (rec.recommendation.bet.toLowerCase().includes(homeTeam.toLowerCase())) {
+            return homeTeam;
+          } else if (rec.recommendation.bet.toLowerCase().includes(awayTeam.toLowerCase())) {
+            return awayTeam;
+          }
+        }
+        // For Over/Under, we can't determine a specific team, so use the team from the original bet
+        if (rec.type === "Over/Under") {
+          return bet.TEAM_INCLUDED || homeTeam;
+        }
+        return bet.TEAM_INCLUDED || homeTeam;
+      };
+
       // Calculate risk-adjusted scores for ranking using data-driven multipliers
       // Use underlying Wilson rate when confidence is capped at 10.0 to preserve actual confidence levels
-      const rankedBets = allBets.map((bet) => {
-        let baseScore = bet.recommendation.confidence;
+      const rankedBets = allBets.map((betOption) => {
+        let baseScore = betOption.recommendation.confidence;
         
         // If confidence is capped at 10.0, use underlying Wilson rate for ranking
         // This preserves the actual confidence difference when multiple bets are maxed out
@@ -1714,32 +1744,67 @@ function App() {
         // We want to use 95% vs 85% for ranking, not 10.0 vs 10.0
         if (baseScore >= 10.0) {
           // Check for Wilson rate in different fields based on bet type
-          if (bet.recommendation.wilsonWinRate !== undefined) {
+          if (betOption.recommendation.wilsonWinRate !== undefined) {
             // Straight Win or Double Chance: use wilsonWinRate
-            baseScore = bet.recommendation.wilsonWinRate / 10;
-          } else if (bet.recommendation.overWilsonRate !== undefined) {
+            baseScore = betOption.recommendation.wilsonWinRate / 10;
+          } else if (betOption.recommendation.overWilsonRate !== undefined) {
             // Over/Under: use overWilsonRate or underWilsonRate
-            baseScore = bet.recommendation.overWilsonRate 
-              ? bet.recommendation.overWilsonRate / 10 
-              : (bet.recommendation.underWilsonRate || 0) / 10;
+            baseScore = betOption.recommendation.overWilsonRate 
+              ? betOption.recommendation.overWilsonRate / 10 
+              : (betOption.recommendation.underWilsonRate || 0) / 10;
           }
           // If no Wilson rate available, keep using capped confidence (shouldn't happen)
         }
         
         let adjustedScore = baseScore;
 
-        // Apply data-driven multipliers based on historical performance
-        if (bet.type === "Straight Win") {
+        // Apply data-driven multipliers based on historical performance (global across all teams)
+        if (betOption.type === "Straight Win") {
           adjustedScore *= betTypeMultipliers.straightWin;
-        } else if (bet.type === "Double Chance") {
+        } else if (betOption.type === "Double Chance") {
           adjustedScore *= betTypeMultipliers.doubleChance;
-        } else if (bet.type === "Over/Under") {
+        } else if (betOption.type === "Over/Under") {
           adjustedScore *= betTypeMultipliers.overUnder;
         }
 
+        // Factor in team-specific bet type performance for ranking
+        // This ensures teams that perform better on specific bet types rank higher for those bet types
+        const teamForBet = getTeamForRecommendation(betOption);
+        if (teamForBet && betOption.recommendation.bet !== "AVOID" && betOption.recommendation.bet !== "No clear winner") {
+          const teamPerformance = getTeamBetTypePerformance(
+            teamForBet,
+            country,
+            league,
+            betOption.type
+          );
+
+          if (teamPerformance && teamPerformance.totalBets >= 3) {
+            // Factor in team-specific performance
+            // If team has good performance (win rate > 50%), boost the score
+            // If team has poor performance (win rate < 40%), penalize the score
+            const performanceMultiplier = teamPerformance.winRate >= 0.5
+              ? 1.0 + (teamPerformance.winRate - 0.5) * 0.4 // Boost up to 20% for 100% win rate
+              : 1.0 - (0.5 - teamPerformance.winRate) * 0.6; // Penalize up to 30% for 0% win rate
+
+            // Apply multiplier, but cap the impact
+            adjustedScore = adjustedScore * Math.max(0.7, Math.min(1.2, performanceMultiplier));
+
+            // Add sample size bonus (more bets = more reliable)
+            if (teamPerformance.totalBets >= 10) {
+              adjustedScore *= 1.05; // 5% bonus for 10+ bets
+            } else if (teamPerformance.totalBets >= 5) {
+              adjustedScore *= 1.02; // 2% bonus for 5+ bets
+            }
+          } else if (teamPerformance && teamPerformance.totalBets < 3) {
+            // Insufficient data - small penalty
+            adjustedScore *= 0.95;
+          }
+        }
+
         return {
-          ...bet,
+          ...betOption,
           adjustedScore: adjustedScore,
+          teamForBet: teamForBet, // Store for later use in Best Bet selection
         };
       });
 
@@ -1776,67 +1841,11 @@ function App() {
         teamOddsAnalytics
       );
 
-      // Calculate Best Bet - considers team-specific bet type performance
-      // Determine which team is being bet on for each recommendation
-      const getTeamForRecommendation = (rec) => {
-        if (rec.recommendation.bet === "AVOID" || rec.recommendation.bet === "No clear winner") {
-          return null;
-        }
-        // For Straight Win, the bet is the team name
-        if (rec.type === "Straight Win") {
-          return rec.recommendation.bet;
-        }
-        // For Double Chance, check if it mentions home or away team
-        if (rec.type === "Double Chance") {
-          if (rec.recommendation.bet.toLowerCase().includes(homeTeam.toLowerCase())) {
-            return homeTeam;
-          } else if (rec.recommendation.bet.toLowerCase().includes(awayTeam.toLowerCase())) {
-            return awayTeam;
-          }
-        }
-        // For Over/Under, we can't determine a specific team, so use the team from the original bet
-        if (rec.type === "Over/Under") {
-          return bet.TEAM_INCLUDED || homeTeam;
-        }
-        return bet.TEAM_INCLUDED || homeTeam;
-      };
-
-      // Calculate best bet score for each recommendation
+      // Calculate Best Bet - uses adjusted scores that already include team-specific bet type performance
+      // Additional factors for Best Bet selection: odds value, risk level, and opponent strength
       const bestBetScores = rankedBets.map((betOption) => {
-        const teamForBet = getTeamForRecommendation(betOption);
-        let bestBetScore = betOption.adjustedScore; // Start with adjusted score
-
-        // If we can identify the team, factor in team-specific bet type performance
-        if (teamForBet && betOption.recommendation.bet !== "AVOID" && betOption.recommendation.bet !== "No clear winner") {
-          const teamPerformance = getTeamBetTypePerformance(
-            teamForBet,
-            country,
-            league,
-            betOption.type
-          );
-
-          if (teamPerformance && teamPerformance.totalBets >= 3) {
-            // Factor in team-specific performance
-            // If team has good performance (win rate > 50%), boost the score
-            // If team has poor performance (win rate < 40%), penalize the score
-            const performanceMultiplier = teamPerformance.winRate >= 0.5
-              ? 1.0 + (teamPerformance.winRate - 0.5) * 0.4 // Boost up to 20% for 100% win rate
-              : 1.0 - (0.5 - teamPerformance.winRate) * 0.6; // Penalize up to 30% for 0% win rate
-
-            // Apply multiplier, but cap the impact
-            bestBetScore = bestBetScore * Math.max(0.7, Math.min(1.2, performanceMultiplier));
-
-            // Add sample size bonus (more bets = more reliable)
-            if (teamPerformance.totalBets >= 10) {
-              bestBetScore *= 1.05; // 5% bonus for 10+ bets
-            } else if (teamPerformance.totalBets >= 5) {
-              bestBetScore *= 1.02; // 2% bonus for 5+ bets
-            }
-          } else if (teamPerformance && teamPerformance.totalBets < 3) {
-            // Insufficient data - small penalty
-            bestBetScore *= 0.95;
-          }
-        }
+        const teamForBet = betOption.teamForBet; // Already calculated during ranking
+        let bestBetScore = betOption.adjustedScore; // Start with adjusted score (already includes team-specific performance)
 
         // Factor in odds value (expected value)
         const recommendationOdds = odds; // Use the main odds for now
@@ -5862,6 +5871,10 @@ function App() {
               scoringAnalysis={scoringAnalysis}
               bets={bets}
             />
+          )}
+
+          {activeTab === "patternAnalysis" && (
+            <PatternAnalysisTab bets={bets} />
           )}
         </div>
       </div>
