@@ -110,19 +110,6 @@ const BetAnalysisTab = ({
             <table className="w-full">
               <thead className="bg-white/20">
                 <tr>
-                  <th
-                    className="px-4 py-2 text-left text-white font-semibold w-20 cursor-pointer hover:bg-white/10"
-                    onClick={() => handleAnalysisSort("DATE")}
-                  >
-                    <div className="flex items-center">
-                      Date
-                      {analysisSortConfig.key === "DATE" && (
-                        <span className="ml-1">
-                          {analysisSortConfig.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
-                  </th>
                   <th className="px-4 py-2 text-left text-white font-semibold w-32">
                     Match
                   </th>
@@ -166,9 +153,6 @@ const BetAnalysisTab = ({
                       index % 2 === 0 ? "bg-white/5" : "bg-white/10"
                     }`}
                   >
-                    <td className="px-4 py-6 text-gray-300">
-                      {formatDate(result.DATE)}
-                    </td>
                     <td className="px-4 py-6 text-gray-300">
                       <div className="text-sm">
                         <div className="font-medium text-white">
@@ -230,28 +214,28 @@ const BetAnalysisTab = ({
                     </td>
                     <td className="px-4 py-6">
                       <div className="text-sm">
-                        <div className="mb-1">
+                        <div className="mb-1 flex items-center gap-2">
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
                               result.confidenceLabel?.color ||
                               "bg-gray-100 text-gray-800"
                             } cursor-help`}
                             title={`${result.confidenceLabel?.label || "N/A"}
-🏆 Team Performance: ${result.confidenceBreakdown?.team || 0}/10
-📈 Recent Form: ${result.confidenceBreakdown?.recentForm || 0}/10
-🚀 Team Momentum: ${result.confidenceBreakdown?.momentum || 0}/10
-🏛️ League Experience: ${result.confidenceBreakdown?.league || 0}/10
-💰 Odds Value: ${result.confidenceBreakdown?.odds || 0}/10
-⚔️ Head-to-Head: ${result.confidenceBreakdown?.matchup || 0}/10
-📊 League Position: ${result.confidenceBreakdown?.position || 0}/10
-🏠 Home/Away: ${result.confidenceBreakdown?.homeAway || 0}/10`}
+🏆 Team Performance: ${result.confidenceBreakdown?.team || 0}%
+📈 Recent Form: ${result.confidenceBreakdown?.recentForm || 0}%
+🚀 Team Momentum: ${result.confidenceBreakdown?.momentum || 0}%
+🏛️ League Experience: ${result.confidenceBreakdown?.league || 0}%
+💰 Odds Value: ${result.confidenceBreakdown?.odds || 0}%
+⚔️ Head-to-Head: ${result.confidenceBreakdown?.matchup || 0}%
+📊 League Position: ${result.confidenceBreakdown?.position || 0}%
+🏠 Home/Away: ${result.confidenceBreakdown?.homeAway || 0}%`}
                           >
                             {result.confidenceLabel?.emoji || "❓"}{" "}
-                            {result.confidenceScore || 0}/10
+                            {result.confidenceScore || 0}%
                           </span>
-                          <div className="text-xs text-gray-400 mt-2">
+                          <span className="text-xs text-gray-400">
                             {result.confidenceLabel?.label || "N/A"}
-                          </div>
+                          </span>
                         </div>
 
                         {/* Bet Type Suggestions */}
@@ -380,10 +364,10 @@ const BetAnalysisTab = ({
                           </div>
                           <div className="mb-2">
                             <div className="text-xs text-gray-400 mb-1">
-                              Expected Goals:
+                              Expected Goals per team:
                             </div>
                             <div className="text-xs text-purple-300">
-                              {result.probabilities?.lambda?.home || "N/A"} -{" "}
+                              🏠 {result.probabilities?.lambda?.home || "N/A"} | ✈️{" "}
                               {result.probabilities?.lambda?.away || "N/A"}
                             </div>
                           </div>

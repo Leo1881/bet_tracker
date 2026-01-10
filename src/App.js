@@ -707,18 +707,30 @@ function App() {
           : 0;
 
       // Group by confidence score ranges
+      // Handle both old (1-10) and new (0-100%) confidence formats
+      const normalizeConfidence = (score) => {
+        // If score is <= 10, assume old format and convert to percentage
+        return score <= 10 ? score * 10 : score;
+      };
+
       const confidenceGroups = {
-        "High (8-10)": recommendationsWithResults.filter(
-          (rec) => rec.confidence_score >= 8
+        "High (80-100%)": recommendationsWithResults.filter(
+          (rec) => normalizeConfidence(rec.confidence_score) >= 80
         ),
-        "Medium (6-7)": recommendationsWithResults.filter(
-          (rec) => rec.confidence_score >= 6 && rec.confidence_score < 8
+        "Medium (60-79%)": recommendationsWithResults.filter(
+          (rec) => {
+            const normalized = normalizeConfidence(rec.confidence_score);
+            return normalized >= 60 && normalized < 80;
+          }
         ),
-        "Low (4-5)": recommendationsWithResults.filter(
-          (rec) => rec.confidence_score >= 4 && rec.confidence_score < 6
+        "Low (40-59%)": recommendationsWithResults.filter(
+          (rec) => {
+            const normalized = normalizeConfidence(rec.confidence_score);
+            return normalized >= 40 && normalized < 60;
+          }
         ),
-        "Very Low (1-3)": recommendationsWithResults.filter(
-          (rec) => rec.confidence_score < 4
+        "Very Low (10-39%)": recommendationsWithResults.filter(
+          (rec) => normalizeConfidence(rec.confidence_score) < 40
         ),
       };
 
@@ -896,8 +908,8 @@ function App() {
         overallAccuracy: Math.round(overallAccuracy * 10) / 10,
         byConfidence: {
           "High (8-10)": {
-            total: confidenceGroups["High (8-10)"].length,
-            correct: confidenceGroups["High (8-10)"].filter((rec) =>
+            total: confidenceGroups["High (80-100%)"].length,
+            correct: confidenceGroups["High (80-100%)"].filter((rec) =>
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
@@ -906,12 +918,12 @@ function App() {
             ).length,
             accuracy:
               Math.round(
-                calculateGroupAccuracy(confidenceGroups["High (8-10)"]) * 10
-              ) / 10,
+                calculateGroupAccuracy(confidenceGroups["High (80-100%)"]) * 100
+              ),
           },
-          "Medium (6-7)": {
-            total: confidenceGroups["Medium (6-7)"].length,
-            correct: confidenceGroups["Medium (6-7)"].filter((rec) =>
+          "Medium (60-79%)": {
+            total: confidenceGroups["Medium (60-79%)"].length,
+            correct: confidenceGroups["Medium (60-79%)"].filter((rec) =>
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
@@ -920,12 +932,12 @@ function App() {
             ).length,
             accuracy:
               Math.round(
-                calculateGroupAccuracy(confidenceGroups["Medium (6-7)"]) * 10
-              ) / 10,
+                calculateGroupAccuracy(confidenceGroups["Medium (60-79%)"]) * 100
+              ),
           },
-          "Low (4-5)": {
-            total: confidenceGroups["Low (4-5)"].length,
-            correct: confidenceGroups["Low (4-5)"].filter((rec) =>
+          "Low (40-59%)": {
+            total: confidenceGroups["Low (40-59%)"].length,
+            correct: confidenceGroups["Low (40-59%)"].filter((rec) =>
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
@@ -934,12 +946,12 @@ function App() {
             ).length,
             accuracy:
               Math.round(
-                calculateGroupAccuracy(confidenceGroups["Low (4-5)"]) * 10
-              ) / 10,
+                calculateGroupAccuracy(confidenceGroups["Low (40-59%)"]) * 100
+              ),
           },
-          "Very Low (1-3)": {
-            total: confidenceGroups["Very Low (1-3)"].length,
-            correct: confidenceGroups["Very Low (1-3)"].filter((rec) =>
+          "Very Low (10-39%)": {
+            total: confidenceGroups["Very Low (10-39%)"].length,
+            correct: confidenceGroups["Very Low (10-39%)"].filter((rec) =>
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
@@ -948,8 +960,8 @@ function App() {
             ).length,
             accuracy:
               Math.round(
-                calculateGroupAccuracy(confidenceGroups["Very Low (1-3)"]) * 10
-              ) / 10,
+                calculateGroupAccuracy(confidenceGroups["Very Low (10-39%)"]) * 100
+              ),
           },
         },
         byBetType: accuracyByBetType,
@@ -1738,20 +1750,21 @@ function App() {
       const rankedBets = allBets.map((betOption) => {
         let baseScore = betOption.recommendation.confidence;
         
-        // If confidence is capped at 10.0, use underlying Wilson rate for ranking
+        // If confidence is capped at 100%, use underlying Wilson rate for ranking
         // This preserves the actual confidence difference when multiple bets are maxed out
-        // Example: Straight Win with 95% Wilson (capped to 10.0) vs Double Chance with 85% Wilson (capped to 10.0)
-        // We want to use 95% vs 85% for ranking, not 10.0 vs 10.0
-        if (baseScore >= 10.0) {
+        // Example: Straight Win with 95% Wilson (capped to 100%) vs Double Chance with 85% Wilson (capped to 100%)
+        // We want to use 95% vs 85% for ranking, not 100% vs 100%
+        if (baseScore >= 100.0) {
           // Check for Wilson rate in different fields based on bet type
+          // Wilson rates are already in percentage form (0-100%)
           if (betOption.recommendation.wilsonWinRate !== undefined) {
-            // Straight Win or Double Chance: use wilsonWinRate
-            baseScore = betOption.recommendation.wilsonWinRate / 10;
+            // Straight Win or Double Chance: use wilsonWinRate (already percentage)
+            baseScore = betOption.recommendation.wilsonWinRate;
           } else if (betOption.recommendation.overWilsonRate !== undefined) {
-            // Over/Under: use overWilsonRate or underWilsonRate
+            // Over/Under: use overWilsonRate or underWilsonRate (already percentage)
             baseScore = betOption.recommendation.overWilsonRate 
-              ? betOption.recommendation.overWilsonRate / 10 
-              : (betOption.recommendation.underWilsonRate || 0) / 10;
+              ? betOption.recommendation.overWilsonRate 
+              : (betOption.recommendation.underWilsonRate || 0);
           }
           // If no Wilson rate available, keep using capped confidence (shouldn't happen)
         }
@@ -2163,7 +2176,7 @@ function App() {
     if (betData.recommendation && betData.recommendation.includes("Avoid")) {
       return {
         bet: "AVOID",
-        confidence: betData.confidenceScore || 5,
+        confidence: betData.confidenceScore || 30, // Low confidence for AVOID (30% = old 3/10)
         winRate: 0,
         totalBets: 0,
         reasoning: betData.recommendation
@@ -2251,7 +2264,7 @@ function App() {
     if (!hasHomeData && !hasAwayData) {
       return {
         bet: "No clear winner",
-        confidence: 3, // Low confidence due to insufficient data
+        confidence: 30, // Low confidence due to insufficient data (30% = old 3/10)
         winRate: Math.max(homeWinRate, awayWinRate),
         totalBets: homeTotal + awayTotal,
         reasoning: `Insufficient data (${homeTotal} home games, ${awayTotal} away games). Need at least ${minSampleSize} games per team.`,
@@ -2279,14 +2292,15 @@ function App() {
 
     // Determine recommendation based on Wilson Score
     if (hasHomeData && (!hasAwayData || homeWilsonRate > awayWilsonRate + minDifference)) {
-      let confidence = Math.min(homeWilsonRate / 10, 10);
+      // Wilson rate is already a percentage (0-100%), use it directly
+      let confidence = Math.min(homeWilsonRate, 100);
       // Apply recent form impact for home team
       const homeFormImpact = calculateRecentFormImpact(recentFormData, true, false);
-      confidence = Math.min(confidence * homeFormImpact, 10);
+      confidence = Math.min(confidence * homeFormImpact, 100);
       
       // Apply opponent strength impact (away team is opponent)
       const opponentStrengthImpact = calculateOpponentStrengthImpact(homeOpponentPosition, homeOpponentForm);
-      confidence = Math.min(confidence * opponentStrengthImpact, 10);
+      confidence = Math.min(confidence * opponentStrengthImpact, 100);
       
       const formNote = homeFormImpact !== 1.0 
         ? ` (Recent form: ${homeFormImpact > 1.0 ? '+' : ''}${((homeFormImpact - 1) * 100).toFixed(0)}%)`
@@ -2302,14 +2316,15 @@ function App() {
         reasoning: `${homeTeam} has ${homeWinRate.toFixed(1)}% win rate (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}. ${awayTeam} has ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}.${formNote}${opponentNote}`,
       };
     } else if (hasAwayData && (!hasHomeData || awayWilsonRate > homeWilsonRate + minDifference)) {
-      let confidence = Math.min(awayWilsonRate / 10, 10);
+      // Wilson rate is already a percentage (0-100%), use it directly
+      let confidence = Math.min(awayWilsonRate, 100);
       // Apply recent form impact for away team
       const awayFormImpact = calculateRecentFormImpact(recentFormData, false, true);
-      confidence = Math.min(confidence * awayFormImpact, 10);
+      confidence = Math.min(confidence * awayFormImpact, 100);
       
       // Apply opponent strength impact (home team is opponent)
       const opponentStrengthImpact = calculateOpponentStrengthImpact(awayOpponentPosition, awayOpponentForm);
-      confidence = Math.min(confidence * opponentStrengthImpact, 10);
+      confidence = Math.min(confidence * opponentStrengthImpact, 100);
       
       const formNote = awayFormImpact !== 1.0 
         ? ` (Recent form: ${awayFormImpact > 1.0 ? '+' : ''}${((awayFormImpact - 1) * 100).toFixed(0)}%)`
@@ -2327,7 +2342,8 @@ function App() {
     } else {
       // Teams have similar Wilson Scores - compare recent form and opponent strength
       const avgWilsonRate = (homeWilsonRate + awayWilsonRate) / 2;
-      let confidence = Math.min(avgWilsonRate / 10, 10);
+      // Wilson rate is already a percentage (0-100%), use it directly
+      let confidence = Math.min(avgWilsonRate, 100);
       
       // Apply form impact to the stronger team based on recent form
       const homeFormImpact = calculateRecentFormImpact(recentFormData, true, false);
@@ -2336,7 +2352,7 @@ function App() {
       // If one team has significantly better form, use that
       if (Math.abs(homeFormImpact - awayFormImpact) > 0.1) {
         const betterFormImpact = homeFormImpact > awayFormImpact ? homeFormImpact : awayFormImpact;
-        confidence = Math.min(confidence * betterFormImpact, 10);
+        confidence = Math.min(confidence * betterFormImpact, 100);
       }
       
       // Consider opponent strength - if one team has a significantly weaker opponent, boost confidence slightly
@@ -2347,10 +2363,10 @@ function App() {
       if (Math.abs(homeOpponentStrength - awayOpponentStrength) > 0.05) {
         // Home team has weaker opponent (higher multiplier) - boost home confidence
         if (homeOpponentStrength > awayOpponentStrength) {
-          confidence = Math.min(confidence * 1.02, 10);
+          confidence = Math.min(confidence * 1.02, 100);
         } else {
           // Away team has weaker opponent - boost away confidence
-          confidence = Math.min(confidence * 1.02, 10);
+          confidence = Math.min(confidence * 1.02, 100);
         }
       }
       
@@ -2358,7 +2374,7 @@ function App() {
       
       return {
         bet: "No clear winner",
-        confidence: Math.max(confidence, 3), // At least 3 if we have some data
+        confidence: Math.max(confidence, 30), // At least 30% if we have some data
         winRate: Math.max(homeWinRate, awayWinRate),
         wilsonWinRate: avgWilsonRate,
         totalBets: homeTotal + awayTotal,
@@ -2392,7 +2408,7 @@ function App() {
     if (betData.recommendation && betData.recommendation.includes("Avoid")) {
       return {
         bet: "AVOID",
-        confidence: betData.confidenceScore || 5,
+        confidence: betData.confidenceScore || 30, // Low confidence for AVOID (30% = old 3/10)
         successRate: 0,
         totalBets: 0,
         reasoning: betData.recommendation
@@ -2638,20 +2654,20 @@ function App() {
     let reasoning;
 
     if (teamDoubleChanceTotal >= 5) {
-      // Use actual Double Chance Wilson Rate (standardized: WilsonRate / 10)
-      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate / 10, 10);
+      // Use actual Double Chance Wilson Rate (already in percentage form 0-100%)
+      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate, 100);
       reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} actual Double Chance bets.`;
     } else if (teamDoubleChanceTotal >= 3) {
       // Use actual Double Chance data but with lower confidence due to small sample (0.9x multiplier)
-      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate / 10 * 0.9, 10);
+      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate * 0.9, 100);
       reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} Double Chance bets (small sample).`;
     } else {
       // Calculate from Straight Win + Draw Rate
       // Double Chance = Win OR Draw, so we add draw rate to win rate
       // This is mathematically correct: P(Win) + P(Draw) = P(Win OR Draw)
-      // Note: This can exceed 100% if team has high win rate + high draw rate, but cap at 10.0 confidence
+      // Note: This can exceed 100% if team has high win rate + high draw rate, but cap at 100%
       const doubleChanceRate = Math.min(teamWilsonRate + effectiveDrawRate, 100);
-      doubleChanceConfidence = Math.min(doubleChanceRate / 10, 10);
+      doubleChanceConfidence = Math.min(doubleChanceRate, 100);
       
       const drawRateSource = totalGames >= minSampleSize 
         ? `team-specific (${drawRate.toFixed(1)}% from ${totalGames} games)` 
@@ -2671,7 +2687,7 @@ function App() {
     const isHomeTeam = recommendedTeam === homeTeam;
     const isAwayTeam = recommendedTeam === awayTeam;
     const formImpact = calculateRecentFormImpact(recentFormData, isHomeTeam, isAwayTeam);
-    doubleChanceConfidence = Math.min(doubleChanceConfidence * formImpact, 10);
+    doubleChanceConfidence = Math.min(doubleChanceConfidence * formImpact, 100);
     
     // Apply opponent strength impact
     const opponentPosition = isHomeTeam 
@@ -2689,7 +2705,7 @@ function App() {
           losses: recentFormData.homeLosses || 0
         } : null);
     const opponentStrengthImpact = calculateOpponentStrengthImpact(opponentPosition, opponentForm);
-    doubleChanceConfidence = Math.min(doubleChanceConfidence * opponentStrengthImpact, 10);
+    doubleChanceConfidence = Math.min(doubleChanceConfidence * opponentStrengthImpact, 100);
     
     // Add form note to reasoning if applicable
     if (formImpact !== 1.0) {
@@ -2721,7 +2737,7 @@ function App() {
     if (betData.recommendation && betData.recommendation.includes("Avoid")) {
       return {
         bet: "AVOID",
-        confidence: betData.confidenceScore || 5,
+        confidence: betData.confidenceScore || 30, // Low confidence for AVOID (30% = old 3/10)
         avgGoals: 0,
         totalGames: 0,
         reasoning: betData.recommendation
@@ -2847,8 +2863,8 @@ function App() {
 
       // Check OVER recommendation
       if (overWilsonRate >= minThreshold && (overWilsonRate - 50) >= minDifference) {
-        // Standardized confidence calculation: WilsonRate / 10 (consistent with other bet types)
-        const overConfidence = Math.min(overWilsonRate / 10, 10);
+        // Wilson rate is already in percentage form (0-100%), use it directly
+        const overConfidence = Math.min(overWilsonRate, 100);
         if (overConfidence > highestConfidence) {
           highestConfidence = overConfidence;
           bestRecommendation = {
@@ -2865,8 +2881,8 @@ function App() {
 
       // Check UNDER recommendation
       if (underWilsonRate >= minThreshold && (underWilsonRate - 50) >= minDifference) {
-        // Standardized confidence calculation: WilsonRate / 10 (consistent with other bet types)
-        const underConfidence = Math.min(underWilsonRate / 10, 10);
+        // Wilson rate is already in percentage form (0-100%), use it directly
+        const underConfidence = Math.min(underWilsonRate, 100);
         if (underConfidence > highestConfidence) {
           highestConfidence = underConfidence;
           bestRecommendation = {
@@ -2921,7 +2937,7 @@ function App() {
     // Cap the multiplier
     formMultiplier = Math.max(0.9, Math.min(1.1, formMultiplier));
     
-    bestRecommendation.confidence = Math.min(bestRecommendation.confidence * formMultiplier, 10);
+    bestRecommendation.confidence = Math.min(bestRecommendation.confidence * formMultiplier, 100);
     
     // Apply opponent strength impact for Over/Under
     // Strong teams tend to score more (favor OVER), weak teams concede more (favor OVER)
@@ -2957,7 +2973,7 @@ function App() {
     
     // Cap the multiplier
     opponentMultiplier = Math.max(0.95, Math.min(1.05, opponentMultiplier));
-    bestRecommendation.confidence = Math.min(bestRecommendation.confidence * opponentMultiplier, 10);
+    bestRecommendation.confidence = Math.min(bestRecommendation.confidence * opponentMultiplier, 100);
     
     // Add form note to reasoning if applicable
     if (formMultiplier !== 1.0) {
@@ -5322,16 +5338,16 @@ function App() {
                                     <span
                                       className={`px-2 py-1 rounded-full text-xs font-medium mb-2 ${result.confidenceLabel.color} cursor-help`}
                                       title={`${result.confidenceLabel.label}
-🏆 Team Performance: ${result.confidenceBreakdown.team}/10
-📈 Recent Form: ${result.confidenceBreakdown.recentForm}/10
-🏛️ League Experience: ${result.confidenceBreakdown.league}/10
-💰 Odds Value: ${result.confidenceBreakdown.odds}/10
-⚔️ Head-to-Head: ${result.confidenceBreakdown.matchup}/10
-📊 League Position: ${result.confidenceBreakdown.position}/10
-🏠 Home/Away: ${result.confidenceBreakdown.homeAway}/10`}
+🏆 Team Performance: ${result.confidenceBreakdown.team}%
+📈 Recent Form: ${result.confidenceBreakdown.recentForm}%
+🏛️ League Experience: ${result.confidenceBreakdown.league}%
+💰 Odds Value: ${result.confidenceBreakdown.odds}%
+⚔️ Head-to-Head: ${result.confidenceBreakdown.matchup}%
+📊 League Position: ${result.confidenceBreakdown.position}%
+🏠 Home/Away: ${result.confidenceBreakdown.homeAway}%`}
                                     >
                                       {result.confidenceLabel.emoji}{" "}
-                                      {result.confidenceScore}/10
+                                      {result.confidenceScore}%
                                     </span>
                                     <div className="text-xs text-gray-400 mt-2">
                                       {result.confidenceLabel.label}

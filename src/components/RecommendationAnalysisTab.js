@@ -759,7 +759,7 @@ const RecommendationAnalysisTab = ({
                       </span>
                     </td>
                     <td className="py-3 px-2 text-center text-gray-300">
-                      {match.confidence_score}/10
+                      {match.confidence_score}%
                     </td>
                     <td className="py-3 px-2 text-gray-300 text-xs">
                       <div>

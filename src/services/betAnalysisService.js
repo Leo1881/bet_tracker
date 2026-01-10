@@ -670,6 +670,13 @@ export const getScoringRecommendation = (
     scoringData.length,
     "teams"
   );
+  
+  // Debug: Log if teams are found
+  if (scoringData.length > 0) {
+    console.log("Sample scoring data structure:", scoringData[0]);
+    console.log("Looking for home team:", homeTeam, "in league:", homeLeague);
+    console.log("Looking for away team:", awayTeam, "in league:", awayLeague);
+  }
 
   // Find team stats with exact matching
   const homeStats = scoringData.find(
@@ -721,7 +728,30 @@ export const getScoringRecommendation = (
 
   // Extract team data with fallbacks
   const getTeamData = (stats, leagueAvg) => {
-    if (!stats) return leagueAvg;
+    if (!stats) {
+      // When using league averages, provide defaults for missing fields
+      return {
+        over1_5: leagueAvg.over1_5 || 0,
+        over2_5: leagueAvg.over2_5 || 0,
+        over3_5: leagueAvg.over3_5 || 0,
+        avgGoals: leagueAvg.avgGoals || 0,
+        avgGoalsScored: leagueAvg.avgGoalsScored || 0,
+        avgGoalsConceded: leagueAvg.avgGoalsConceded || 0,
+        totalGames: 0, // League average doesn't have game count
+        homeGames: 0,
+        awayGames: 0,
+        homeOver1_5: leagueAvg.over1_5 || 0, // Use league average as fallback
+        awayOver1_5: leagueAvg.over1_5 || 0,
+        homeOver2_5: leagueAvg.over2_5 || 0,
+        awayOver2_5: leagueAvg.over2_5 || 0,
+        homeAvgGoals: leagueAvg.avgGoals || 0,
+        awayAvgGoals: leagueAvg.avgGoals || 0,
+        homeAvgGoalsScored: leagueAvg.avgGoalsScored || 0,
+        awayAvgGoalsScored: leagueAvg.avgGoalsScored || 0,
+        homeAvgGoalsConceded: leagueAvg.avgGoalsConceded || 0,
+        awayAvgGoalsConceded: leagueAvg.avgGoalsConceded || 0,
+      };
+    }
 
     return {
       over1_5: parseFloat(stats.over1_5Rate || 0),
@@ -748,6 +778,20 @@ export const getScoringRecommendation = (
 
   const homeData = getTeamData(homeStats, homeLeagueAvg);
   const awayData = getTeamData(awayStats, awayLeagueAvg);
+  
+  // Debug: Log what data we have
+  console.log("Home team data:", {
+    found: !!homeStats,
+    totalGames: homeData.totalGames,
+    avgGoalsScored: homeData.avgGoalsScored,
+    avgGoals: homeData.avgGoals
+  });
+  console.log("Away team data:", {
+    found: !!awayStats,
+    totalGames: awayData.totalGames,
+    avgGoalsScored: awayData.avgGoalsScored,
+    avgGoals: awayData.avgGoals
+  });
 
   // Calculate Wilson Scores for reliability
   const calculateWilsonRate = (rate, games) => {
@@ -795,8 +839,11 @@ export const getScoringRecommendation = (
         2,
     },
     goals: {
-      total: (homeData.avgGoals + awayData.avgGoals) / 2,
-      scored: (homeData.avgGoalsScored + awayData.avgGoalsScored) / 2,
+      // Expected total goals in this match = home team's avg goals scored + away team's avg goals scored
+      // This gives us the expected total goals for THIS specific matchup
+      // Fallback to avgGoals if avgGoalsScored is 0 (for backward compatibility)
+      total: (homeData.avgGoalsScored || homeData.avgGoals || 0) + (awayData.avgGoalsScored || awayData.avgGoals || 0),
+      scored: ((homeData.avgGoalsScored || homeData.avgGoals || 0) + (awayData.avgGoalsScored || awayData.avgGoals || 0)) / 2,
       conceded: (homeData.avgGoalsConceded + awayData.avgGoalsConceded) / 2,
     },
   };
@@ -876,15 +923,32 @@ export const getScoringRecommendation = (
     });
   }
 
-  // Defensive Analysis
-  if (combined.goals.conceded <= 1.0) {
+  // Low Scoring Analysis - uses Over/Under rates which are more reliable than raw goal averages
+  // Only show "Low Scoring Teams" if Over 2.5 rate is very low (indicating low-scoring matches)
+  // This is more accurate for betting purposes than using raw goal averages
+  if (combined.over2_5 && combined.over2_5.avgWilson !== undefined && combined.over2_5.avgWilson < 30) {
+    // Use Over 2.5 rate if available and indicates low scoring
+    if (combined.goals.total <= 2.5) {
+      recommendations.push({
+        type: "Low Scoring Teams",
+        confidence: "medium",
+        rate: combined.over2_5.avgWilson,
+        reasoning: `Low scoring pattern: ${combined.over2_5.avgWilson.toFixed(
+          1
+        )}% Over 2.5 rate, expected ${combined.goals.total.toFixed(1)} total goals`,
+        riskLevel: "Medium",
+      });
+    }
+  } else if (combined.goals.total <= 2.0 && homeData.totalGames >= 3 && awayData.totalGames >= 3) {
+    // Fallback: use goal averages if Over/Under data not available or not low enough
+    // Only if we have sufficient data (at least 3 games per team)
     recommendations.push({
-      type: "Low Conceding Teams",
-      confidence: "medium",
-      rate: combined.goals.conceded,
-      reasoning: `Both teams concede only ${combined.goals.conceded.toFixed(
+      type: "Low Scoring Teams",
+      confidence: "low",
+      rate: combined.goals.total,
+      reasoning: `Expected total goals: ${combined.goals.total.toFixed(
         1
-      )} goals per game on average`,
+      )} (Home scores: ${homeData.avgGoalsScored.toFixed(1)}/game, Away scores: ${awayData.avgGoalsScored.toFixed(1)}/game)`,
       riskLevel: "Medium",
     });
   }
@@ -906,6 +970,43 @@ export const getScoringRecommendation = (
 
   // Return the best recommendation or a summary
   if (recommendations.length === 0) {
+    // If no specific recommendations match, provide a general summary based on available data
+    // Check if we have any goal data (either team-specific or league averages)
+    const hasGoalData = 
+      (homeData.avgGoalsScored > 0 || awayData.avgGoalsScored > 0) ||
+      (homeData.totalGames >= 3 || awayData.totalGames >= 3) ||
+      (scoringData.length > 0); // At least some scoring data exists
+    
+    if (hasGoalData && combined.goals.total > 0) {
+      // We have some data, provide a general recommendation
+      const expectedTotal = combined.goals.total;
+      let generalType = "Moderate Scoring";
+      let generalConfidence = "low";
+      
+      if (expectedTotal >= 3.5) {
+        generalType = "High Scoring Expected";
+        generalConfidence = "medium";
+      } else if (expectedTotal <= 2.0) {
+        generalType = "Low Scoring Expected";
+        generalConfidence = "medium";
+      }
+      
+      return {
+        type: generalType,
+        confidence: generalConfidence,
+        rate: expectedTotal,
+        reasoning: `Expected total goals: ${expectedTotal.toFixed(1)} (Home: ${homeData.avgGoalsScored.toFixed(1)}, Away: ${awayData.avgGoalsScored.toFixed(1)})`,
+        riskLevel: "Medium",
+        details: {
+          homeGames: homeData.totalGames,
+          awayGames: awayData.totalGames,
+          homeConfidence: homeConfidence.level,
+          awayConfidence: awayConfidence.level,
+        },
+      };
+    }
+    
+    // Truly insufficient data
     return {
       type: "Insufficient Data",
       confidence: "low",

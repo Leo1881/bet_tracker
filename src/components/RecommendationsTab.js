@@ -50,7 +50,7 @@ const RecommendationsTab = ({ betRecommendations }) => {
                 </div>
                 <div className="text-right">
                   <span className="text-blue-400 font-medium">
-                    Overall Confidence: {rec.confidence.toFixed(1)}/10
+                    Overall Confidence: {rec.confidence.toFixed(1)}%
                   </span>
                   <p className="text-gray-400 text-sm">Odds: {rec.odds}</p>
                 </div>
@@ -152,12 +152,12 @@ const RecommendationsTab = ({ betRecommendations }) => {
                       {rec.bestBet.recommendation.bet === "AVOID"
                         ? `AVOID (${rec.bestBet.recommendation.confidence.toFixed(
                             1
-                          )}/10)`
+                          )}%)`
                         : `${
                             rec.bestBet.recommendation.bet
                           } (${rec.bestBet.recommendation.confidence.toFixed(
                             1
-                          )}/10)`}
+                          )}%)`}
                     </div>
                     {rec.bestBet.recommendation.bet === "AVOID" && (
                       <div className="text-red-300 text-xs mt-1">
@@ -202,12 +202,12 @@ const RecommendationsTab = ({ betRecommendations }) => {
                     {rec.primary.recommendation.bet === "AVOID"
                       ? `AVOID (${rec.primary.recommendation.confidence.toFixed(
                           1
-                        )}/10)`
+                        )}%)`
                       : `${
                           rec.primary.recommendation.bet
                         } (${rec.primary.recommendation.confidence.toFixed(
                           1
-                        )}/10)`}
+                        )}%)`}
                   </div>
                   {rec.primary.recommendation.bet === "AVOID" && (
                     <div className="text-red-300 text-xs mt-1">
@@ -251,12 +251,12 @@ const RecommendationsTab = ({ betRecommendations }) => {
                     {rec.secondary.recommendation.bet === "AVOID"
                       ? `AVOID (${rec.secondary.recommendation.confidence.toFixed(
                           1
-                        )}/10)`
+                        )}%)`
                       : `${
                           rec.secondary.recommendation.bet
                         } (${rec.secondary.recommendation.confidence.toFixed(
                           1
-                        )}/10)`}
+                        )}%)`}
                   </div>
                   {rec.secondary.recommendation.bet === "AVOID" && (
                     <div className="text-red-300 text-xs mt-1">
@@ -300,12 +300,12 @@ const RecommendationsTab = ({ betRecommendations }) => {
                     {rec.tertiary.recommendation.bet === "AVOID"
                       ? `AVOID (${rec.tertiary.recommendation.confidence.toFixed(
                           1
-                        )}/10)`
+                        )}%)`
                       : `${
                           rec.tertiary.recommendation.bet
                         } (${rec.tertiary.recommendation.confidence.toFixed(
                           1
-                        )}/10)`}
+                        )}%)`}
                   </div>
                   {rec.tertiary.recommendation.bet === "AVOID" && (
                     <div className="text-red-300 text-xs mt-1">
