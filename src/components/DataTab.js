@@ -12,6 +12,46 @@ const DataTab = ({
   const [currentPage, setCurrentPage] = useState(1);
   const betsPerPage = 100;
 
+  // Convert field names to readable labels
+  const getReadableHeader = (key) => {
+    const headerMap = {
+      DATE: "Date",
+      BET_ID: "Bet ID",
+      COUNTRY: "Country",
+      LEAGUE: "League",
+      HOME_TEAM: "Home Team",
+      AWAY_TEAM: "Away Team",
+      ODDS1: "Home Odds",
+      ODDS2: "Away Odds",
+      ODDSX: "Draw Odds",
+      BET_TYPE: "Bet Type",
+      BET_SELECTION: "Bet Selection",
+      TEAM_INCLUDED: "Team",
+      TEAM_BET: "Team Bet",
+      HOME_SCORE: "Home Score",
+      AWAY_SCORE: "Away Score",
+      RESULT: "Result",
+      REASON: "Reason",
+      CREATED_AT: "Created At",
+      HOME_TEAM_POSITION_NUMBER: "Home Position",
+      AWAY_TEAM_POSITION_NUMBER: "Away Position",
+      TOTAL_TEAMS_IN_LEAGUE: "Total Teams",
+      HOME_TEAM_GAMES_PLAYED: "Home Games",
+      AWAY_TEAM_GAMES_PLAYED: "Away Games",
+    };
+
+    // If we have a mapping, use it
+    if (headerMap[key]) {
+      return headerMap[key];
+    }
+
+    // Otherwise, convert SNAKE_CASE to Title Case
+    return key
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+  };
+
   // Get paginated data
   const getPaginatedData = () => {
     const allData = getSortedData();
@@ -73,9 +113,9 @@ const DataTab = ({
       ) : (
         <>
           {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-full">
-              <thead className="bg-white/20">
+          <div className="hidden md:block overflow-x-auto w-full">
+            <table className="w-full border-collapse">
+              <thead className="bg-white/20 w-full">
                 <tr>
                   {getDeduplicatedFilteredBets()[0] &&
                     Object.keys(getDeduplicatedFilteredBets()[0])
@@ -84,6 +124,7 @@ const DataTab = ({
                           ![
                             "ID",
                             "id",
+                            "DATE",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",
@@ -98,7 +139,7 @@ const DataTab = ({
                           onClick={() => handleSort(key)}
                         >
                           <div className="flex items-center justify-between">
-                            <span>{key}</span>
+                            <span>{getReadableHeader(key)}</span>
                             {sortConfig.key === key && (
                               <span className="ml-2">
                                 {sortConfig.direction === "asc" ? "↑" : "↓"}
@@ -121,6 +162,7 @@ const DataTab = ({
                           ![
                             "ID",
                             "id",
+                            "DATE",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",
@@ -167,9 +209,9 @@ const DataTab = ({
         </div>
 
         {/* Mobile Grid View */}
-          <div className="block md:hidden overflow-x-auto">
-            <table className="w-full min-w-full">
-              <thead className="bg-white/20">
+          <div className="block md:hidden overflow-x-auto w-full">
+            <table className="w-full border-collapse">
+              <thead className="bg-white/20 w-full">
                 <tr>
                   {getDeduplicatedFilteredBets()[0] &&
                     Object.keys(getDeduplicatedFilteredBets()[0])
@@ -178,6 +220,7 @@ const DataTab = ({
                           ![
                             "ID",
                             "id",
+                            "DATE",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",
@@ -193,7 +236,7 @@ const DataTab = ({
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-xs">
-                              {key.replace(/_/g, " ")}
+                              {getReadableHeader(key)}
                             </span>
                             {sortConfig.key === key && (
                               <span className="ml-1 text-xs">
@@ -217,6 +260,7 @@ const DataTab = ({
                           ![
                             "ID",
                             "id",
+                            "DATE",
                             "SYSTEM_RECOMMENDATION",
                             "SYSTEM_CONFIDENCE",
                             "PREDICTION_ACCURATE",

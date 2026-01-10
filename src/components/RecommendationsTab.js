@@ -1,6 +1,78 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 
 const RecommendationsTab = ({ betRecommendations }) => {
+  const [sortBy, setSortBy] = useState("confidence"); // confidence, odds, risk
+  const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
+  const [filterConfidence, setFilterConfidence] = useState("all"); // all, high, medium, low
+  const [filterRisk, setFilterRisk] = useState("all"); // all, high, medium, low
+  const [filterHasAvoid, setFilterHasAvoid] = useState("all"); // all, yes, no
+
+  // Filter and sort recommendations
+  const filteredAndSortedRecommendations = useMemo(() => {
+    let filtered = [...betRecommendations];
+
+    // Apply filters
+    if (filterConfidence !== "all") {
+      filtered = filtered.filter((rec) => {
+        const confidence = rec.confidence || 0;
+        if (filterConfidence === "high") return confidence >= 70;
+        if (filterConfidence === "medium") return confidence >= 50 && confidence < 70;
+        if (filterConfidence === "low") return confidence < 50;
+        return true;
+      });
+    }
+
+    if (filterRisk !== "all") {
+      filtered = filtered.filter((rec) => {
+        const riskLevel = rec.bestBet?.riskLevel || rec.primary?.riskLevel || "Medium";
+        return riskLevel.toLowerCase() === filterRisk.toLowerCase();
+      });
+    }
+
+    if (filterHasAvoid !== "all") {
+      filtered = filtered.filter((rec) => {
+        const hasAvoid =
+          rec.bestBet?.recommendation?.bet === "AVOID" ||
+          rec.primary?.recommendation?.bet === "AVOID" ||
+          rec.secondary?.recommendation?.bet === "AVOID" ||
+          rec.tertiary?.recommendation?.bet === "AVOID";
+        return filterHasAvoid === "yes" ? hasAvoid : !hasAvoid;
+      });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+
+      if (sortBy === "confidence") {
+        aValue = a.confidence || 0;
+        bValue = b.confidence || 0;
+      } else if (sortBy === "odds") {
+        aValue = parseFloat(a.odds) || 0;
+        bValue = parseFloat(b.odds) || 0;
+      } else if (sortBy === "risk") {
+        const getRiskValue = (rec) => {
+          const risk = rec.bestBet?.riskLevel || rec.primary?.riskLevel || "Medium";
+          if (risk.toLowerCase() === "high") return 3;
+          if (risk.toLowerCase() === "medium") return 2;
+          return 1;
+        };
+        aValue = getRiskValue(a);
+        bValue = getRiskValue(b);
+      } else {
+        return 0;
+      }
+
+      if (sortOrder === "asc") {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+
+    return filtered;
+  }, [betRecommendations, sortBy, sortOrder, filterConfidence, filterRisk, filterHasAvoid]);
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
@@ -34,9 +106,92 @@ const RecommendationsTab = ({ betRecommendations }) => {
         </p>
       </div>
 
+      {/* Filter and Sort Controls */}
+      {betRecommendations.length > 0 && (
+        <div className="mb-6 bg-white/5 rounded-lg p-4 border border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Sort By */}
+            <div>
+              <label className="block text-gray-300 text-sm mb-2">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+              >
+                <option value="confidence">Confidence</option>
+                <option value="odds">Odds</option>
+                <option value="risk">Risk Level</option>
+              </select>
+            </div>
+
+            {/* Sort Order */}
+            <div>
+              <label className="block text-gray-300 text-sm mb-2">Order</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+              >
+                <option value="desc">High to Low</option>
+                <option value="asc">Low to High</option>
+              </select>
+            </div>
+
+            {/* Filter Confidence */}
+            <div>
+              <label className="block text-gray-300 text-sm mb-2">Confidence</label>
+              <select
+                value={filterConfidence}
+                onChange={(e) => setFilterConfidence(e.target.value)}
+                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+              >
+                <option value="all">All</option>
+                <option value="high">High (70%+)</option>
+                <option value="medium">Medium (50-70%)</option>
+                <option value="low">Low (&lt;50%)</option>
+              </select>
+            </div>
+
+            {/* Filter Risk */}
+            <div>
+              <label className="block text-gray-300 text-sm mb-2">Risk Level</label>
+              <select
+                value={filterRisk}
+                onChange={(e) => setFilterRisk(e.target.value)}
+                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+              >
+                <option value="all">All</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            {/* Filter Has Avoid */}
+            <div>
+              <label className="block text-gray-300 text-sm mb-2">Has AVOID</label>
+              <select
+                value={filterHasAvoid}
+                onChange={(e) => setFilterHasAvoid(e.target.value)}
+                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+              >
+                <option value="all">All</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Results count */}
+          <div className="mt-4 text-sm text-gray-400">
+            Showing {filteredAndSortedRecommendations.length} of {betRecommendations.length} recommendations
+          </div>
+        </div>
+      )}
+
       {betRecommendations.length > 0 ? (
         <div className="space-y-6">
-          {betRecommendations.map((rec, index) => (
+          {filteredAndSortedRecommendations.map((rec, index) => (
             <div
               key={index}
               className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-6"

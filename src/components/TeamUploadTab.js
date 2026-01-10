@@ -3,7 +3,7 @@ import { fetchSheetData } from '../utils/fetchSheetData';
 
 const TeamUploadTab = ({ 
   scoringAnalysis = [], 
-  teamAnalytics = [], 
+  teamAnalytics = [],
   blacklistedTeams = [],
   isTeamBlacklisted,
   bets = [],
@@ -13,6 +13,121 @@ const TeamUploadTab = ({
   const [analysisResults, setAnalysisResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Sorting state for unified table
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: 'asc'
+  });
+
+  // Handle sorting
+  const handleSort = (key) => {
+    setSortConfig(prev => {
+      const direction = prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc';
+      return { key, direction };
+    });
+  };
+
+  // Get all teams combined
+  const getAllTeams = () => {
+    if (!analysisResults) return [];
+    return [
+      ...analysisResults.straightWin,
+      ...analysisResults.over1_5,
+      ...analysisResults.doubleChance,
+      ...analysisResults.avoid
+    ];
+  };
+
+  // Sort teams based on configuration
+  const getSortedTeams = () => {
+    const teams = getAllTeams();
+    if (!sortConfig.key || !teams || teams.length === 0) return teams;
+
+    const sorted = [...teams].sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortConfig.key) {
+        case 'team':
+          aValue = (a.TEAM || '').toLowerCase();
+          bValue = (b.TEAM || '').toLowerCase();
+          break;
+        case 'country':
+          aValue = (a.COUNTRY || '').toLowerCase();
+          bValue = (b.COUNTRY || '').toLowerCase();
+          break;
+        case 'league':
+          aValue = (a.LEAGUE || '').toLowerCase();
+          bValue = (b.LEAGUE || '').toLowerCase();
+          break;
+        case 'location':
+          aValue = (a.LOCATION || '').toLowerCase();
+          bValue = (b.LOCATION || '').toLowerCase();
+          break;
+        case 'confidence':
+          const confidenceOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
+          aValue = confidenceOrder[a.confidence?.level] || 0;
+          bValue = confidenceOrder[b.confidence?.level] || 0;
+          break;
+        case 'games':
+          aValue = parseFloat(a.totalGames) || 0;
+          bValue = parseFloat(b.totalGames) || 0;
+          break;
+        case 'avgGoals':
+          aValue = parseFloat(a.avgGoals) || 0;
+          bValue = parseFloat(b.avgGoals) || 0;
+          break;
+        case 'winRate':
+          aValue = parseFloat(a.wilsonWinRate) || parseFloat(a.winRate) || 0;
+          bValue = parseFloat(b.wilsonWinRate) || parseFloat(b.winRate) || 0;
+          break;
+        case 'over1_5':
+          aValue = parseFloat(a.wilsonOver1_5) || parseFloat(a.over1_5Rate) || 0;
+          bValue = parseFloat(b.wilsonOver1_5) || parseFloat(b.over1_5Rate) || 0;
+          break;
+        case 'doubleChance':
+          aValue = parseFloat(a.wilsonDoubleChance) || parseFloat(a.doubleChanceOverall) || 0;
+          bValue = parseFloat(b.wilsonDoubleChance) || parseFloat(b.doubleChanceOverall) || 0;
+          break;
+        case 'reason':
+          aValue = (a.reason || '').toLowerCase();
+          bValue = (b.reason || '').toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aValue === 'string') {
+        return sortConfig.direction === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      } else {
+        return sortConfig.direction === 'asc' 
+          ? aValue - bValue
+          : bValue - aValue;
+      }
+    });
+
+    return sorted;
+  };
+
+  // Render sortable header
+  const renderSortableHeader = (key, label) => {
+    const isActive = sortConfig.key === key;
+    return (
+      <th 
+        className="px-4 py-2 text-left text-white font-semibold text-sm cursor-pointer hover:bg-white/20 transition-colors"
+        onClick={() => handleSort(key)}
+      >
+        <div className="flex items-center gap-2">
+          <span>{label}</span>
+          {isActive && (
+            <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+          )}
+        </div>
+      </th>
+    );
+  };
 
   // Calculate Wilson Score for confidence
   const calculateWilsonScore = (wins, total) => {
@@ -536,85 +651,112 @@ const TeamUploadTab = ({
     return badges[category] || { label: category, color: 'bg-gray-600', textColor: 'text-white' };
   };
 
-  // Render team card
-  const renderTeamCard = (team, index) => (
-    <div key={index} className={`bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors ${
-      team.isBlacklisted ? 'border-l-4 border-red-500 bg-red-900/20' : ''
-    }`}>
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex-1">
-          <div className="font-medium text-white text-sm flex items-center gap-2 flex-wrap">
-            {team.TEAM}
-            {team.isBlacklisted && (
-              <span className="px-2 py-1 text-xs font-bold bg-red-600 text-white rounded-full">
-                BLACKLISTED
-              </span>
-            )}
-            {/* Show badges for other categories */}
-            {team.otherCategories && team.otherCategories.filter(cat => cat !== 'over2_5').length > 0 && (
-              <>
-                {team.otherCategories.filter(cat => cat !== 'over2_5').map((cat, idx) => {
-                  const badge = getCategoryBadge(cat);
-                  return (
-                    <span 
-                      key={idx} 
-                      className={`px-2 py-1 text-xs font-semibold ${badge.color} ${badge.textColor} rounded-full`}
-                      title={`Also qualifies for ${badge.label}`}
-                    >
-                      {badge.label}
-                    </span>
-                  );
-                })}
-              </>
-            )}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">
-            {team.COUNTRY} - {team.LEAGUE} ({team.LOCATION})
-          </div>
+  // Render team row for table
+  const renderTeamRow = (team, index) => (
+    <tr 
+      key={index} 
+      className={`hover:bg-white/5 transition-colors ${
+        team.isBlacklisted ? 'bg-red-900/20 border-l-4 border-red-500' : ''
+      } ${index % 2 === 0 ? 'bg-white/5' : 'bg-white/10'}`}
+    >
+      <td className="px-4 py-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-white">{team.TEAM}</span>
+          {team.isBlacklisted && (
+            <span className="px-2 py-1 text-xs font-bold bg-red-600 text-white rounded-full">
+              BLACKLISTED
+            </span>
+          )}
         </div>
-        <div className={`px-2 py-1 text-xs rounded-full ${team.confidence.bg}`}>
+      </td>
+      <td className="px-4 py-3 text-sm">
+        <div className="flex items-center gap-1 flex-wrap">
+          {(() => {
+            // Get all categories (primary + other) and sort by Wilson score
+            const allCategories = [];
+            
+            // Add primary category if it's not 'avoid'
+            if (team.primaryCategory && team.primaryCategory !== 'avoid') {
+              allCategories.push(team.primaryCategory);
+            }
+            
+            // Add other categories
+            if (team.otherCategories) {
+              team.otherCategories
+                .filter(cat => cat !== 'over2_5' && cat !== team.primaryCategory)
+                .forEach(cat => allCategories.push(cat));
+            }
+            
+            // Sort categories by their Wilson score (highest first)
+            const sortedCategories = allCategories.sort((a, b) => {
+              const getWilsonScore = (category) => {
+                switch (category) {
+                  case 'straightWin':
+                    return parseFloat(team.wilsonWinRate) || 0;
+                  case 'over1_5':
+                    return parseFloat(team.wilsonOver1_5) || 0;
+                  case 'doubleChance':
+                    return parseFloat(team.wilsonDoubleChance) || 0;
+                  default:
+                    return 0;
+                }
+              };
+              
+              return getWilsonScore(b) - getWilsonScore(a);
+            });
+            
+            if (sortedCategories.length === 0) {
+              return <span className="text-gray-400 text-xs">-</span>;
+            }
+            
+            return sortedCategories.map((cat, idx) => {
+              const badge = getCategoryBadge(cat);
+              const isPrimary = cat === team.primaryCategory;
+              return (
+                <span 
+                  key={idx} 
+                  className={`px-2 py-1 text-xs font-semibold ${badge.color} ${badge.textColor} rounded-full`}
+                  title={isPrimary ? `Primary: ${badge.label}` : `Also qualifies for ${badge.label}`}
+                >
+                  {badge.label}
+                </span>
+              );
+            });
+          })()}
+        </div>
+      </td>
+      <td className="px-4 py-3 text-sm text-gray-300">{team.COUNTRY}</td>
+      <td className="px-4 py-3 text-sm text-gray-300">{team.LEAGUE}</td>
+      <td className="px-4 py-3 text-sm text-gray-300">{team.LOCATION}</td>
+      <td className="px-4 py-3 text-sm">
+        <span className={`px-2 py-1 text-xs rounded-full ${team.confidence.bg}`}>
           <span className={team.confidence.color}>{team.confidence.level}</span>
-        </div>
-      </div>
-      
-      <div className="text-xs text-gray-300 mb-2">
-        {team.reason}
-      </div>
-      
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <span className="text-gray-400">Games:</span> <span className="text-gray-300">{team.totalGames}</span>
-        </div>
-        <div>
-          <span className="text-gray-400">Avg Goals:</span> <span className="text-gray-300">{team.avgGoals}</span>
-        </div>
-        {team.wilsonWinRate && (
-          <div>
-            <span className="text-gray-400">Win Rate:</span> <span className="text-gray-300">{team.winRate}% ({team.wilsonWinRate}% Wilson)</span>
-          </div>
-        )}
-        {team.wilsonOver1_5 && (
-          <div>
-            <span className="text-gray-400">Over 1.5:</span> <span className="text-gray-300">{team.over1_5Rate}% ({team.wilsonOver1_5}% Wilson)</span>
-          </div>
-        )}
-        {team.wilsonDoubleChance && (
-          <div>
-            <span className="text-gray-400">Double Chance:</span> <span className="text-gray-300">{team.doubleChanceOverall}% ({team.wilsonDoubleChance}% Wilson)</span>
-          </div>
-        )}
-        {team.doubleChance1X && team.doubleChance1X !== team.doubleChanceOverall && (
-          <div>
-            <span className="text-gray-400">1X (Home):</span> <span className="text-gray-300">{team.doubleChance1X}%</span>
-          </div>
-        )}
-        {team.doubleChanceX2 && team.doubleChanceX2 !== team.doubleChanceOverall && (
-          <div>
-            <span className="text-gray-400">X2 (Away):</span> <span className="text-gray-300">{team.doubleChanceX2}%</span>
-          </div>
-        )}
-      </div>
-    </div>
+        </span>
+      </td>
+      <td className="px-4 py-3 text-sm text-gray-300">{team.totalGames}</td>
+      <td className="px-4 py-3 text-sm text-gray-300">{team.avgGoals}</td>
+      {team.wilsonWinRate && (
+        <td className="px-4 py-3 text-sm text-gray-300">
+          {team.wilsonWinRate}%
+        </td>
+      )}
+      {!team.wilsonWinRate && <td className="px-4 py-3 text-sm text-gray-400">-</td>}
+      {team.wilsonOver1_5 && (
+        <td className="px-4 py-3 text-sm text-gray-300">
+          {team.wilsonOver1_5}%
+        </td>
+      )}
+      {!team.wilsonOver1_5 && <td className="px-4 py-3 text-sm text-gray-400">-</td>}
+      {team.wilsonDoubleChance && (
+        <td className="px-4 py-3 text-sm text-gray-300">
+          {team.wilsonDoubleChance}%
+        </td>
+      )}
+      {!team.wilsonDoubleChance && <td className="px-4 py-3 text-sm text-gray-400">-</td>}
+      <td className="px-4 py-3 text-sm text-gray-400" title={team.reason}>
+        <span className="truncate block max-w-xs">{team.reason}</span>
+      </td>
+    </tr>
   );
 
   return (
@@ -654,7 +796,7 @@ const TeamUploadTab = ({
       {analysisResults && (
         <div className="space-y-6">
           {/* Summary */}
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-gray-800 rounded-lg p-4 mb-6">
             <h3 className="text-lg font-semibold text-white mb-3">Analysis Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div className="text-center">
@@ -676,53 +818,35 @@ const TeamUploadTab = ({
             </div>
           </div>
 
-          {/* Straight Win Recommendations */}
-          {analysisResults.straightWin.length > 0 && (
-            <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-              <h4 className="text-lg font-semibold text-green-300 mb-3 flex items-center">
-                🎯 Straight Win Recommendations ({analysisResults.straightWin.length})
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {analysisResults.straightWin.map((team, index) => renderTeamCard(team, index))}
-              </div>
+          {/* Unified Table */}
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4">
+            <h4 className="text-lg font-semibold text-white mb-3">
+              All Teams ({getAllTeams().length})
+            </h4>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-white/10">
+                  <tr>
+                    {renderSortableHeader('team', 'Team')}
+                    <th className="px-4 py-2 text-left text-white font-semibold text-sm">Categories</th>
+                    {renderSortableHeader('country', 'Country')}
+                    {renderSortableHeader('league', 'League')}
+                    {renderSortableHeader('location', 'Location')}
+                    {renderSortableHeader('confidence', 'Confidence')}
+                    {renderSortableHeader('games', 'Games')}
+                    {renderSortableHeader('avgGoals', 'Avg Goals')}
+                    {renderSortableHeader('winRate', 'Win Rate')}
+                    {renderSortableHeader('over1_5', 'Over 1.5')}
+                    {renderSortableHeader('doubleChance', 'Double Chance')}
+                    {renderSortableHeader('reason', 'Reason')}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {getSortedTeams().map((team, index) => renderTeamRow(team, index))}
+                </tbody>
+              </table>
             </div>
-          )}
-
-          {/* Over 1.5 Recommendations */}
-          {analysisResults.over1_5.length > 0 && (
-            <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-              <h4 className="text-lg font-semibold text-blue-300 mb-3 flex items-center">
-                ⚽ Over 1.5 Recommendations ({analysisResults.over1_5.length})
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {analysisResults.over1_5.map((team, index) => renderTeamCard(team, index))}
-              </div>
-            </div>
-          )}
-
-          {/* Double Chance Recommendations */}
-          {analysisResults.doubleChance.length > 0 && (
-            <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
-              <h4 className="text-lg font-semibold text-yellow-300 mb-3 flex items-center">
-                🎲 Double Chance Recommendations ({analysisResults.doubleChance.length})
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {analysisResults.doubleChance.map((team, index) => renderTeamCard(team, index))}
-              </div>
-            </div>
-          )}
-
-          {/* Teams to Avoid */}
-          {analysisResults.avoid.length > 0 && (
-            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-              <h4 className="text-lg font-semibold text-red-300 mb-3 flex items-center">
-                🚫 Teams to Avoid ({analysisResults.avoid.length})
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {analysisResults.avoid.map((team, index) => renderTeamCard(team, index))}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>

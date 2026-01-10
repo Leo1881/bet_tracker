@@ -28,9 +28,13 @@ const BetAnalysisTab = ({
           </button>
           <div className="absolute left-0 top-8 w-96 bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm text-gray-300 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto z-50">
             <div className="mb-3">
-              <strong className="text-white">Confidence Score (0-10):</strong>
+              <strong className="text-white">Confidence Score (0-100%):</strong>
               <br />
               🏆 Team Performance: Historical win rate and betting experience
+              <br />
+              📈 Recent Form: Team's performance in last 5 games
+              <br />
+              🚀 Team Momentum: Recent trend (improving/declining)
               <br />
               🏛️ League Experience: Your success rate in this league/country
               <br />
@@ -110,11 +114,8 @@ const BetAnalysisTab = ({
             <table className="w-full">
               <thead className="bg-white/20">
                 <tr>
-                  <th className="px-4 py-2 text-left text-white font-semibold w-32">
+                  <th className="px-4 py-2 text-left text-white font-semibold w-40">
                     Match
-                  </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold w-20">
-                    Positions
                   </th>
                   <th className="px-4 py-2 text-left text-white font-semibold w-24">
                     Bet On
@@ -127,9 +128,6 @@ const BetAnalysisTab = ({
                   </th>
                   <th className="px-4 py-2 text-left text-white font-semibold w-80">
                     Probability
-                  </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold w-32">
-                    Blacklist
                   </th>
                   <th className="px-4 py-2 text-left text-white font-semibold w-80">
                     History
@@ -156,42 +154,43 @@ const BetAnalysisTab = ({
                     <td className="px-4 py-6 text-gray-300">
                       <div className="text-sm">
                         <div className="font-medium text-white">
-                          {result.HOME_TEAM || "N/A"} vs{" "}
-                          {result.AWAY_TEAM || "N/A"}
+                          {(() => {
+                            const homeBadge = getPositionBadge(
+                              result.HOME_TEAM_POSITION
+                            );
+                            const awayBadge = getPositionBadge(
+                              result.AWAY_TEAM_POSITION
+                            );
+                            return (
+                              <>
+                                {result.HOME_TEAM || "N/A"}
+                                {homeBadge && (
+                                  <span
+                                    className={`ml-2 text-xs ${
+                                      homeBadge.color || "text-gray-400"
+                                    }`}
+                                  >
+                                    ({homeBadge.text})
+                                  </span>
+                                )}{" "}
+                                vs{" "}
+                                {result.AWAY_TEAM || "N/A"}
+                                {awayBadge && (
+                                  <span
+                                    className={`ml-2 text-xs ${
+                                      awayBadge.color || "text-gray-400"
+                                    }`}
+                                  >
+                                    ({awayBadge.text})
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                         <div className="text-gray-400">
                           {result.COUNTRY || "N/A"} - {result.LEAGUE || "N/A"}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-6 text-gray-300">
-                      <div className="text-sm">
-                        {(() => {
-                          const homeBadge = getPositionBadge(
-                            result.HOME_TEAM_POSITION
-                          );
-                          const awayBadge = getPositionBadge(
-                            result.AWAY_TEAM_POSITION
-                          );
-                          return (
-                            <div>
-                              <div
-                                className={`text-xs ${
-                                  homeBadge?.color || "text-gray-400"
-                                }`}
-                              >
-                                {homeBadge?.text || "N/A"}
-                              </div>
-                              <div
-                                className={`text-xs ${
-                                  awayBadge?.color || "text-gray-400"
-                                }`}
-                              >
-                                {awayBadge?.text || "N/A"}
-                              </div>
-                            </div>
-                          );
-                        })()}
                       </div>
                     </td>
                     <td className="px-4 py-6 text-purple-300 font-medium">
@@ -394,17 +393,6 @@ const BetAnalysisTab = ({
                       ) : (
                         <span className="text-gray-400 text-sm">
                           No odds data
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-6">
-                      {result.isBlacklisted ? (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">
-                          🚫 Blacklisted
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
-                          ✅ Safe
                         </span>
                       )}
                     </td>
