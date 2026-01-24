@@ -1,15 +1,39 @@
 import React, { useState, useMemo } from "react";
 
+// Helper: is a single card (bestBet, primary, secondary, tertiary) ticket-ready?
+const isCardTicketReady = (card) => {
+  if (!card?.recommendation) return false;
+  const conf = parseFloat(card.recommendation.confidence);
+  if (isNaN(conf) || conf < 70) return false;
+  if ((card.riskLevel || "").toLowerCase() === "high") return false;
+  if (card.recommendation.bet === "AVOID") return false;
+  if (card.oddsPerformance?.type === "warning") return false;
+  return true;
+};
+
+// Helper: does this rec have at least one ticket-ready card?
+const hasAnyTicketReady = (rec) =>
+  (rec.bestBet && isCardTicketReady(rec.bestBet)) ||
+  (rec.primary && isCardTicketReady(rec.primary)) ||
+  (rec.secondary && isCardTicketReady(rec.secondary)) ||
+  (rec.tertiary && isCardTicketReady(rec.tertiary));
+
 const RecommendationsTab = ({ betRecommendations }) => {
   const [sortBy, setSortBy] = useState("confidence"); // confidence, odds, risk
   const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
   const [filterConfidence, setFilterConfidence] = useState("all"); // all, high, medium, low
   const [filterRisk, setFilterRisk] = useState("all"); // all, high, medium, low
   const [filterHasAvoid, setFilterHasAvoid] = useState("all"); // all, yes, no
+  const [filterTicketReady, setFilterTicketReady] = useState(false);
 
   // Filter and sort recommendations
   const filteredAndSortedRecommendations = useMemo(() => {
     let filtered = [...betRecommendations];
+
+    // Ticket-ready only: show games with at least one pick that passes confidence ≥70, risk ≠ High, not AVOID, no red odds warning
+    if (filterTicketReady) {
+      filtered = filtered.filter(hasAnyTicketReady);
+    }
 
     // Apply filters
     if (filterConfidence !== "all") {
@@ -71,7 +95,7 @@ const RecommendationsTab = ({ betRecommendations }) => {
     });
 
     return filtered;
-  }, [betRecommendations, sortBy, sortOrder, filterConfidence, filterRisk, filterHasAvoid]);
+  }, [betRecommendations, sortBy, sortOrder, filterConfidence, filterRisk, filterHasAvoid, filterTicketReady]);
 
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
@@ -109,7 +133,7 @@ const RecommendationsTab = ({ betRecommendations }) => {
       {/* Filter and Sort Controls */}
       {betRecommendations.length > 0 && (
         <div className="mb-6 bg-white/5 rounded-lg p-4 border border-white/10">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             {/* Sort By */}
             <div>
               <label className="block text-gray-300 text-sm mb-2">Sort By</label>
@@ -179,6 +203,21 @@ const RecommendationsTab = ({ betRecommendations }) => {
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </select>
+            </div>
+
+            {/* Ticket-ready only toggle */}
+            <div className="flex flex-col justify-end">
+              <label className="block text-gray-300 text-sm mb-2">Ticket-ready only</label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterTicketReady}
+                  onChange={(e) => setFilterTicketReady(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/30 bg-white/10 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+                />
+                <span className="text-sm text-gray-300">Only games with a ticket-ready pick</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">Confidence ≥70%, risk ≠ High, not AVOID, no red odds</p>
             </div>
           </div>
 
@@ -286,9 +325,9 @@ const RecommendationsTab = ({ betRecommendations }) => {
                 </div>
               )}
 
-              <div className={`grid grid-cols-1 md:grid-cols-2 ${rec.bestBet ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${filterTicketReady ? 'lg:grid-cols-2' : (rec.bestBet ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}`}>
                 {/* Best Bet Card */}
-                {rec.bestBet && (
+                {rec.bestBet && (!filterTicketReady || isCardTicketReady(rec.bestBet)) && (
                   <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border-2 border-purple-400/40 rounded-lg p-4 shadow-lg">
                     <div className="flex items-center mb-2">
                       <span className="text-2xl mr-2">⭐</span>
@@ -339,6 +378,7 @@ const RecommendationsTab = ({ betRecommendations }) => {
                 )}
 
                 {/* Primary Recommendation */}
+                {rec.primary && (!filterTicketReady || isCardTicketReady(rec.primary)) && (
                 <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/30 rounded-lg p-4">
                   <div className="flex items-center mb-2">
                     <span className="text-2xl mr-2">🥇</span>
@@ -386,8 +426,10 @@ const RecommendationsTab = ({ betRecommendations }) => {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Secondary Recommendation */}
+                {rec.secondary && (!filterTicketReady || isCardTicketReady(rec.secondary)) && (
                 <div className="bg-gradient-to-br from-gray-500/20 to-gray-600/20 border border-gray-400/30 rounded-lg p-4">
                   <div className="flex items-center mb-2">
                     <span className="text-2xl mr-2">🥈</span>
@@ -435,8 +477,10 @@ const RecommendationsTab = ({ betRecommendations }) => {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Tertiary Recommendation */}
+                {rec.tertiary && (!filterTicketReady || isCardTicketReady(rec.tertiary)) && (
                 <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-400/30 rounded-lg p-4">
                   <div className="flex items-center mb-2">
                     <span className="text-2xl mr-2">🥉</span>
@@ -484,6 +528,7 @@ const RecommendationsTab = ({ betRecommendations }) => {
                     </div>
                   )}
                 </div>
+                )}
               </div>
             </div>
           ))}
