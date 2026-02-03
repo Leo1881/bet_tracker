@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 
 const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
   const [sortConfig, setSortConfig] = useState({
@@ -58,7 +58,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
   };
 
   // Calculate recent performance for a specific bet type
-  const calculateRecentPerformance = (individualBets, betType) => {
+  const calculateRecentPerformance = useCallback((individualBets, betType) => {
     if (!individualBets || individualBets.length === 0) return { recentWinRate: 0, recentBets: 0 };
 
     // Filter bets by bet type
@@ -86,7 +86,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
     const recentWinRate = recentBets > 0 ? (recentWins / recentBets) * 100 : 0;
 
     return { recentWinRate, recentBets };
-  };
+  }, []);
 
   const teams = useMemo(() => {
     // Helper function to sort teams (defined inside useMemo to access sortConfig)
@@ -188,7 +188,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
       .slice(0, 100); // Top 100
 
     return sortTeams(filteredTeams);
-  }, [getTopTeams, sortConfig, selectedBetType]);
+  }, [getTopTeams, sortConfig, selectedBetType, calculateRecentPerformance]);
 
   const handleSort = (key) => {
     setSortConfig(prevConfig => {
