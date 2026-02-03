@@ -4,10 +4,16 @@ import React, { useState, useMemo } from "react";
 const isCardTicketReady = (card) => {
   if (!card?.recommendation) return false;
   const conf = parseFloat(card.recommendation.confidence);
-  if (isNaN(conf) || conf < 70) return false;
-  if ((card.riskLevel || "").toLowerCase() === "high") return false;
+  if (isNaN(conf)) return false;
   if (card.recommendation.bet === "AVOID") return false;
   if (card.oddsPerformance?.type === "warning") return false;
+
+  // Exception: Straight Win with very high confidence (≥85%) and no red odds counts as ticket-ready even if risk is High
+  if (card.type === "Straight Win" && conf >= 85) return true;
+
+  // Standard rules: confidence ≥70%, risk ≠ High
+  if (conf < 70) return false;
+  if ((card.riskLevel || "").toLowerCase() === "high") return false;
   return true;
 };
 
@@ -217,7 +223,7 @@ const RecommendationsTab = ({ betRecommendations }) => {
                 />
                 <span className="text-sm text-gray-300">Only games with a ticket-ready pick</span>
               </label>
-              <p className="text-xs text-gray-500 mt-1">Confidence ≥70%, risk ≠ High, not AVOID, no red odds</p>
+              <p className="text-xs text-gray-500 mt-1">Confidence ≥70%, risk ≠ High, not AVOID, no red odds. Straight Win ≥85% counts even if High risk.</p>
             </div>
           </div>
 

@@ -146,8 +146,6 @@ export const executeQuery = async (
   setIsQuerying(true);
 
   try {
-    let filteredTeams = new Set();
-
     // Apply all filters (AND logic - all conditions must be met)
     const matchingBets = deduplicatedBets.filter((bet) => {
       // Check if this bet matches ALL filters

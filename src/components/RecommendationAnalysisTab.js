@@ -75,8 +75,6 @@ const RecommendationAnalysisTab = ({
             // Use the stored analysis fields if available, otherwise fall back to old logic
             let isCorrect = false;
             let isPending = false;
-            let analysisType = rec.analysis_type || "";
-            let insight = rec.insight || "";
 
             // Check if this is a pending result (no actual_result entered yet)
             if (!rec.actual_result || rec.actual_result.trim() === "") {
@@ -123,7 +121,6 @@ const RecommendationAnalysisTab = ({
               rec.actual_result.trim() !== ""
             ) {
               const betType = rec.bet_type?.toLowerCase() || "";
-              const result = rec.actual_result.toLowerCase();
               const recommendedTeam = rec.recommendation;
 
               // Basic failure reason based on bet type
@@ -302,7 +299,6 @@ const RecommendationAnalysisTab = ({
               rec.actual_result.trim() !== ""
             ) {
               const betType = rec.bet_type?.toLowerCase() || "";
-              const result = rec.actual_result.toLowerCase();
               const recommendedTeam = rec.recommendation;
 
               // Basic failure reason based on bet type

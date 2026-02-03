@@ -38,8 +38,6 @@ export const calculateTeamConfidence = (teamName, country, league, bets) => {
 
   if (total === 0) return 50;
 
-  const winRate = wins / total;
-
   // Use Wilson Score confidence interval for statistical rigor
   const confidence = calculateStatisticalConfidence(wins, total);
 
@@ -65,11 +63,7 @@ const calculateStatisticalConfidence = (wins, total) => {
       (z * z) / (2 * n) -
       z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
     (1 + (z * z) / n);
-  const upperBound =
-    (p +
-      (z * z) / (2 * n) +
-      z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n)) /
-    (1 + (z * z) / n);
+  // upperBound available for alternative confidence strategies
 
   // Use lower bound for conservative estimate, but adjust for sample size uncertainty
   const uncertainty = Math.sqrt((p * (1 - p)) / n);
@@ -155,9 +149,6 @@ export const calculateOddsConfidence = (odds1, betType, teamName, bets) => {
 
   if (total === 0) return 50;
 
-  // Use actual win rate as probability
-  const winRate = (wins / total) * 100;
-  
   // Use Wilson Score for more accurate probability estimate
   const confidence = calculateStatisticalConfidence(wins, total);
 

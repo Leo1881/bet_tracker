@@ -5,7 +5,7 @@ const normalizeTeamName = (name = "") => {
 
   return name
     .toLowerCase()
-    .replace(/[\.\-]/g, " ")
+    .replace(/[.-]/g, " ")
     .replace(/\b(women|woman|ladies|lady|femenino|femenina)\b/g, " ")
     .replace(/\b(cf|fc|club|de|the|team|cd|sd|ud|ac|sc|afc)\b/g, " ")
     .replace(/\s+/g, " ")
@@ -824,9 +824,11 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
       let totalUnder4_5Count = 0;
       let totalGoals = 0;
       let totalHomeWins = 0;
+      // eslint-disable-next-line no-unused-vars -- accumulated for potential future use
       let totalHomeLosses = 0;
       let totalHomeGames = 0;
       let totalAwayWins = 0;
+      // eslint-disable-next-line no-unused-vars -- accumulated for potential future use
       let totalAwayLosses = 0;
       let totalAwayGames = 0;
       let totalDoubleChanceTotal = 0;

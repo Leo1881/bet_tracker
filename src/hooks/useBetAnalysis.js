@@ -57,6 +57,7 @@ export const useBetAnalysis = (
           )
       );
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analyzeScoringPatterns is stable from service
     [
       bets,
       blacklistedTeams,

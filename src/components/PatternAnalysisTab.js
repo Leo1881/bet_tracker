@@ -84,7 +84,7 @@ const PatternAnalysisTab = ({ bets }) => {
       const league = bet.LEAGUE || "Unknown";
       const country = bet.COUNTRY || "Unknown";
       const oddsValue = getOddsValue(bet);
-      const betId = bet.BET_ID || "NO_ID";
+      // BET_ID available as bet.BET_ID if needed
 
       // SUCCESS PATTERNS - Build combination keys
       const combinations = [

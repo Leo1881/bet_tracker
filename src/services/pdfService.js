@@ -25,14 +25,11 @@ export const generatePDFReport = async (
     const { default: jsPDF } = await import("jspdf");
 
     const pdf = new jsPDF("l", "mm", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 20;
-    const contentWidth = pageWidth - 2 * margin;
 
     let yPosition = margin;
     const lineHeight = 5;
-    const sectionGap = 15;
 
     // Consolidated Bet Analysis Table
     pdf.setFontSize(16);

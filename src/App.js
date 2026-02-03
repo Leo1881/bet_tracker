@@ -19,7 +19,6 @@ import {
   getBetsForOddsRange as getBetsForOddsRangeService,
   getTeamOddsAnalytics as getTeamOddsAnalyticsService,
 } from "./services/oddsAnalyticsService";
-import { getTopTeams } from "./services/analyticsService";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -322,11 +321,6 @@ function App() {
     return result;
   };
 
-  // Check if any filters are active
-  const hasActiveFilters = () => {
-    return Object.values(filters).some((value) => value !== "");
-  };
-
   // Handle filter changes and trigger data loading
   const handleFilterChange = (filterType, value) => {
     const newFilters = { ...filters, [filterType]: value };
@@ -493,7 +487,8 @@ function App() {
 
   // Confidence Scoring Functions
 
-  // Store recommendations for accuracy tracking
+  // Store recommendations for accuracy tracking (reserved for future use)
+  // eslint-disable-next-line no-unused-vars
   const storeRecommendations = async (analysisResults) => {
     try {
       // For now, we'll store recommendations in localStorage
@@ -524,7 +519,8 @@ function App() {
     }
   };
 
-  // Store predictions from analysis
+  // Store predictions from analysis (reserved for future use)
+  // eslint-disable-next-line no-unused-vars
   const storePredictions = (analysisResults) => {
     const today = new Date().toISOString().split("T")[0];
     const predictions = {
@@ -980,7 +976,8 @@ function App() {
     }
   };
 
-  // Calculate prediction accuracy
+  // Calculate prediction accuracy (reserved for future use)
+  // eslint-disable-next-line no-unused-vars
   const calculatePredictionAccuracy = (bet) => {
     if (!bet.SYSTEM_RECOMMENDATION || !bet.RESULT) {
       return "Pending";
@@ -1285,25 +1282,6 @@ function App() {
           : 1.0, // Default to 1.0 if insufficient data (no bias)
     };
 
-    // Log the calculated multipliers for debugging
-    console.log("Bet Type Performance Multipliers:", {
-      straightWin: {
-        rate: (straightWinRate * 100).toFixed(1) + "%",
-        bets: straightWinBets.length,
-        multiplier: multipliers.straightWin.toFixed(2),
-      },
-      doubleChance: {
-        rate: (doubleChanceRate * 100).toFixed(1) + "%",
-        bets: doubleChanceBets.length,
-        multiplier: multipliers.doubleChance.toFixed(2),
-      },
-      overUnder: {
-        rate: (overUnderRate * 100).toFixed(1) + "%",
-        bets: overUnderBets.length,
-        multiplier: multipliers.overUnder.toFixed(2),
-      },
-    });
-
     return multipliers;
   };
 
@@ -1314,15 +1292,12 @@ function App() {
     betData,
     teamOddsAnalytics
   ) => {
-    console.log(`[Odds Performance] Function called for betType: ${betType}, recommendation.bet: ${recommendation?.bet}`);
-    
     // Skip if recommendation is AVOID
     if (
       recommendation.bet === "AVOID" ||
       recommendation.bet === "No clear winner" ||
       !recommendation.bet
     ) {
-      console.log(`[Odds Performance] Early return - AVOID or No clear winner`);
       return null;
     }
 
@@ -1331,14 +1306,11 @@ function App() {
     let teamName = betData.TEAM_INCLUDED;
     
     if (!teamName) {
-      console.log(`[Odds Performance] No TEAM_INCLUDED found, cannot determine team for odds lookup`);
       return {
         type: "no_data",
         message: "No odds history available for this team",
       };
     }
-    
-    console.log(`[Odds Performance] Using TEAM_INCLUDED for odds lookup: ${teamName}`);
 
     // Map bet type
     let mappedBetType = "Win"; // default
@@ -1386,14 +1358,6 @@ function App() {
 
     // Find team in odds analytics - match by team name, country, and league
     // First try exact match with country/league, then fallback to team name only
-    console.log(`[Odds Performance] Looking for team: ${teamName}, Country: ${betData.COUNTRY}, League: ${betData.LEAGUE}`);
-    console.log(`[Odds Performance] Available teams in analytics:`, teamOddsAnalytics.map(t => ({
-      name: t.teamName,
-      country: t.country,
-      league: t.league,
-      totalLosses: t.totalLosses
-    })));
-    
     let teamOddsData = teamOddsAnalytics.find(
       (team) =>
         team.teamName &&
@@ -1409,18 +1373,12 @@ function App() {
     
     // Fallback to team name only if no exact match found
     if (!teamOddsData) {
-      console.log(`[Odds Performance] No exact match found, trying team name only`);
       teamOddsData = teamOddsAnalytics.find(
         (team) =>
           team.teamName &&
           teamName &&
           team.teamName.toLowerCase() === teamName.toLowerCase()
       );
-      if (teamOddsData) {
-        console.log(`[Odds Performance] Found team by name only: ${teamOddsData.teamName} (${teamOddsData.country} - ${teamOddsData.league})`);
-      }
-    } else {
-      console.log(`[Odds Performance] Found exact match: ${teamOddsData.teamName} (${teamOddsData.country} - ${teamOddsData.league})`);
     }
 
     if (!teamOddsData) {
@@ -1445,12 +1403,7 @@ function App() {
     // Check bet type performance at this odds range
     const lossBetTypes = rangeData.betTypes?.losses || {};
     const winBetTypes = rangeData.betTypes?.wins || {};
-    
-    // Debug: Log all bet types in losses to see what's stored
-    console.log(`[Odds Performance] Team: ${teamName}, Range: ${oddsRange}, Mapped Bet Type: ${mappedBetType}`);
-    console.log(`[Odds Performance] All loss bet types:`, lossBetTypes);
-    console.log(`[Odds Performance] Total losses in range: ${rangeData.losses}`);
-    
+
     // Try to find the bet type - check both exact match and case-insensitive
     let lossesForBetType = 0;
     let winsForBetType = 0;
@@ -1480,8 +1433,6 @@ function App() {
     }
     
     const totalForBetType = lossesForBetType + winsForBetType;
-    
-    console.log(`[Odds Performance] Losses for ${mappedBetType}: ${lossesForBetType}, Wins: ${winsForBetType}`);
 
     // Check if this is an outlier range
     const isOutlier = teamOddsData.outlierRanges && teamOddsData.outlierRanges.length > 0
@@ -1502,8 +1453,7 @@ function App() {
     // Check if this bet type has losses at this range
     if (totalForBetType > 0) {
       const winRateForBetType = (winsForBetType / totalForBetType) * 100;
-      const lossRateForBetType = (lossesForBetType / totalForBetType) * 100;
-      
+
       if (lossesForBetType > 0) {
         // ANY losses = red warning
         notification.type = "warning";
@@ -1593,7 +1543,7 @@ function App() {
     });
 
     // Generate comprehensive recommendations for each bet
-    const recommendations = betsWithFormData.slice(0, 40).map((bet, index) => {
+    const recommendations = betsWithFormData.slice(0, 50).map((bet, index) => {
       const odds = parseFloat(bet.ODDS1) || 2.0;
       const confidence = bet.confidenceScore || 5.0;
 
@@ -1637,16 +1587,6 @@ function App() {
         bet.LAST_2_RESULT_AWAY,
         bet.LAST_1_RESULT_AWAY
       );
-
-      // Debug: Log sequence data if available
-      if (homeFormFromResults.sequence.length > 0 || awayFormFromResults.sequence.length > 0) {
-        console.log(`[Form Analysis] ${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}:`, {
-          homeSequence: homeFormFromResults.sequence.length > 0 ? homeFormFromResults.sequence : 'Using aggregate columns',
-          homeCounts: `${homeFormFromResults.wins}W ${homeFormFromResults.draws}D ${homeFormFromResults.losses}L`,
-          awaySequence: awayFormFromResults.sequence.length > 0 ? awayFormFromResults.sequence : 'Using aggregate columns',
-          awayCounts: `${awayFormFromResults.wins}W ${awayFormFromResults.draws}D ${awayFormFromResults.losses}L`
-        });
-      }
 
       // Use new columns if available, otherwise use old aggregate columns
       const recentFormData = {
@@ -1830,11 +1770,6 @@ function App() {
       const tertiary = rankedBets[2];
 
       // Add odds performance notifications to each recommendation
-      console.log(`[Odds Performance] Adding notifications for match: ${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`);
-      console.log(`[Odds Performance] Primary: ${primary.type}, bet: ${primary.recommendation?.bet}`);
-      console.log(`[Odds Performance] Secondary: ${secondary.type}, bet: ${secondary.recommendation?.bet}`);
-      console.log(`[Odds Performance] Tertiary: ${tertiary.type}, bet: ${tertiary.recommendation?.bet}`);
-      
       primary.oddsPerformance = getOddsPerformanceNotification(
         primary.recommendation,
         primary.type,
@@ -2066,9 +2001,6 @@ function App() {
     
     // Enhanced analysis if we have sequence data
     if (sequence && sequence.length > 0) {
-      // Debug: Log sequence-based analysis
-      console.log(`[Form Impact] Using sequence-based analysis: ${sequence.join(' ')} (${wins}W ${draws}D ${losses}L)`);
-      
       // Recency weighting: most recent games weighted more heavily
       // Weights: [0.6, 0.7, 0.8, 0.9, 1.0] for games 5 to 1 (oldest to newest)
       const recencyWeights = [0.6, 0.7, 0.8, 0.9, 1.0];
@@ -2988,7 +2920,8 @@ function App() {
     return bestRecommendation;
   };
 
-  // Generate detailed reasoning for why a bet should be avoided
+  // Generate detailed reasoning for why a bet should be avoided (reserved for future use)
+  // eslint-disable-next-line no-unused-vars
   const getAvoidReasoning = (bet, confidenceBreakdown) => {
     const reasons = [];
 
@@ -3200,10 +3133,12 @@ function App() {
     storeRecommendationsData,
   } = useUtility(bets, blacklistedTeams, storedPredictions);
 
-  // Use the analysis hook
+  // Use the analysis hook (side effects only)
+  // eslint-disable-next-line no-empty-pattern
   const {} = useAnalysis(bets);
 
-  // Use the prediction hook
+  // Use the prediction hook (side effects only)
+  // eslint-disable-next-line no-empty-pattern
   const {} = usePrediction(bets);
 
   // Use the bet analysis hook
@@ -3364,24 +3299,18 @@ function App() {
       setNewBets(fetchedNewBets);
 
       if (!fetchedNewBets || fetchedNewBets.length === 0) {
-        console.log("No new bets found or fetch failed");
         setAnalysisResults([]);
         setBetRecommendations([]);
         return;
       }
 
-      console.log(`Analyzing ${fetchedNewBets.length} new bets from Sheet3`);
-
       // Use the service to analyze new bets
       const { results } = await analyzeNewBetsService(fetchedNewBets);
-
-      console.log(`Analysis complete: ${results.length} results`);
 
       setAnalysisResults(results);
 
       // Generate bet recommendations using the local function
       const recommendations = generateBetRecommendations(results);
-      console.log(`Generated ${recommendations.length} recommendations (filtered from ${results.length} results)`);
       setBetRecommendations(recommendations);
     } catch (error) {
       console.error("Error analyzing new bets:", error);
@@ -3396,7 +3325,6 @@ function App() {
       setIsUpdatingDatabase(true);
 
       if (!analysisResults || analysisResults.length === 0) {
-        console.log("No analysis results to save");
         return;
       }
 
@@ -3404,10 +3332,6 @@ function App() {
       const betslipId = `analysis_${
         new Date().toISOString().split("T")[0]
       }_${Date.now()}`;
-
-      // Debug: Check if BET_ID is available in analysisResults
-      console.log("Sample analysis result:", analysisResults[0]);
-      console.log("BET_ID in first result:", analysisResults[0]?.BET_ID);
 
       // Prepare recommendations data for database storage
       // Store all 3 recommendations (Primary/Secondary/Tertiary) for each game in one record
@@ -3420,18 +3344,6 @@ function App() {
           const fullRecommendation = betRecommendations.find(
             (rec) => rec.match === matchString1 || rec.match === matchString2
           );
-
-          // Debug: Check matching for first few results
-          if (analysisResults.indexOf(result) < 3) {
-            console.log(`Game ${analysisResults.indexOf(result) + 1}:`);
-            console.log(
-              `  Looking for: "${matchString1}" or "${matchString2}"`
-            );
-            console.log(`  Found match:`, !!fullRecommendation);
-            if (fullRecommendation) {
-              console.log(`  Match found:`, fullRecommendation.match);
-            }
-          }
 
           if (fullRecommendation) {
             return {
@@ -3487,24 +3399,6 @@ function App() {
           return null;
         })
         .filter(Boolean);
-
-      // Debug: Check what's being sent to database
-      console.log("Total analysis results:", analysisResults.length);
-      console.log("Total bet recommendations:", betRecommendations.length);
-      console.log(
-        "First few bet recommendations:",
-        betRecommendations.slice(0, 3)
-      );
-      console.log("First few analysis results:", analysisResults.slice(0, 3));
-      console.log(
-        "Total recommendations after filtering:",
-        recommendations.length
-      );
-      console.log("First recommendation being sent to DB:", recommendations[0]);
-      console.log(
-        "BET_ID in first recommendation:",
-        recommendations[0]?.bet_id
-      );
 
       // Send to database
       const response = await fetch("/api/recommendations", {
@@ -4025,7 +3919,6 @@ function App() {
   // Evaluate if your specific bet selection won (separate from system prediction accuracy)
   const evaluateYourBetOutcome = (yourBetSelection, actualResult) => {
     const result = actualResult.toLowerCase();
-    const betSelection = yourBetSelection?.toLowerCase() || "";
 
     // Since your Google Sheets RESULT column contains your bet outcome (WIN/LOSS),
     // we can directly check if the result is "win"
@@ -4044,7 +3937,6 @@ function App() {
     actualResult
   ) => {
     const result = actualResult.toLowerCase();
-    const recommendation = systemRecommendation?.toLowerCase() || "";
 
     // Simplified approach: If your bet won, assume the system was right
     // If your bet lost, assume the system was wrong
@@ -4151,7 +4043,6 @@ function App() {
 
   // Analyze why a specific recommendation failed
   const analyzeRecommendationFailure = (recommendation, actualBet) => {
-    const betType = recommendation.bet_type?.toLowerCase() || "";
     const betSelection = recommendation.bet_selection || "";
     const systemRecommendation = recommendation.recommendation || "";
     const result = actualBet.RESULT.toLowerCase();
@@ -4326,6 +4217,7 @@ function App() {
     return await analyzeScoringPatternsService();
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getScoringRecommendation = (
     homeTeam,
     awayTeam,
@@ -4342,6 +4234,7 @@ function App() {
     );
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getHeadToHeadData = () => {
     return getHeadToHeadDataService();
   };
@@ -4506,6 +4399,7 @@ function App() {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getDeduplicatedNewBets = (newBets) => {
     return getDeduplicatedNewBetsService(newBets);
   };
