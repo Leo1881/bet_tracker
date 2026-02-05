@@ -5678,7 +5678,7 @@ function App() {
           )}
 
           {activeTab === "recommendations" && (
-            <RecommendationsTab betRecommendations={betRecommendations} />
+            <RecommendationsTab betRecommendations={betRecommendations} scoringAnalysis={scoringAnalysis} />
           )}
 
           {activeTab === "teamUpload" && (

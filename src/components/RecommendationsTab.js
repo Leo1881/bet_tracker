@@ -24,13 +24,91 @@ const hasAnyTicketReady = (rec) =>
   (rec.secondary && isCardTicketReady(rec.secondary)) ||
   (rec.tertiary && isCardTicketReady(rec.tertiary));
 
-const RecommendationsTab = ({ betRecommendations }) => {
+const HIGH_SCORING_THRESHOLD = 2; // 2 or higher
+
+const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
   const [sortBy, setSortBy] = useState("confidence"); // confidence, odds, risk
   const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
   const [filterConfidence, setFilterConfidence] = useState("all"); // all, high, medium, low
   const [filterRisk, setFilterRisk] = useState("all"); // all, high, medium, low
   const [filterHasAvoid, setFilterHasAvoid] = useState("all"); // all, yes, no
   const [filterTicketReady, setFilterTicketReady] = useState(false);
+  const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "scoring"
+  const [scoringSortKey, setScoringSortKey] = useState("avgGoalsScored");
+  const [scoringSortOrder, setScoringSortOrder] = useState("desc");
+
+  const handleScoringSort = (key) => {
+    if (scoringSortKey === key) {
+      setScoringSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setScoringSortKey(key);
+      setScoringSortOrder(key === "team" || key === "league" ? "asc" : "desc");
+    }
+  };
+
+  // Set of uploaded teams: "teamName|league" (from current recommendations)
+  const uploadedTeamKeys = useMemo(() => {
+    const keys = new Set();
+    if (!betRecommendations || betRecommendations.length === 0) return keys;
+    betRecommendations.forEach((rec) => {
+      const parts = (rec.match || "").split(" vs ").map((s) => s.trim());
+      const league = (rec.league || "").toLowerCase();
+      parts.forEach((teamName) => {
+        if (teamName) keys.add(`${teamName.toLowerCase()}|${league}`);
+      });
+    });
+    return keys;
+  }, [betRecommendations]);
+
+  // Scoring data only for uploaded teams: avg goals scored >= 2.5 (no min games)
+  const highScoringTeams = useMemo(() => {
+    if (!scoringAnalysis || scoringAnalysis.length === 0 || uploadedTeamKeys.size === 0) return [];
+    return scoringAnalysis
+      .filter((stat) => {
+        const key = `${(stat.team || "").toLowerCase()}|${(stat.league || "").toLowerCase()}`;
+        if (!uploadedTeamKeys.has(key)) return false;
+        const avgScored = parseFloat(stat.avgGoalsScored || 0);
+        return avgScored >= HIGH_SCORING_THRESHOLD;
+      })
+      .map((stat) => ({
+        team: stat.team,
+        league: stat.league,
+        country: stat.country || "",
+        avgGoalsScored: parseFloat(stat.avgGoalsScored || 0),
+        totalGames: stat.totalGames || 0,
+      }))
+      .sort((a, b) => b.avgGoalsScored - a.avgGoalsScored);
+  }, [scoringAnalysis, uploadedTeamKeys]);
+
+  const sortedScoringTeams = useMemo(() => {
+    const list = [...highScoringTeams];
+    const dir = scoringSortOrder === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      let aVal, bVal;
+      if (scoringSortKey === "team") {
+        aVal = (a.team || "").toLowerCase();
+        bVal = (b.team || "").toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (scoringSortKey === "league") {
+        aVal = `${a.country || ""} ${a.league || ""}`.toLowerCase();
+        bVal = `${b.country || ""} ${b.league || ""}`.toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (scoringSortKey === "avgGoalsScored") {
+        aVal = a.avgGoalsScored;
+        bVal = b.avgGoalsScored;
+        return dir * (aVal - bVal);
+      }
+      if (scoringSortKey === "totalGames") {
+        aVal = a.totalGames || 0;
+        bVal = b.totalGames || 0;
+        return dir * (aVal - bVal);
+      }
+      return 0;
+    });
+    return list;
+  }, [highScoringTeams, scoringSortKey, scoringSortOrder]);
 
   // Filter and sort recommendations
   const filteredAndSortedRecommendations = useMemo(() => {
@@ -136,6 +214,102 @@ const RecommendationsTab = ({ betRecommendations }) => {
         </p>
       </div>
 
+      {/* Sub-tabs: Recommendations | Scoring */}
+      <div className="flex gap-2 mb-6 border-b border-white/20 pb-2">
+        <button
+          type="button"
+          onClick={() => setSubTab("recommendations")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            subTab === "recommendations"
+              ? "bg-blue-500 text-white"
+              : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
+          }`}
+        >
+          Recommendations
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("scoring")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            subTab === "scoring"
+              ? "bg-blue-500 text-white"
+              : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
+          }`}
+        >
+          Scoring (avg scored ≥ 2)
+        </button>
+      </div>
+
+      {subTab === "scoring" ? (
+        <div className="space-y-4">
+          <p className="text-gray-400 text-sm">
+            <strong className="text-white">Only teams from your uploaded games.</strong> Shown where average goals scored is 2+. Run &quot;Analyze Scoring Patterns&quot; in Scoring Analysis if empty.
+          </p>
+          {highScoringTeams.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-white/20">
+                  <tr>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleScoringSort("team")}
+                    >
+                      <span className="flex items-center gap-1">
+                        Team
+                        {scoringSortKey === "team" && (scoringSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleScoringSort("league")}
+                    >
+                      <span className="flex items-center gap-1">
+                        League
+                        {scoringSortKey === "league" && (scoringSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-right text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleScoringSort("avgGoalsScored")}
+                    >
+                      <span className="flex items-center gap-1 justify-end">
+                        Avg scored
+                        {scoringSortKey === "avgGoalsScored" && (scoringSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-right text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleScoringSort("totalGames")}
+                    >
+                      <span className="flex items-center gap-1 justify-end">
+                        Games
+                        {scoringSortKey === "totalGames" && (scoringSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {sortedScoringTeams.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-white/5">
+                      <td className="px-4 py-2 text-white font-medium">{row.team}</td>
+                      <td className="px-4 py-2 text-gray-300">{row.country} — {row.league}</td>
+                      <td className="px-4 py-2 text-right text-green-300 font-mono">{row.avgGoalsScored.toFixed(1)}</td>
+                      <td className="px-4 py-2 text-right text-gray-400">{row.totalGames}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
+              <p className="text-gray-400">
+                No uploaded teams with avg goals scored 2+. Run &quot;Analyze Scoring Patterns&quot; in the Scoring Analysis tab, or upload games and run bet analysis first.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {/* Filter and Sort Controls */}
       {betRecommendations.length > 0 && (
         <div className="mb-6 bg-white/5 rounded-lg p-4 border border-white/10">
@@ -550,6 +724,8 @@ const RecommendationsTab = ({ betRecommendations }) => {
             betting recommendations.
           </p>
         </div>
+      )}
+        </>
       )}
     </div>
   );
