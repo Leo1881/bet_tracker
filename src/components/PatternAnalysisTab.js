@@ -98,13 +98,14 @@ const PatternAnalysisTab = ({ bets }) => {
       combinations.forEach((combo) => {
         // Track all patterns in a single map first, then split into success/failure
         if (!successPatternMap.has(combo)) {
-          successPatternMap.set(combo, { wins: 0, losses: 0, total: 0 });
+          successPatternMap.set(combo, { wins: 0, losses: 0, total: 0, teams: new Set() });
         }
         
         const stats = successPatternMap.get(combo);
         if (isWin) stats.wins++;
         else stats.losses++;
         stats.total++;
+        if (team && team !== "Unknown") stats.teams.add(team);
       });
 
       // TEAM PATTERNS
@@ -224,11 +225,14 @@ const PatternAnalysisTab = ({ bets }) => {
         const winRate = stats.total > 0 ? (stats.wins / stats.total) * 100 : 0;
         return {
           pattern: key,
-          ...stats,
+          wins: stats.wins,
+          losses: stats.losses,
+          total: stats.total,
           winRate,
+          teams: stats.teams ? Array.from(stats.teams) : [],
         };
       })
-      .filter(p => p.total >= 3);
+      .filter(p => p.total >= 10);
 
     const successPatterns = allPatterns.filter(p => p.winRate >= 70).sort((a, b) => b.winRate - a.winRate);
     const failurePatterns = allPatterns.filter(p => p.winRate < 50).sort((a, b) => a.winRate - b.winRate);
@@ -246,12 +250,19 @@ const PatternAnalysisTab = ({ bets }) => {
         .sort((a, b) => b.winRate - a.winRate);
     };
 
+    // Odds × bet type: min 5 bets, sorted by win rate (best first)
+    const oddsPatternsFull = processPatterns(oddsPatternMap, 5);
+    const bestOddsCombo = oddsPatternsFull.length > 0 ? oddsPatternsFull[0] : null;
+    const worstOddsCombo = oddsPatternsFull.length > 1 ? oddsPatternsFull[oddsPatternsFull.length - 1] : null;
+
     return {
       successPatterns: successPatterns.slice(0, 20),
       failurePatterns: failurePatterns.slice(0, 20),
       teamPatterns: processTeamPatterns(teamPatternMap).slice(0, 30),
       leaguePatterns: processPatterns(leaguePatternMap).slice(0, 20),
-      oddsPatterns: processPatterns(oddsPatternMap).slice(0, 15),
+      oddsPatterns: oddsPatternsFull,
+      bestOddsCombo,
+      worstOddsCombo,
       betslipPatterns: processPatterns(betslipPatternMap, 2).slice(0, 15),
     };
   }, [bets]);
@@ -262,6 +273,94 @@ const PatternAnalysisTab = ({ bets }) => {
       <p className="text-gray-300 mb-6">
         Discover patterns in your betting history to identify what works and what doesn't.
       </p>
+
+      {/* Odds × Bet type: where you win most / least */}
+      <div className="mb-8">
+        <h3 className="text-xl font-bold text-yellow-400 mb-4">
+          💰 Odds &amp; bet type — where you win most
+        </h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Your performance by odds range and bet type (min 5 bets per combo).
+        </p>
+        {patterns.bestOddsCombo || patterns.worstOddsCombo ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {patterns.bestOddsCombo && (
+              <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
+                <div className="text-green-300 text-sm font-medium mb-1">Most successful</div>
+                <div className="text-white font-semibold">
+                  Odds {patterns.bestOddsCombo.oddsRange} — {patterns.bestOddsCombo.betType}
+                </div>
+                <div className="text-green-300 text-2xl font-bold mt-1">
+                  {patterns.bestOddsCombo.winRate.toFixed(1)}%
+                </div>
+                <div className="text-gray-400 text-sm mt-1">
+                  {patterns.bestOddsCombo.wins}W / {patterns.bestOddsCombo.losses}L ({patterns.bestOddsCombo.total} bets)
+                </div>
+              </div>
+            )}
+            {patterns.worstOddsCombo && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                <div className="text-red-300 text-sm font-medium mb-1">Least successful</div>
+                <div className="text-white font-semibold">
+                  Odds {patterns.worstOddsCombo.oddsRange} — {patterns.worstOddsCombo.betType}
+                </div>
+                <div className="text-red-300 text-2xl font-bold mt-1">
+                  {patterns.worstOddsCombo.winRate.toFixed(1)}%
+                </div>
+                <div className="text-gray-400 text-sm mt-1">
+                  {patterns.worstOddsCombo.wins}W / {patterns.worstOddsCombo.losses}L ({patterns.worstOddsCombo.total} bets)
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-white/20">
+              <tr>
+                <th className="px-4 py-2 text-left text-white">Odds range</th>
+                <th className="px-4 py-2 text-left text-white">Bet type</th>
+                <th className="px-4 py-2 text-left text-white">Win rate</th>
+                <th className="px-4 py-2 text-left text-white">Record</th>
+                <th className="px-4 py-2 text-left text-white">Bets</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {patterns.oddsPatterns.length > 0 ? (
+                patterns.oddsPatterns.map((pattern, idx) => (
+                  <tr key={idx} className="hover:bg-white/5">
+                    <td className="px-4 py-2 text-gray-300">{pattern.oddsRange}</td>
+                    <td className="px-4 py-2 text-gray-300">{pattern.betType}</td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={`inline-block px-2 py-1 rounded text-sm font-medium ${
+                          pattern.winRate >= 70
+                            ? "bg-green-100 text-green-800"
+                            : pattern.winRate >= 50
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {pattern.winRate.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-gray-300 text-sm">
+                      {pattern.wins}W / {pattern.losses}L
+                    </td>
+                    <td className="px-4 py-2 text-gray-400 text-sm">{pattern.total}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="px-4 py-4 text-center text-gray-400">
+                    No odds × bet type data yet (need 5+ bets per odds range and bet type)
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* Success Patterns */}
       <div className="mb-8">
@@ -282,11 +381,18 @@ const PatternAnalysisTab = ({ bets }) => {
                 <div className="text-gray-300 text-sm mt-1">
                   {pattern.wins}W / {pattern.losses}L ({pattern.total} bets)
                 </div>
+                {pattern.teams && pattern.teams.length > 0 && (
+                  <div className="text-gray-400 text-xs mt-2 pt-2 border-t border-green-500/30">
+                    Teams: {pattern.teams.length > 5
+                      ? `${pattern.teams.slice(0, 5).join(", ")} +${pattern.teams.length - 5} more`
+                      : pattern.teams.join(", ")}
+                  </div>
+                )}
               </div>
             ))
           ) : (
             <div className="text-gray-400 col-span-full">
-              No success patterns found (need 70%+ win rate with 3+ bets)
+              No success patterns found (need 70%+ win rate with 10+ bets)
             </div>
           )}
         </div>
@@ -311,11 +417,18 @@ const PatternAnalysisTab = ({ bets }) => {
                 <div className="text-gray-300 text-sm mt-1">
                   {pattern.wins}W / {pattern.losses}L ({pattern.total} bets)
                 </div>
+                {pattern.teams && pattern.teams.length > 0 && (
+                  <div className="text-gray-400 text-xs mt-2 pt-2 border-t border-red-500/30">
+                    Teams: {pattern.teams.length > 5
+                      ? `${pattern.teams.slice(0, 5).join(", ")} +${pattern.teams.length - 5} more`
+                      : pattern.teams.join(", ")}
+                  </div>
+                )}
               </div>
             ))
           ) : (
             <div className="text-gray-400 col-span-full">
-              No failure patterns found (need &lt;50% win rate with 3+ bets)
+              No failure patterns found (need &lt;50% win rate with 10+ bets)
             </div>
           )}
         </div>
@@ -398,35 +511,6 @@ const PatternAnalysisTab = ({ bets }) => {
           ) : (
             <div className="text-gray-400 col-span-full">
               No league patterns found (need 3+ bets per league/bet type combo)
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Odds Patterns */}
-      <div className="mb-8">
-        <h3 className="text-xl font-bold text-yellow-400 mb-4">
-          💰 Odds-Based Patterns
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {patterns.oddsPatterns.length > 0 ? (
-            patterns.oddsPatterns.map((pattern, idx) => (
-              <div
-                key={idx}
-                className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4"
-              >
-                <div className="text-white font-semibold mb-2">{pattern.pattern}</div>
-                <div className="text-yellow-300 text-2xl font-bold">
-                  {pattern.winRate.toFixed(1)}%
-                </div>
-                <div className="text-gray-300 text-sm mt-1">
-                  {pattern.wins}W / {pattern.losses}L ({pattern.total} bets)
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-gray-400 col-span-full">
-              No odds patterns found (need 3+ bets per odds range/bet type combo)
             </div>
           )}
         </div>
