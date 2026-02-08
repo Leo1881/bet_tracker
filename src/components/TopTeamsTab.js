@@ -57,32 +57,28 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
     return winRateScore + totalWinsScore + recentPerformanceScore + betTypeBonus + volumeBonus;
   };
 
-  // Calculate recent performance for a specific bet type
+  // Calculate recent performance for a specific bet type (last 10 settled bets only)
   const calculateRecentPerformance = useCallback((individualBets, betType) => {
     if (!individualBets || individualBets.length === 0) return { recentWinRate: 0, recentBets: 0 };
 
-    // Filter bets by bet type
-    const filteredBets = individualBets.filter(bet => matchesBetType(bet, betType));
-
-    // Sort by date (newest first) and take last 10
-    const sortedBets = filteredBets
+    const filteredByType = individualBets.filter(bet => matchesBetType(bet, betType));
+    const settledOnly = filteredByType.filter(
+      (bet) => {
+        const result = (bet.RESULT || bet.result || "").toLowerCase();
+        return result.includes("win") || result.includes("loss");
+      }
+    );
+    const last10Settled = settledOnly
       .sort((a, b) => new Date(b.DATE || b.date) - new Date(a.DATE || a.date))
       .slice(0, 10);
 
-    // Calculate recent performance from last 10 bets
     let recentWins = 0;
-    let recentBets = 0;
-
-    sortedBets.forEach((bet) => {
-      const result = bet.RESULT || bet.result || "";
-      if (result.toLowerCase().includes("win")) {
-        recentWins++;
-        recentBets++;
-      } else if (result.toLowerCase().includes("loss")) {
-        recentBets++;
-      }
+    last10Settled.forEach((bet) => {
+      const result = (bet.RESULT || bet.result || "").toLowerCase();
+      if (result.includes("win")) recentWins++;
     });
 
+    const recentBets = last10Settled.length;
     const recentWinRate = recentBets > 0 ? (recentWins / recentBets) * 100 : 0;
 
     return { recentWinRate, recentBets };
@@ -130,14 +126,18 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
     };
 
     const allTeams = getTopTeams();
-    
-    // If "All" is selected, use teams as-is
+    // Exclude blacklisted teams from the list entirely
+    const teamsExcludingBlacklist = allTeams.filter(
+      (team) => !isTeamBlacklisted(team.teamName)
+    );
+
+    // If "All" is selected, use teams as-is (minus blacklisted)
     if (selectedBetType === 'All') {
-      return sortTeams(allTeams);
+      return sortTeams(teamsExcludingBlacklist);
     }
 
     // Filter teams that have the selected bet type with at least 3 bets
-    const filteredTeams = allTeams
+    const filteredTeams = teamsExcludingBlacklist
       .map(team => {
         // Find the bet type in breakdown
         const betTypeData = team.betTypeBreakdown?.find(bt => {
@@ -188,7 +188,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
       .slice(0, 100); // Top 100
 
     return sortTeams(filteredTeams);
-  }, [getTopTeams, sortConfig, selectedBetType, calculateRecentPerformance]);
+  }, [getTopTeams, sortConfig, selectedBetType, calculateRecentPerformance, isTeamBlacklisted]);
 
   const handleSort = (key) => {
     setSortConfig(prevConfig => {
@@ -337,17 +337,8 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {teams.map((team, index) => {
-              const isBlacklisted = isTeamBlacklisted(team.teamName);
-              return (
-                <tr
-                  key={index}
-                  className={`hover:bg-white/5 ${
-                    isBlacklisted
-                      ? "bg-red-900/20 border-l-4 border-red-500"
-                      : ""
-                  }`}
-                >
+            {teams.map((team, index) => (
+                <tr key={index} className="hover:bg-white/5">
                   <td className="px-4 py-2 text-gray-300">
                     <div className="flex items-center">
                       <span
@@ -370,11 +361,6 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
                       <div className="font-medium text-white">
                         {team.teamName}
                       </div>
-                      {isBlacklisted && (
-                        <span className="px-2 py-1 text-xs font-bold bg-red-600 text-white rounded-full">
-                          BLACKLISTED
-                        </span>
-                      )}
                     </div>
                   </td>
                   <td className="px-4 py-2 text-gray-300">
@@ -444,8 +430,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
                     </span>
                   </td>
                 </tr>
-              );
-            })}
+            ))}
           </tbody>
         </table>
       </div>

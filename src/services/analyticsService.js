@@ -398,11 +398,12 @@ export const getTopTeams = (deduplicatedBets) => {
     teamBets.get(teamKey).push(bet);
 
     const team = teamStats.get(teamKey);
-    team.totalBets++;
-
+    // Only count settled bets (win/loss) in totalBets so ranking and stats are accurate
     if (bet.RESULT?.toLowerCase().includes("win")) {
+      team.totalBets++;
       team.wins++;
     } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+      team.totalBets++;
       team.losses++;
     }
 
@@ -431,32 +432,27 @@ export const getTopTeams = (deduplicatedBets) => {
     }
   });
 
-  // Second pass: calculate recent performance from last 10 bets by date
+  // Second pass: calculate recent performance from last 10 settled bets by date
   teamBets.forEach((bets, teamKey) => {
     const team = teamStats.get(teamKey);
     if (!team) return;
 
-    // Sort bets by date (newest first) and take last 10
-    const sortedBets = bets
+    // Only settled bets, sort by date (newest first), take last 10
+    const last10Settled = bets
+      .filter(
+        (b) =>
+          b.RESULT?.toLowerCase().includes("win") ||
+          b.RESULT?.toLowerCase().includes("loss")
+      )
       .sort((a, b) => new Date(b.DATE) - new Date(a.DATE))
       .slice(0, 10);
 
-    // Calculate recent performance from last 10 bets
     let recentWins = 0;
-    let recentBets = 0;
-
-    sortedBets.forEach((bet) => {
-      // Only count completed bets (wins + losses), exclude pending bets
-      if (bet.RESULT?.toLowerCase().includes("win")) {
-        recentWins++;
-        recentBets++;
-      } else if (bet.RESULT?.toLowerCase().includes("loss")) {
-        recentBets++;
-      }
-      // Skip pending bets - don't count them in recent performance
+    last10Settled.forEach((bet) => {
+      if (bet.RESULT?.toLowerCase().includes("win")) recentWins++;
     });
 
-    team.recentBets = recentBets;
+    team.recentBets = last10Settled.length;
     team.recentWins = recentWins;
 
     // Calculate win rates
@@ -473,7 +469,7 @@ export const getTopTeams = (deduplicatedBets) => {
 
   // Convert to array and calculate composite score
   const teamsArray = Array.from(teamStats.values() || [])
-    .filter((team) => team && team.totalBets >= 5) // Only teams with at least 5 bets for statistical reliability
+    .filter((team) => team && team.totalBets >= 5) // Only teams with at least 5 settled bets
     .map((team) => {
       // Calculate Wilson Score for statistical accuracy
       const wilsonScore = calculateWilsonScore(
