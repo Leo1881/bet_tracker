@@ -188,6 +188,22 @@ const BetAnalysisTab = ({
                             );
                           })()}
                         </div>
+                        {result.positionGap && (
+                          <div className="mt-1">
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full ${
+                                result.positionGap.gapLabel === "Large"
+                                  ? "bg-amber-500/30 text-amber-200"
+                                  : result.positionGap.gapLabel === "Moderate"
+                                    ? "bg-blue-500/20 text-blue-200"
+                                    : "bg-white/10 text-gray-400"
+                              }`}
+                              title={`Position gap: ${result.positionGap.gapLabel} (${(result.positionGap.relativeGap * 100).toFixed(0)}% of table)`}
+                            >
+                              Position gap: {result.positionGap.gapLabel}
+                            </span>
+                          </div>
+                        )}
                         <div className="text-gray-400">
                           {result.COUNTRY || "N/A"} - {result.LEAGUE || "N/A"}
                         </div>

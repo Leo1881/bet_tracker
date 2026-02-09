@@ -5202,6 +5202,20 @@ function App() {
                                         >
                                           {awayBadge?.text || "N/A"}
                                         </div>
+                                        {result.positionGap && (
+                                          <span
+                                            className={`block mt-1 text-xs px-2 py-0.5 rounded-full w-fit ${
+                                              result.positionGap.gapLabel === "Large"
+                                                ? "bg-amber-500/30 text-amber-200"
+                                                : result.positionGap.gapLabel === "Moderate"
+                                                  ? "bg-blue-500/20 text-blue-200"
+                                                  : "bg-white/10 text-gray-400"
+                                            }`}
+                                            title={`${(result.positionGap.relativeGap * 100).toFixed(0)}% of table`}
+                                          >
+                                            Gap: {result.positionGap.gapLabel}
+                                          </span>
+                                        )}
                                       </div>
                                     );
                                   })()}

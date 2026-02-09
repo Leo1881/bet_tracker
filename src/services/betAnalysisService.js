@@ -1,4 +1,5 @@
 import { calculateProbabilities } from "../utils/mathUtils";
+import { getPositionGapIndicator } from "./teamHistoryService";
 
 /**
  * Analyze new bets and generate recommendations
@@ -259,10 +260,18 @@ export const analyzeNewBets = async (
         scoringData
       );
 
+      // Position gap (home vs away in table, relative to league size)
+      const positionGap = getPositionGapIndicator(
+        newBet.HOME_TEAM_POSITION_NUMBER,
+        newBet.AWAY_TEAM_POSITION_NUMBER,
+        newBet.TOTAL_TEAMS_IN_LEAGUE
+      );
+
       return {
         ...newBet,
         betOdds,
         isBlacklisted,
+        positionGap,
         historicalBets: total,
         historicalWins: wins.length,
         historicalLosses: losses.length,

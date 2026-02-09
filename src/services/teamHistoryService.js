@@ -267,6 +267,34 @@ export const calculatePositionConfidence = (
 };
 
 /**
+ * Returns a position gap indicator between home and away team (considering league size).
+ * @param {string|number} homePosition - Home team league position
+ * @param {string|number} awayPosition - Away team league position
+ * @param {string|number} totalTeamsInLeague - Number of teams in the league (optional; defaults to 20)
+ * @returns {{ gapLabel: string, relativeGap: number } | null} - 'Large' | 'Moderate' | 'Close', and 0-1 relative gap; null if positions missing
+ */
+export const getPositionGapIndicator = (
+  homePosition,
+  awayPosition,
+  totalTeamsInLeague
+) => {
+  const homePos = parseInt(homePosition, 10);
+  const awayPos = parseInt(awayPosition, 10);
+  if (!Number.isFinite(homePos) || !Number.isFinite(awayPos)) return null;
+
+  const totalTeams = parseInt(totalTeamsInLeague, 10);
+  const n = Number.isFinite(totalTeams) && totalTeams > 0 ? totalTeams : 20;
+  const rawGap = Math.abs(homePos - awayPos);
+  const relativeGap = rawGap / n;
+
+  let gapLabel = "Close";
+  if (relativeGap >= 0.4) gapLabel = "Large";
+  else if (relativeGap >= 0.2) gapLabel = "Moderate";
+
+  return { gapLabel, relativeGap };
+};
+
+/**
  * Calculates home/away confidence based on team performance in home vs away games
  * @param {string} teamName - Name of the team
  * @param {string} country - Country of the team
