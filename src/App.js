@@ -1495,6 +1495,96 @@ function App() {
     return notification;
   };
 
+  /**
+   * Compare user's proposed bet to our bestBet recommendation. Returns agree/disagree and reason when disagree.
+   * @param {Object} bet - Analysis row with BET_TYPE, BET_SELECTION, TEAM_INCLUDED
+   * @param {Object} bestBet - Our best bet { type, recommendation: { bet, reasoning } }
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {{ agrees: boolean, reason?: string } | null} - null if no proposed bet to compare
+   */
+  const getProposedBetVerdict = (bet, bestBet, homeTeam, awayTeam) => {
+    const proposedType = (bet.BET_TYPE || "").toLowerCase().trim();
+    const proposedSelection = (bet.BET_SELECTION || "").toLowerCase().trim();
+    const teamIncluded = (bet.TEAM_INCLUDED || "").trim();
+    if (!proposedType && !proposedSelection && !teamIncluded) return null;
+
+    const ourType = bestBet?.type || "";
+    const ourBet = (bestBet?.recommendation?.bet ?? "").toString().trim();
+    const ourReasoning = bestBet?.recommendation?.reasoning || "";
+
+    const isWin = (t, s) =>
+      (t.includes("win") && !t.includes("double")) ||
+      (!t.includes("double") && !t.includes("over") && !t.includes("under") && (s.includes("win") || s === "1" || s === "2"));
+    const isDoubleChance = (t, s) =>
+      t.includes("double") || t.includes("chance") || /^[12]?x[12]?$/i.test(s.replace(/\s/g, "")) || s === "1x" || s === "x2" || s === "12";
+    const isOverUnder = (t, s) =>
+      t.includes("over") || t.includes("under") || s.includes("over") || s.includes("under");
+
+    const ourIsAvoid = ourBet === "AVOID";
+    const ourIsStraightWin = ourType === "Straight Win";
+    const ourIsDoubleChance = ourType === "Double Chance";
+    const ourIsOverUnder = ourType === "Over/Under";
+
+    if (ourIsAvoid) {
+      return {
+        agrees: false,
+        reason: ourReasoning || "We recommend avoiding this match based on the analysis.",
+      };
+    }
+
+    if (ourIsStraightWin) {
+      const ourTeam = ourBet;
+      const userBacksHome =
+        teamIncluded.toLowerCase() === (homeTeam || "").toLowerCase() ||
+        proposedSelection.includes("home");
+      const userBacksAway =
+        teamIncluded.toLowerCase() === (awayTeam || "").toLowerCase() ||
+        proposedSelection.includes("away");
+      const weBackHome = ourTeam === homeTeam;
+      const weBackAway = ourTeam === awayTeam;
+      const agrees = isWin(proposedType, proposedSelection) && ((weBackHome && userBacksHome) || (weBackAway && userBacksAway));
+      return {
+        agrees: !!agrees,
+        reason: agrees ? undefined : (ourReasoning || `We recommend Straight Win: ${ourTeam}.`),
+      };
+    }
+
+    if (ourIsDoubleChance) {
+      const ourTeam = ourBet;
+      const userBacksHome =
+        teamIncluded.toLowerCase() === (homeTeam || "").toLowerCase() ||
+        /1x|x1/.test(proposedSelection.replace(/\s/g, ""));
+      const userBacksAway =
+        teamIncluded.toLowerCase() === (awayTeam || "").toLowerCase() ||
+        /x2|2x/.test(proposedSelection.replace(/\s/g, ""));
+      const weBackHome = ourTeam === homeTeam;
+      const weBackAway = ourTeam === awayTeam;
+      const agrees = isDoubleChance(proposedType, proposedSelection) && ((weBackHome && userBacksHome) || (weBackAway && userBacksAway));
+      return {
+        agrees: !!agrees,
+        reason: agrees ? undefined : (ourReasoning || `We recommend Double Chance: ${ourTeam}.`),
+      };
+    }
+
+    if (ourIsOverUnder) {
+      const ourLine = ourBet.toLowerCase();
+      const proposedLine = `${proposedType} ${proposedSelection}`.toLowerCase();
+      const sameLine =
+        (ourLine.includes("over") && proposedLine.includes("over")) ||
+        (ourLine.includes("under") && proposedLine.includes("under"));
+      const proposedNum = (proposedSelection.match(/[\d.]+/) || [])[0];
+      const ourNum = (ourBet.match(/[\d.]+/) || [])[0];
+      const agrees = isOverUnder(proposedType, proposedSelection) && sameLine && (ourNum === proposedNum || !ourNum || !proposedNum);
+      return {
+        agrees: !!agrees,
+        reason: agrees ? undefined : (ourReasoning || `We recommend Over/Under: ${ourBet}.`),
+      };
+    }
+
+    return { agrees: false, reason: ourReasoning || "Recommendation type could not be compared." };
+  };
+
   const generateBetRecommendations = (analysisResults) => {
     if (!analysisResults || analysisResults.length === 0) return [];
 
@@ -1853,6 +1943,9 @@ function App() {
         teamOddsAnalytics
       );
 
+      const proposedBetVerdict = getProposedBetVerdict(bet, bestBet, homeTeam, awayTeam);
+      const proposedBetLabel = [bet.BET_TYPE, bet.BET_SELECTION].filter(Boolean).join(" – ") || bet.TEAM_INCLUDED || "";
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
@@ -1866,6 +1959,8 @@ function App() {
         odds: odds,
         recommendationScore: recommendationScore,
         recentFormData: recentFormData,
+        proposedBetVerdict: proposedBetVerdict,
+        proposedBetLabel: proposedBetLabel,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
         doubleChance: doubleChanceRecommendation,
@@ -2799,6 +2894,8 @@ function App() {
         const overConfidence = Math.min(overWilsonRate, 100);
         if (overConfidence > highestConfidence) {
           highestConfidence = overConfidence;
+          const goalLabel = line === 1.5 ? "2+" : `${line}+`;
+          const cautiousNote = totalGames < 25 ? ` Cautious estimate: ${overWilsonRate.toFixed(0)}% (small sample).` : "";
           bestRecommendation = {
             bet: `OVER ${line}`,
             confidence: overConfidence,
@@ -2806,7 +2903,7 @@ function App() {
             totalGames: totalGames,
             overRate: overRate,
             overWilsonRate: overWilsonRate,
-            reasoning: `Historical data shows ${overRate.toFixed(1)}% (${overWilsonRate.toFixed(1)}% Wilson) of games go OVER ${line} (${overGames}/${totalGames} games). Combined avg: ${combinedAvgGoals.toFixed(1)} goals.`,
+            reasoning: `Strong support for Over ${line}: ${overGames} of ${totalGames} past games had ${goalLabel} goals (avg ${combinedAvgGoals.toFixed(1)} total).${cautiousNote}`,
           };
         }
       }
@@ -2817,6 +2914,7 @@ function App() {
         const underConfidence = Math.min(underWilsonRate, 100);
         if (underConfidence > highestConfidence) {
           highestConfidence = underConfidence;
+          const cautiousNote = totalGames < 25 ? ` Cautious estimate: ${underWilsonRate.toFixed(0)}% (small sample).` : "";
           bestRecommendation = {
             bet: `UNDER ${line}`,
             confidence: underConfidence,
@@ -2824,7 +2922,7 @@ function App() {
             totalGames: totalGames,
             underRate: underRate,
             underWilsonRate: underWilsonRate,
-            reasoning: `Historical data shows ${underRate.toFixed(1)}% (${underWilsonRate.toFixed(1)}% Wilson) of games go UNDER ${line} (${underGames}/${totalGames} games). Combined avg: ${combinedAvgGoals.toFixed(1)} goals.`,
+            reasoning: `Strong support for Under ${line}: ${underGames} of ${totalGames} past games had fewer than ${line} goals (avg ${combinedAvgGoals.toFixed(1)} total).${cautiousNote}`,
           };
         }
       }
@@ -2837,7 +2935,7 @@ function App() {
         confidence: 3, // Standardized low confidence (consistent with other bet types)
         avgGoals: combinedAvgGoals,
         totalGames: totalGames,
-        reasoning: `No strong over/under pattern found. Combined average: ${combinedAvgGoals.toFixed(1)} goals per game (${totalGames} games).`,
+        reasoning: `No strong over/under pattern. Average: ${combinedAvgGoals.toFixed(1)} goals per game (${totalGames} games).`,
       };
     }
 
@@ -2907,15 +3005,33 @@ function App() {
     opponentMultiplier = Math.max(0.95, Math.min(1.05, opponentMultiplier));
     bestRecommendation.confidence = Math.min(bestRecommendation.confidence * opponentMultiplier, 100);
     
-    // Add form note to reasoning if applicable
+    // Add form note to reasoning if applicable (plain language)
     if (formMultiplier !== 1.0) {
-      const formNote = ` Recent form: ${formMultiplier > 1.0 ? '+' : ''}${((formMultiplier - 1) * 100).toFixed(0)}%`;
+      const pct = ((formMultiplier - 1) * 100).toFixed(0);
+      const formNote = formMultiplier > 1.0
+        ? ` Recent form adds +${pct}% confidence.`
+        : ` Recent form reduces confidence by ${pct.replace('-', '')}%.`;
       bestRecommendation.reasoning += formNote;
     }
-    
-    // Add opponent strength note
-    const opponentNote = ` Opponent strength: ${homeTeam} faces ${getOpponentStatusDescription(homeOpponentPosition, homeOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}; ${awayTeam} faces ${getOpponentStatusDescription(awayOpponentPosition, awayOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}.`;
-    bestRecommendation.reasoning += opponentNote;
+
+    // Add opponent note (short, readable)
+    const shortOpponentDesc = (pos, form) => {
+      const parts = [];
+      if (pos) {
+        const p = parseInt(pos);
+        if (p <= 3) parts.push("top 3");
+        else if (p <= 6) parts.push("top 6");
+        else if (p >= 15) parts.push("bottom 3");
+        else if (p >= 12) parts.push("bottom half");
+      }
+      if (form && (form.wins + form.draws + form.losses) >= 3) {
+        parts.push(`${form.wins}W-${form.draws}D-${form.losses}L`);
+      }
+      return parts.length ? parts.join(", ") : "moderate opposition";
+    };
+    const homeOppDesc = shortOpponentDesc(homeOpponentPosition, homeOpponentForm);
+    const awayOppDesc = shortOpponentDesc(awayOpponentPosition, awayOpponentForm);
+    bestRecommendation.reasoning += ` Opponents: ${homeTeam} vs ${homeOppDesc}; ${awayTeam} vs ${awayOppDesc}.`;
 
     return bestRecommendation;
   };

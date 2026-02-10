@@ -310,59 +310,49 @@ const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
         </div>
       ) : (
         <>
-      {/* Filter and Sort Controls */}
+      {/* Filter and Sort Controls - compact toolbar */}
       {betRecommendations.length > 0 && (
-        <div className="mb-6 bg-white/5 rounded-lg p-4 border border-white/10">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-            {/* Sort By */}
-            <div>
-              <label className="block text-gray-300 text-sm mb-2">Sort By</label>
+        <div className="mb-5 bg-white/5 rounded-lg px-4 py-3 border border-white/10">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-gray-400 text-xs whitespace-nowrap">Sort</label>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
               >
                 <option value="confidence">Confidence</option>
                 <option value="odds">Odds</option>
-                <option value="risk">Risk Level</option>
+                <option value="risk">Risk</option>
               </select>
-            </div>
-
-            {/* Sort Order */}
-            <div>
-              <label className="block text-gray-300 text-sm mb-2">Order</label>
               <select
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value)}
-                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
               >
-                <option value="desc">High to Low</option>
-                <option value="asc">Low to High</option>
+                <option value="desc">↓</option>
+                <option value="asc">↑</option>
               </select>
             </div>
-
-            {/* Filter Confidence */}
-            <div>
-              <label className="block text-gray-300 text-sm mb-2">Confidence</label>
+            <div className="flex items-center gap-2">
+              <label className="text-gray-400 text-xs whitespace-nowrap">Confidence</label>
               <select
                 value={filterConfidence}
                 onChange={(e) => setFilterConfidence(e.target.value)}
-                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
               >
                 <option value="all">All</option>
-                <option value="high">High (70%+)</option>
-                <option value="medium">Medium (50-70%)</option>
-                <option value="low">Low (&lt;50%)</option>
+                <option value="high">70%+</option>
+                <option value="medium">50–70%</option>
+                <option value="low">&lt;50%</option>
               </select>
             </div>
-
-            {/* Filter Risk */}
-            <div>
-              <label className="block text-gray-300 text-sm mb-2">Risk Level</label>
+            <div className="flex items-center gap-2">
+              <label className="text-gray-400 text-xs whitespace-nowrap">Risk</label>
               <select
                 value={filterRisk}
                 onChange={(e) => setFilterRisk(e.target.value)}
-                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
               >
                 <option value="all">All</option>
                 <option value="high">High</option>
@@ -370,40 +360,30 @@ const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
                 <option value="low">Low</option>
               </select>
             </div>
-
-            {/* Filter Has Avoid */}
-            <div>
-              <label className="block text-gray-300 text-sm mb-2">Has AVOID</label>
+            <div className="flex items-center gap-2">
+              <label className="text-gray-400 text-xs whitespace-nowrap">AVOID</label>
               <select
                 value={filterHasAvoid}
                 onChange={(e) => setFilterHasAvoid(e.target.value)}
-                className="w-full bg-white/20 text-white rounded-lg px-3 py-2 border border-white/20"
+                className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
               >
                 <option value="all">All</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </select>
             </div>
-
-            {/* Ticket-ready only toggle */}
-            <div className="flex flex-col justify-end">
-              <label className="block text-gray-300 text-sm mb-2">Ticket-ready only</label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={filterTicketReady}
-                  onChange={(e) => setFilterTicketReady(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/30 bg-white/10 text-green-500 focus:ring-green-500 focus:ring-offset-0"
-                />
-                <span className="text-sm text-gray-300">Only games with a ticket-ready pick</span>
-              </label>
-              <p className="text-xs text-gray-500 mt-1">Confidence ≥70%, risk ≠ High, not AVOID, no red odds. Straight Win ≥85% counts even if High risk.</p>
-            </div>
-          </div>
-
-          {/* Results count */}
-          <div className="mt-4 text-sm text-gray-400">
-            Showing {filteredAndSortedRecommendations.length} of {betRecommendations.length} recommendations
+            <label className="flex items-center gap-2 cursor-pointer ml-2">
+              <input
+                type="checkbox"
+                checked={filterTicketReady}
+                onChange={(e) => setFilterTicketReady(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-white/30 bg-white/10 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+              />
+              <span className="text-xs text-gray-400">Ticket-ready only</span>
+            </label>
+            <span className="text-xs text-gray-500 ml-auto">
+              {filteredAndSortedRecommendations.length} of {betRecommendations.length}
+            </span>
           </div>
         </div>
       )}
@@ -413,144 +393,96 @@ const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
           {filteredAndSortedRecommendations.map((rec, index) => (
             <div
               key={index}
-              className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-6"
+              className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 overflow-hidden"
             >
-              <div className="flex justify-between items-start mb-4">
+              {/* Match header: one clear strip */}
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-white/5 border-b border-white/10">
                 <div>
                   <h4 className="text-lg font-bold text-white">{rec.match}</h4>
-                  <p className="text-gray-400 text-sm">
-                    {rec.country} - {rec.league}
-                  </p>
+                  <p className="text-gray-400 text-sm mt-0.5">{rec.country} · {rec.league}</p>
                 </div>
-                <div className="text-right">
-                  <span className="text-blue-400 font-medium">
-                    Overall Confidence: {rec.confidence.toFixed(1)}%
-                  </span>
-                  <p className="text-gray-400 text-sm">Odds: {rec.odds}</p>
+                <div className="flex items-baseline gap-4 text-sm">
+                  <span className="text-blue-400 font-medium">{rec.confidence.toFixed(1)}%</span>
+                  <span className="text-gray-500">Odds {rec.odds}</span>
                 </div>
               </div>
 
-              {/* Recent Form Display */}
-              {rec.recentFormData && (
-                <div className="mb-4 bg-white/5 rounded-lg p-3 border border-white/10">
-                  <h5 className="text-sm font-semibold text-white mb-2">
-                    📈 Recent Form (Last 5 Games)
-                  </h5>
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <span className="text-gray-300">Home Team:</span>
-                      <div className="flex items-center mt-1">
-                        <span className="text-green-400 font-medium">
-                          {rec.recentFormData.homeWins}W
-                        </span>
-                        <span className="text-yellow-400 mx-1">
-                          {rec.recentFormData.homeDraws}D
-                        </span>
-                        <span className="text-red-400">
-                          {rec.recentFormData.homeLosses}L
-                        </span>
-                      </div>
-                      {/* Show sequence if available */}
-                      {rec.recentFormData.homeSequence && rec.recentFormData.homeSequence.length > 0 && (
-                        <div className="flex items-center gap-1 mt-1 text-xs">
-                          <span className="text-gray-400">Sequence:</span>
-                          {rec.recentFormData.homeSequence.map((result, idx) => (
-                            <span
-                              key={idx}
-                              className={`font-mono ${
-                                result === 'W' ? 'text-green-400' :
-                                result === 'D' ? 'text-yellow-400' :
-                                'text-red-400'
-                              }`}
-                            >
-                              {result}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <span className="text-gray-300">Away Team:</span>
-                      <div className="flex items-center mt-1">
-                        <span className="text-green-400 font-medium">
-                          {rec.recentFormData.awayWins}W
-                        </span>
-                        <span className="text-yellow-400 mx-1">
-                          {rec.recentFormData.awayDraws}D
-                        </span>
-                        <span className="text-red-400">
-                          {rec.recentFormData.awayLosses}L
-                        </span>
-                      </div>
-                      {/* Show sequence if available */}
-                      {rec.recentFormData.awaySequence && rec.recentFormData.awaySequence.length > 0 && (
-                        <div className="flex items-center gap-1 mt-1 text-xs">
-                          <span className="text-gray-400">Sequence:</span>
-                          {rec.recentFormData.awaySequence.map((result, idx) => (
-                            <span
-                              key={idx}
-                              className={`font-mono ${
-                                result === 'W' ? 'text-green-400' :
-                                result === 'D' ? 'text-yellow-400' :
-                                'text-red-400'
-                              }`}
-                            >
-                              {result}
-                            </span>
-                          ))}
-                        </div>
+              <div className="p-5 space-y-4">
+                {/* Your pick: agree / disagree - compact */}
+                {rec.proposedBetVerdict != null && (
+                  <div className={`rounded-lg px-3 py-2 border ${rec.proposedBetVerdict.agrees ? "bg-green-500/10 border-green-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
+                    <div className="text-sm">
+                      <span className="text-gray-400">Your pick: </span>
+                      <span className="text-white font-medium">{rec.proposedBetLabel || "—"}</span>
+                      <span className="text-gray-400"> · </span>
+                      {rec.proposedBetVerdict.agrees ? (
+                        <span className="text-green-400 font-medium">We agree ✓</span>
+                      ) : (
+                        <>
+                          <span className="text-amber-400 font-medium">We disagree</span>
+                          {rec.proposedBetVerdict.reason && (
+                            <p className="mt-1.5 text-gray-300 text-xs leading-relaxed">
+                              {rec.proposedBetVerdict.reason}
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${filterTicketReady ? 'lg:grid-cols-2' : (rec.bestBet ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}`}>
+                {/* Recent form: single compact row on desktop */}
+                {rec.recentFormData && (
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs bg-white/5 rounded-lg px-3 py-2 border border-white/10">
+                    <span className="text-gray-400 font-medium">Form (last 5)</span>
+                    <span className="text-gray-300">
+                      <span className="text-green-400">{rec.recentFormData.homeWins}W</span>
+                      <span className="text-yellow-400 mx-0.5">{rec.recentFormData.homeDraws}D</span>
+                      <span className="text-red-400">{rec.recentFormData.homeLosses}L</span>
+                      {rec.recentFormData.homeSequence?.length > 0 && (
+                        <span className="ml-1.5 text-gray-500 font-mono">
+                          ({rec.recentFormData.homeSequence.join(" ")})
+                        </span>
+                      )}
+                      <span className="text-gray-500 ml-1">Home</span>
+                    </span>
+                    <span className="text-gray-500">·</span>
+                    <span className="text-gray-300">
+                      <span className="text-green-400">{rec.recentFormData.awayWins}W</span>
+                      <span className="text-yellow-400 mx-0.5">{rec.recentFormData.awayDraws}D</span>
+                      <span className="text-red-400">{rec.recentFormData.awayLosses}L</span>
+                      {rec.recentFormData.awaySequence?.length > 0 && (
+                        <span className="ml-1.5 text-gray-500 font-mono">
+                          ({rec.recentFormData.awaySequence.join(" ")})
+                        </span>
+                      )}
+                      <span className="text-gray-500 ml-1">Away</span>
+                    </span>
+                  </div>
+                )}
+
+                {/* Recommendation cards - clear section */}
+                <div className="pt-1">
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${filterTicketReady ? "lg:grid-cols-2" : (rec.bestBet ? "lg:grid-cols-4" : "lg:grid-cols-3")}`}>
                 {/* Best Bet Card */}
                 {rec.bestBet && (!filterTicketReady || isCardTicketReady(rec.bestBet)) && (
-                  <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border-2 border-purple-400/40 rounded-lg p-4 shadow-lg">
-                    <div className="flex items-center mb-2">
-                      <span className="text-2xl mr-2">⭐</span>
-                      <span className="text-purple-300 font-bold">BEST BET</span>
+                  <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-400/40 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-lg">⭐</span>
+                      <span className="text-purple-300 font-semibold text-xs uppercase tracking-wide">Best bet</span>
                     </div>
-                    <div className="text-white font-medium mb-1">
-                      {rec.bestBet.type}
-                    </div>
-                    <div
-                      className={`text-sm font-semibold ${
-                        rec.bestBet.recommendation.bet === "AVOID"
-                          ? "text-red-400"
-                          : "text-purple-300"
-                      }`}
-                    >
+                    <div className="text-white font-medium text-sm">{rec.bestBet.type}</div>
+                    <div className={`text-sm font-semibold ${rec.bestBet.recommendation.bet === "AVOID" ? "text-red-400" : "text-purple-300"}`}>
                       {rec.bestBet.recommendation.bet === "AVOID"
-                        ? `AVOID (${rec.bestBet.recommendation.confidence.toFixed(
-                            1
-                          )}%)`
-                        : `${
-                            rec.bestBet.recommendation.bet
-                          } (${rec.bestBet.recommendation.confidence.toFixed(
-                            1
-                          )}%)`}
+                        ? `AVOID (${rec.bestBet.recommendation.confidence.toFixed(1)}%)`
+                        : `${rec.bestBet.recommendation.bet} (${rec.bestBet.recommendation.confidence.toFixed(1)}%)`}
                     </div>
                     {rec.bestBet.recommendation.bet === "AVOID" && (
-                      <div className="text-red-300 text-xs mt-1">
-                        {rec.bestBet.recommendation.reasoning}
-                      </div>
+                      <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.bestBet.recommendation.reasoning}</div>
                     )}
-                    <div className="text-gray-300 text-xs mt-1">
-                      Risk: {rec.bestBet.riskLevel}
-                    </div>
+                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.bestBet.riskLevel}</div>
                     {rec.bestBet.oddsPerformance && (
-                      <div
-                        className={`text-xs mt-2 px-2 py-1 rounded ${
-                          rec.bestBet.oddsPerformance.type === "warning"
-                            ? "bg-red-500/20 border border-red-500/50 text-red-300"
-                            : rec.bestBet.oddsPerformance.type === "no_data"
-                            ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
-                            : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
-                        }`}
-                      >
+                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.bestBet.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.bestBet.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.bestBet.oddsPerformance.message}
                       </div>
                     )}
@@ -559,156 +491,68 @@ const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
 
                 {/* Primary Recommendation */}
                 {rec.primary && (!filterTicketReady || isCardTicketReady(rec.primary)) && (
-                <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/30 rounded-lg p-4">
-                  <div className="flex items-center mb-2">
-                    <span className="text-2xl mr-2">🥇</span>
-                    <span className="text-yellow-300 font-bold">PRIMARY</span>
-                  </div>
-                  <div className="text-white font-medium mb-1">
-                    {rec.primary.type}
-                  </div>
-                  <div
-                    className={`text-sm ${
-                      rec.primary.recommendation.bet === "AVOID"
-                        ? "text-red-400"
-                        : "text-green-400"
-                    }`}
-                  >
-                    {rec.primary.recommendation.bet === "AVOID"
-                      ? `AVOID (${rec.primary.recommendation.confidence.toFixed(
-                          1
-                        )}%)`
-                      : `${
-                          rec.primary.recommendation.bet
-                        } (${rec.primary.recommendation.confidence.toFixed(
-                          1
-                        )}%)`}
-                  </div>
-                  {rec.primary.recommendation.bet === "AVOID" && (
-                    <div className="text-red-300 text-xs mt-1">
-                      {rec.primary.recommendation.reasoning}
+                  <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/30 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-lg">🥇</span>
+                      <span className="text-yellow-300 font-semibold text-xs uppercase tracking-wide">Primary</span>
                     </div>
-                  )}
-                  <div className="text-gray-400 text-xs mt-1">
-                    Risk: {rec.primary.riskLevel}
-                  </div>
-                  {rec.primary.oddsPerformance && (
-                    <div
-                      className={`text-xs mt-2 px-2 py-1 rounded ${
-                        rec.primary.oddsPerformance.type === "warning"
-                          ? "bg-red-500/20 border border-red-500/50 text-red-300"
-                          : rec.primary.oddsPerformance.type === "no_data"
-                          ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
-                          : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
-                      }`}
-                    >
-                      {rec.primary.oddsPerformance.message}
+                    <div className="text-white font-medium text-sm">{rec.primary.type}</div>
+                    <div className={`text-sm ${rec.primary.recommendation.bet === "AVOID" ? "text-red-400" : "text-green-400"}`}>
+                      {rec.primary.recommendation.bet === "AVOID" ? `AVOID (${rec.primary.recommendation.confidence.toFixed(1)}%)` : `${rec.primary.recommendation.bet} (${rec.primary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
-                  )}
-                </div>
+                    {rec.primary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.primary.recommendation.reasoning}</div>}
+                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.primary.riskLevel}</div>
+                    {rec.primary.oddsPerformance && (
+                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.primary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.primary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
+                        {rec.primary.oddsPerformance.message}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Secondary Recommendation */}
                 {rec.secondary && (!filterTicketReady || isCardTicketReady(rec.secondary)) && (
-                <div className="bg-gradient-to-br from-gray-500/20 to-gray-600/20 border border-gray-400/30 rounded-lg p-4">
-                  <div className="flex items-center mb-2">
-                    <span className="text-2xl mr-2">🥈</span>
-                    <span className="text-gray-300 font-bold">SECONDARY</span>
-                  </div>
-                  <div className="text-white font-medium mb-1">
-                    {rec.secondary.type}
-                  </div>
-                  <div
-                    className={`text-sm ${
-                      rec.secondary.recommendation.bet === "AVOID"
-                        ? "text-red-400"
-                        : "text-blue-400"
-                    }`}
-                  >
-                    {rec.secondary.recommendation.bet === "AVOID"
-                      ? `AVOID (${rec.secondary.recommendation.confidence.toFixed(
-                          1
-                        )}%)`
-                      : `${
-                          rec.secondary.recommendation.bet
-                        } (${rec.secondary.recommendation.confidence.toFixed(
-                          1
-                        )}%)`}
-                  </div>
-                  {rec.secondary.recommendation.bet === "AVOID" && (
-                    <div className="text-red-300 text-xs mt-1">
-                      {rec.secondary.recommendation.reasoning}
+                  <div className="bg-gradient-to-br from-gray-500/20 to-gray-600/20 border border-gray-400/30 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-lg">🥈</span>
+                      <span className="text-gray-300 font-semibold text-xs uppercase tracking-wide">Secondary</span>
                     </div>
-                  )}
-                  <div className="text-gray-400 text-xs mt-1">
-                    Risk: {rec.secondary.riskLevel}
-                  </div>
-                  {rec.secondary.oddsPerformance && (
-                    <div
-                      className={`text-xs mt-2 px-2 py-1 rounded ${
-                        rec.secondary.oddsPerformance.type === "warning"
-                          ? "bg-red-500/20 border border-red-500/50 text-red-300"
-                          : rec.secondary.oddsPerformance.type === "no_data"
-                          ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
-                          : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
-                      }`}
-                    >
-                      {rec.secondary.oddsPerformance.message}
+                    <div className="text-white font-medium text-sm">{rec.secondary.type}</div>
+                    <div className={`text-sm ${rec.secondary.recommendation.bet === "AVOID" ? "text-red-400" : "text-blue-400"}`}>
+                      {rec.secondary.recommendation.bet === "AVOID" ? `AVOID (${rec.secondary.recommendation.confidence.toFixed(1)}%)` : `${rec.secondary.recommendation.bet} (${rec.secondary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
-                  )}
-                </div>
+                    {rec.secondary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.secondary.recommendation.reasoning}</div>}
+                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.secondary.riskLevel}</div>
+                    {rec.secondary.oddsPerformance && (
+                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.secondary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.secondary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
+                        {rec.secondary.oddsPerformance.message}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Tertiary Recommendation */}
                 {rec.tertiary && (!filterTicketReady || isCardTicketReady(rec.tertiary)) && (
-                <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-400/30 rounded-lg p-4">
-                  <div className="flex items-center mb-2">
-                    <span className="text-2xl mr-2">🥉</span>
-                    <span className="text-orange-300 font-bold">TERTIARY</span>
-                  </div>
-                  <div className="text-white font-medium mb-1">
-                    {rec.tertiary.type}
-                  </div>
-                  <div
-                    className={`text-sm ${
-                      rec.tertiary.recommendation.bet === "AVOID"
-                        ? "text-red-400"
-                        : "text-orange-400"
-                    }`}
-                  >
-                    {rec.tertiary.recommendation.bet === "AVOID"
-                      ? `AVOID (${rec.tertiary.recommendation.confidence.toFixed(
-                          1
-                        )}%)`
-                      : `${
-                          rec.tertiary.recommendation.bet
-                        } (${rec.tertiary.recommendation.confidence.toFixed(
-                          1
-                        )}%)`}
-                  </div>
-                  {rec.tertiary.recommendation.bet === "AVOID" && (
-                    <div className="text-red-300 text-xs mt-1">
-                      {rec.tertiary.recommendation.reasoning}
+                  <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-400/30 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-lg">🥉</span>
+                      <span className="text-orange-300 font-semibold text-xs uppercase tracking-wide">Tertiary</span>
                     </div>
-                  )}
-                  <div className="text-gray-400 text-xs mt-1">
-                    Risk: {rec.tertiary.riskLevel}
-                  </div>
-                  {rec.tertiary.oddsPerformance && (
-                    <div
-                      className={`text-xs mt-2 px-2 py-1 rounded ${
-                        rec.tertiary.oddsPerformance.type === "warning"
-                          ? "bg-red-500/20 border border-red-500/50 text-red-300"
-                          : rec.tertiary.oddsPerformance.type === "no_data"
-                          ? "bg-gray-500/20 border border-gray-500/50 text-gray-400"
-                          : "bg-blue-500/20 border border-blue-500/50 text-blue-300"
-                      }`}
-                    >
-                      {rec.tertiary.oddsPerformance.message}
+                    <div className="text-white font-medium text-sm">{rec.tertiary.type}</div>
+                    <div className={`text-sm ${rec.tertiary.recommendation.bet === "AVOID" ? "text-red-400" : "text-orange-400"}`}>
+                      {rec.tertiary.recommendation.bet === "AVOID" ? `AVOID (${rec.tertiary.recommendation.confidence.toFixed(1)}%)` : `${rec.tertiary.recommendation.bet} (${rec.tertiary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
-                  )}
-                </div>
+                    {rec.tertiary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.tertiary.recommendation.reasoning}</div>}
+                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.tertiary.riskLevel}</div>
+                    {rec.tertiary.oddsPerformance && (
+                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.tertiary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.tertiary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
+                        {rec.tertiary.oddsPerformance.message}
+                      </div>
+                    )}
+                  </div>
                 )}
+                  </div>
+                </div>
               </div>
             </div>
           ))}
