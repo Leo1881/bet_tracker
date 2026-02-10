@@ -39,6 +39,7 @@ import HeadToHeadTab from "./components/HeadToHeadTab";
 import PredictionAccuracyTab from "./components/PredictionAccuracyTab";
 import TeamNotesTab from "./components/TeamNotesTab";
 import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
+import BetslipAnalysisTab from "./components/BetslipAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
 import QuickLookupTab from "./components/QuickLookupTab";
 import PatternAnalysisTab from "./components/PatternAnalysisTab";
@@ -126,6 +127,7 @@ function App() {
   // Additional state not covered by useAppState
   const [storedPredictions, setStoredPredictions] = useState([]);
   const [isUpdatingDatabase, setIsUpdatingDatabase] = useState(false);
+  const [isSavingBetslip, setIsSavingBetslip] = useState(false);
   const [comparisonResults, setComparisonResults] = useState(null);
   const [isComparing, setIsComparing] = useState(false);
   // eslint-disable-next-line no-unused-vars
@@ -3528,22 +3530,94 @@ function App() {
         }),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log(
-          `Successfully stored ${result.stored} recommendations to database`
-        );
-        alert(
-          `✅ Successfully saved ${result.stored} recommendations to database!`
-        );
-      } else {
-        throw new Error("Failed to save recommendations");
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save recommendations");
       }
+      const result = await response.json();
+      console.log(
+        `Successfully stored ${result.stored} recommendations to database`
+      );
+      alert(
+        `✅ Successfully saved ${result.stored} recommendations to database!`
+      );
     } catch (error) {
       console.error("Error updating database:", error);
       alert(`❌ Error saving recommendations: ${error.message}`);
     } finally {
       setIsUpdatingDatabase(false);
+    }
+  };
+
+  // New flow: save current betslip to betslip_recommendations (no link to old recommendation_tracking)
+  const saveBetslipToDb = async () => {
+    if (!analysisResults || analysisResults.length === 0) return;
+    try {
+      setIsSavingBetslip(true);
+      const betId = analysisResults[0]?.BET_ID;
+      if (!betId) {
+        alert("No BET_ID in analysis results.");
+        return;
+      }
+      const recommendations = analysisResults
+        .map((result) => {
+          const match1 = `${result.HOME_TEAM} vs ${result.AWAY_TEAM}`;
+          const match2 = `${result.AWAY_TEAM} vs ${result.HOME_TEAM}`;
+          const full = betRecommendations.find(
+            (rec) => rec.match === match1 || rec.match === match2
+          );
+          if (!full) return null;
+          return {
+            date: result.DATE,
+            country: result.COUNTRY ?? null,
+            league: result.LEAGUE ?? null,
+            home_team: result.HOME_TEAM,
+            away_team: result.AWAY_TEAM,
+            team_included: result.TEAM_INCLUDED ?? null,
+            bet_type: result.BET_TYPE ?? null,
+            bet_selection: result.BET_SELECTION ?? null,
+            odds1: result.ODDS1,
+            odds2: result.ODDS2,
+            oddsx: result.ODDSX,
+            recommendation: full.primary?.recommendation?.bet ?? null,
+            confidence_score: full.primary?.recommendation?.confidence ?? null,
+            reasoning: full.primary?.recommendation?.reasoning ?? full.primary?.recommendation?.bet ?? null,
+            primary_recommendation: full.primary?.recommendation?.bet ?? null,
+            primary_confidence: full.primary?.recommendation?.confidence ?? null,
+            primary_reasoning: full.primary?.recommendation?.reasoning ?? full.primary?.recommendation?.bet ?? null,
+            secondary_recommendation: full.secondary?.recommendation?.bet ?? null,
+            secondary_confidence: full.secondary?.recommendation?.confidence ?? null,
+            secondary_reasoning: full.secondary?.recommendation?.reasoning ?? full.secondary?.recommendation?.bet ?? null,
+            tertiary_recommendation: full.tertiary?.recommendation?.bet ?? null,
+            tertiary_confidence: full.tertiary?.recommendation?.confidence ?? null,
+            tertiary_reasoning: full.tertiary?.recommendation?.reasoning ?? full.tertiary?.recommendation?.bet ?? null,
+          };
+        })
+        .filter(Boolean);
+      if (recommendations.length === 0) {
+        alert("No recommendations to save. Run analysis first.");
+        return;
+      }
+      const response = await fetch("/api/betslip-recommendations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bet_id: betId,
+          betslip_id: `betslip_${new Date().toISOString().split("T")[0]}_${Date.now()}`,
+          recommendations,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to save betslip");
+      }
+      const data = await response.json();
+      alert(`✅ Saved ${data.stored} games for betslip ${betId}`);
+    } catch (error) {
+      console.error("Error saving betslip:", error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
+      setIsSavingBetslip(false);
     }
   };
 
@@ -5123,8 +5197,8 @@ function App() {
               analyzeNewBets={analyzeNewBets}
               isAnalyzing={isAnalyzing}
               generatePDFReport={generatePDFReport}
-              updateDatabase={updateDatabase}
-              isUpdatingDatabase={isUpdatingDatabase}
+              saveBetslipToDb={saveBetslipToDb}
+              isSavingBetslip={isSavingBetslip}
               analysisResults={analysisResults}
               handleAnalysisSort={handleAnalysisSort}
               analysisSortConfig={analysisSortConfig}
@@ -5138,6 +5212,8 @@ function App() {
               getTeamNotesForTeam={getTeamNotesForTeam}
             />
           )}
+
+          {activeTab === "betslipAnalysis" && <BetslipAnalysisTab />}
 
           {/* Original betAnalysis content - to be removed after testing */}
           {false && activeTab === "betAnalysis" && (

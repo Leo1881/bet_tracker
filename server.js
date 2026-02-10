@@ -358,7 +358,7 @@ app.post("/api/recommendations", async (req, res) => {
         tertiary_recommendation, tertiary_confidence, tertiary_reasoning,
         chosen_recommendation_type
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
-      ON CONFLICT (bet_id, betslip_id, game_id) 
+      ON CONFLICT (bet_id, betslip_id) 
       DO UPDATE SET 
         bet_id = $2,
         recommendation = $13,
@@ -746,6 +746,168 @@ app.get("/api/recommendation-analysis", async (req, res) => {
   }
 });
 
+// ========== New betslip recommendations flow (no link to old recommendation_tracking) ==========
+
+// Save one betslip (all games) to betslip_recommendations
+app.post("/api/betslip-recommendations", async (req, res) => {
+  try {
+    const { bet_id, betslip_id, recommendations } = req.body;
+    if (!bet_id || !recommendations || !Array.isArray(recommendations)) {
+      return res.status(400).json({ error: "Invalid request: need bet_id and recommendations array" });
+    }
+    const parseDate = (dateStr) => {
+      if (!dateStr) return null;
+      if (dateStr.includes("T")) return dateStr.split("T")[0];
+      if (dateStr.includes("-") && dateStr.length <= 6) {
+        const [day, month] = dateStr.split("-");
+        const monthMap = { Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06", Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12" };
+        const y = new Date().getFullYear();
+        return `${y}-${monthMap[month] || "01"}-${String(day).padStart(2, "0")}`;
+      }
+      return dateStr;
+    };
+    const parseNum = (v) => {
+      if (v === undefined || v === null || v === "") return null;
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    };
+    const sid = betslip_id || `betslip_${Date.now()}`;
+    const insert = `
+      INSERT INTO betslip_recommendations (
+        bet_id, betslip_id, game_id, date, country, league, home_team, away_team, team_included,
+        bet_type, bet_selection, odds1, odds2, oddsx,
+        recommendation, confidence_score, reasoning,
+        primary_recommendation, primary_confidence, primary_reasoning,
+        secondary_recommendation, secondary_confidence, secondary_reasoning,
+        tertiary_recommendation, tertiary_confidence, tertiary_reasoning
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+      ON CONFLICT (bet_id, country, league, bet_type, bet_selection, team_included)
+      DO UPDATE SET
+        betslip_id = $2, game_id = $3, date = $4, home_team = $7, away_team = $8,
+        odds1 = $12, odds2 = $13, oddsx = $14, recommendation = $15, confidence_score = $16, reasoning = $17,
+        primary_recommendation = $18, primary_confidence = $19, primary_reasoning = $20,
+        secondary_recommendation = $21, secondary_confidence = $22, secondary_reasoning = $23,
+        tertiary_recommendation = $24, tertiary_confidence = $25, tertiary_reasoning = $26,
+        updated_at = NOW()
+    `;
+    for (const r of recommendations) {
+      const gameId = `${(r.date || "").toString().replace(/\s/g, "_")}_${(r.home_team || "").replace(/\s/g, "_")}_${(r.away_team || "").replace(/\s/g, "_")}`;
+      await pool.query(insert, [
+        bet_id,
+        sid,
+        gameId,
+        parseDate(r.date),
+        r.country ?? null,
+        r.league ?? null,
+        r.home_team ?? null,
+        r.away_team ?? null,
+        r.team_included ?? null,
+        r.bet_type ?? null,
+        r.bet_selection ?? null,
+        parseNum(r.odds1),
+        parseNum(r.odds2),
+        parseNum(r.oddsx),
+        r.recommendation ?? null,
+        parseNum(r.confidence_score),
+        r.reasoning ?? null,
+        r.primary_recommendation ?? null,
+        parseNum(r.primary_confidence),
+        r.primary_reasoning ?? null,
+        r.secondary_recommendation ?? null,
+        parseNum(r.secondary_confidence),
+        r.secondary_reasoning ?? null,
+        r.tertiary_recommendation ?? null,
+        parseNum(r.tertiary_confidence),
+        r.tertiary_reasoning ?? null,
+      ]);
+    }
+    res.json({ success: true, bet_id, stored: recommendations.length });
+  } catch (error) {
+    console.error("Error saving betslip recommendations:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List saved betslips / games (optional ?bet_id= filter)
+app.get("/api/betslip-recommendations", async (req, res) => {
+  try {
+    const { bet_id } = req.query;
+    let query = `SELECT * FROM betslip_recommendations ORDER BY date DESC, id DESC`;
+    const params = [];
+    if (bet_id) {
+      query = `SELECT * FROM betslip_recommendations WHERE bet_id = $1 ORDER BY date ASC, id ASC`;
+      params.push(bet_id);
+    }
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching betslip recommendations:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get distinct bet_ids for dropdown
+app.get("/api/betslip-recommendations/bet-ids", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT bet_id FROM betslip_recommendations ORDER BY bet_id DESC`
+    );
+    res.json(result.rows.map((r) => r.bet_id));
+  } catch (error) {
+    console.error("Error fetching bet IDs:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Compare: accept results from Sheet1, match by (bet_id, country, league, bet_type, bet_selection, team_included), update actual_result
+app.post("/api/betslip-recommendations/compare", async (req, res) => {
+  try {
+    const { bet_id, results } = req.body;
+    if (!bet_id || !results || !Array.isArray(results)) {
+      return res.status(400).json({ error: "Invalid request: need bet_id and results array" });
+    }
+    const rows = await pool.query(
+      `SELECT id, bet_id, country, league, bet_type, bet_selection, team_included FROM betslip_recommendations WHERE bet_id = $1`,
+      [bet_id]
+    );
+    const normalize = (v) => (v == null ? "" : String(v).trim().toLowerCase());
+    const resultMap = new Map();
+    for (const row of results) {
+      const key = [
+        normalize(row.country ?? row.COUNTRY),
+        normalize(row.league ?? row.LEAGUE),
+        normalize(row.bet_type ?? row.BET_TYPE),
+        normalize(row.bet_selection ?? row.BET_SELECTION),
+        normalize(row.team_included ?? row.TEAM_INCLUDED),
+      ].join("|");
+      const resVal = row.result ?? row.RESULT ?? row.actual_result;
+      if (resVal !== undefined && resVal !== null) resultMap.set(key, String(resVal).trim());
+    }
+    let updated = 0;
+    for (const rec of rows.rows) {
+      const key = [
+        normalize(rec.country),
+        normalize(rec.league),
+        normalize(rec.bet_type),
+        normalize(rec.bet_selection),
+        normalize(rec.team_included),
+      ].join("|");
+      const actualResult = resultMap.get(key);
+      if (actualResult) {
+        await pool.query(
+          `UPDATE betslip_recommendations SET actual_result = $1, result_updated_at = NOW(), updated_at = NOW() WHERE id = $2`,
+          [actualResult, rec.id]
+        );
+        updated++;
+      }
+    }
+    res.json({ success: true, bet_id, updated, total: rows.rows.length });
+  } catch (error) {
+    console.error("Error comparing betslip recommendations:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
@@ -759,4 +921,8 @@ app.listen(PORT, () => {
   console.log(`  GET /api/recommendations - Get stored recommendations`);
   console.log(`  POST /api/recommendation-analysis - Store analysis results`);
   console.log(`  GET /api/recommendation-analysis - Get analysis results`);
+  console.log(`  POST /api/betslip-recommendations - Save betslip (new flow)`);
+  console.log(`  GET /api/betslip-recommendations - List games (?bet_id=)`);
+  console.log(`  GET /api/betslip-recommendations/bet-ids - List bet IDs`);
+  console.log(`  POST /api/betslip-recommendations/compare - Compare with Sheet1 results`);
 });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { fetchSheetData } from "../utils/fetchSheetData";
 
 const RecommendationAnalysisTab = ({
   compareRecommendationsWithResults,
@@ -10,21 +11,16 @@ const RecommendationAnalysisTab = ({
   const [selectedBetslip, setSelectedBetslip] = useState("");
   const [availableBetslips, setAvailableBetslips] = useState([]);
   const [storedResults, setStoredResults] = useState(null);
+  const [comparingLocal, setComparingLocal] = useState(false);
 
-  // Fetch available betslips from database on component mount
+  // Fetch available betslips from new API (betslip_recommendations)
   useEffect(() => {
     const fetchAvailableBetslips = async () => {
       try {
-        const response = await fetch("/api/recommendations");
+        const response = await fetch("/api/betslip-recommendations/bet-ids");
         if (response.ok) {
-          const recommendations = await response.json();
-          // Get unique bet_ids from the recommendations
-          const uniqueBetIds = [
-            ...new Set(
-              recommendations.map((rec) => rec.bet_id).filter(Boolean)
-            ),
-          ];
-          setAvailableBetslips(uniqueBetIds.sort());
+          const betIds = await response.json();
+          setAvailableBetslips(Array.isArray(betIds) ? betIds : []);
         }
       } catch (error) {
         console.error("Error fetching available betslips:", error);
@@ -34,7 +30,7 @@ const RecommendationAnalysisTab = ({
     fetchAvailableBetslips();
   }, []);
 
-  // Fetch stored results for selected betslip
+  // Fetch games for selected betslip from new API (betslip_recommendations)
   useEffect(() => {
     const fetchStoredResults = async () => {
       if (!selectedBetslip) {
@@ -44,7 +40,7 @@ const RecommendationAnalysisTab = ({
 
       try {
         const response = await fetch(
-          `/api/recommendations?betId=${selectedBetslip}`
+          `/api/betslip-recommendations?bet_id=${encodeURIComponent(selectedBetslip)}`
         );
         if (response.ok) {
           const recommendations = await response.json();
@@ -62,119 +58,27 @@ const RecommendationAnalysisTab = ({
             console.log("bet_type from API:", recommendations[0].bet_type);
           }
 
-          // Convert stored recommendations to the format expected by the UI
-          const matched = recommendations.map((rec) => {
-            // Debug each record
-            console.log("Processing recommendation:", {
-              bet_id: rec.bet_id,
-              prediction_accurate: rec.prediction_accurate,
-              actual_result: rec.actual_result,
-              recommendation: rec.recommendation,
-            });
-
-            // Use the stored analysis fields if available, otherwise fall back to old logic
+          // Map betslip_recommendations rows to the format expected by the UI
+          const matched = (Array.isArray(recommendations) ? recommendations : []).map((rec) => {
+            const hasResult = rec.actual_result && String(rec.actual_result).trim() !== "";
+            const isPending = !hasResult;
+            const resultLower = hasResult ? String(rec.actual_result).toLowerCase() : "";
+            const recLower = (rec.recommendation || "").toLowerCase();
             let isCorrect = false;
-            let isPending = false;
-
-            // Check if this is a pending result (no actual_result entered yet)
-            if (!rec.actual_result || rec.actual_result.trim() === "") {
-              isPending = true;
-              isCorrect = false; // Pending results are neither correct nor wrong
-              console.log(
-                `Game: ${rec.home_team} vs ${rec.away_team} - PENDING (no actual_result)`
-              );
-            } else if (rec.analysis_type) {
-              // Use the stored analysis type for completed results
-              isCorrect =
-                rec.analysis_type === "Both Correct" ||
-                rec.analysis_type === "System Right, You Lost";
-              isPending = false;
-            } else {
-              // Fallback to old logic for completed results
-              if (
-                rec.prediction_accurate === true ||
-                rec.prediction_accurate === "true"
-              ) {
+            if (hasResult) {
+              if (rec.prediction_accurate === true || rec.prediction_accurate === "true") {
                 isCorrect = true;
-                isPending = false;
-              } else if (
-                rec.prediction_accurate === false ||
-                rec.prediction_accurate === "false"
-              ) {
-                isCorrect = false;
-                isPending = false;
-              } else if (rec.actual_result && rec.actual_result.trim() !== "") {
-                isCorrect =
-                  rec.actual_result.toLowerCase().includes("win") &&
-                  rec.recommendation.toLowerCase().includes("win");
-                isPending = false;
-              }
-            }
-
-            // Generate detailed failure analysis
-            let failureReason = "";
-            let confidenceAnalysis = {};
-
-            if (
-              !isCorrect &&
-              rec.actual_result &&
-              rec.actual_result.trim() !== ""
-            ) {
-              const betType = rec.bet_type?.toLowerCase() || "";
-              const recommendedTeam = rec.recommendation;
-
-              // Basic failure reason based on bet type
-              if (betType.includes("win")) {
-                failureReason = `Predicted ${recommendedTeam} to win but they lost`;
-              } else if (betType.includes("double chance")) {
-                failureReason = "Predicted double chance but got loss";
-              } else if (
-                betType.includes("over/under") ||
-                betType.includes("over") ||
-                betType.includes("under")
-              ) {
-                failureReason = `Predicted ${rec.bet_selection} but got loss`;
-              } else if (betType.includes("avoid")) {
-                failureReason = `Predicted to avoid ${recommendedTeam} but they won`;
+              } else if (rec.analysis_type === "Both Correct" || rec.analysis_type === "System Right, You Lost") {
+                isCorrect = true;
               } else {
-                failureReason = `Predicted ${rec.bet_selection} but got loss`;
-              }
-
-              // Add detailed confidence analysis
-              const breakdown = rec.confidence_breakdown || {};
-
-              if (breakdown.team >= 7) {
-                confidenceAnalysis.team = {
-                  wasHigh: true,
-                  issue:
-                    "High team confidence but team lost - possibly poor recent form not captured",
-                };
-              }
-
-              if (breakdown.homeAway >= 7) {
-                confidenceAnalysis.homeAway = {
-                  wasHigh: true,
-                  issue:
-                    "High home/away confidence but advantage didn't matter",
-                };
-              }
-
-              if (breakdown.league >= 7) {
-                confidenceAnalysis.league = {
-                  wasHigh: true,
-                  issue:
-                    "High league confidence but league trends didn't apply",
-                };
-              }
-
-              if (breakdown.odds >= 7) {
-                confidenceAnalysis.odds = {
-                  wasHigh: true,
-                  issue: "High odds confidence but market was wrong",
-                };
+                isCorrect = (resultLower.includes("win") && recLower.includes("win")) || (resultLower.includes("loss") && (recLower.includes("avoid") || recLower.includes("loss")));
               }
             }
-
+            let failureReason = "";
+            const confidenceAnalysis = rec.confidence_breakdown && typeof rec.confidence_breakdown === "object" ? rec.confidence_breakdown : {};
+            if (!isCorrect && hasResult && rec.recommendation) {
+              failureReason = `Recommendation: ${rec.recommendation}. Result: ${rec.actual_result}`;
+            }
             return {
               bet_id: rec.bet_id,
               game_id: rec.game_id,
@@ -182,7 +86,7 @@ const RecommendationAnalysisTab = ({
               home_team: rec.home_team,
               away_team: rec.away_team,
               recommendation: rec.recommendation,
-              primary_recommendation: rec.primary_recommendation,
+              primary_recommendation: rec.primary_recommendation || rec.recommendation,
               secondary_recommendation: rec.secondary_recommendation,
               tertiary_recommendation: rec.tertiary_recommendation,
               bet_type: rec.bet_type,
@@ -194,10 +98,10 @@ const RecommendationAnalysisTab = ({
               analysis_type: rec.analysis_type,
               insight: rec.insight,
               analysis: {
-                isCorrect: isCorrect,
-                isPending: isPending,
+                isCorrect,
+                isPending,
                 failureReason: failureReason || null,
-                confidenceAnalysis: confidenceAnalysis,
+                confidenceAnalysis: typeof confidenceAnalysis === "object" ? confidenceAnalysis : {},
                 analysisType: rec.analysis_type || "",
                 insight: rec.insight || "",
               },
@@ -239,19 +143,47 @@ const RecommendationAnalysisTab = ({
   }, [selectedBetslip]);
 
   const handleCompare = async () => {
+    if (!selectedBetslip) return;
+    setComparingLocal(true);
     try {
-      const results = await compareRecommendationsWithResults();
-      setComparisonResults(results);
+      const sheetRows = await fetchSheetData("Sheet1");
+      const key = Object.keys(sheetRows[0] || {}).find((k) => k.toUpperCase() === "BET_ID") || "BET_ID";
+      const rowsForBet = (sheetRows || []).filter(
+        (row) => (row[key] || row.BET_ID || "").toString().trim() === selectedBetslip
+      );
+      if (rowsForBet.length === 0) {
+        alert(`No rows on Sheet1 with BET_ID "${selectedBetslip}". Add results on Sheet1 first.`);
+        setComparingLocal(false);
+        return;
+      }
+      const res = await fetch("/api/betslip-recommendations/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bet_id: selectedBetslip,
+          results: rowsForBet.map((row) => ({
+            country: row.COUNTRY ?? row.country,
+            league: row.LEAGUE ?? row.league,
+            bet_type: row.BET_TYPE ?? row.bet_type,
+            bet_selection: row.BET_SELECTION ?? row.bet_selection,
+            team_included: row.TEAM_INCLUDED ?? row.team_included,
+            result: row.RESULT ?? row.result,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Compare failed");
+      }
+      const data = await res.json();
+      alert(`Updated ${data.updated} of ${data.total} games with results from Sheet1.`);
 
-      // Refresh stored results after comparison to get updated data
-      if (selectedBetslip) {
-        console.log("Refreshing stored results after comparison...");
-        const response = await fetch(
-          `/api/recommendations?betId=${encodeURIComponent(selectedBetslip)}`
-        );
-        if (response.ok) {
-          const recommendations = await response.json();
-          console.log("Refreshed recommendations:", recommendations.length);
+      // Refresh stored results after comparison
+      const response = await fetch(
+        `/api/betslip-recommendations?bet_id=${encodeURIComponent(selectedBetslip)}`
+      );
+      if (response.ok) {
+        const recommendations = await response.json();
 
           // Convert stored recommendations to the format expected by the UI
           const matched = recommendations.map((rec) => {
@@ -395,10 +327,11 @@ const RecommendationAnalysisTab = ({
             },
           });
         }
-      }
     } catch (error) {
       console.error("Comparison failed:", error);
       alert(`❌ Error comparing recommendations: ${error.message}`);
+    } finally {
+      setComparingLocal(false);
     }
   };
 
@@ -418,9 +351,9 @@ const RecommendationAnalysisTab = ({
       if (selectedFilter === "correct") {
         filtered = filtered.filter((match) => match.analysis.isCorrect);
       } else if (selectedFilter === "wrong") {
-        filtered = filtered.filter((match) => !match.analysis.isCorrect);
+        filtered = filtered.filter((match) => !match.analysis.isCorrect && !match.analysis.isPending);
       } else if (selectedFilter === "pending") {
-        filtered = resultsToFilter.unmatched || [];
+        filtered = filtered.filter((match) => match.analysis.isPending);
       }
 
       return filtered;
@@ -519,16 +452,16 @@ const RecommendationAnalysisTab = ({
       <div className="mb-6">
         <button
           onClick={handleCompare}
-          disabled={isComparing || !selectedBetslip}
+          disabled={comparingLocal || !selectedBetslip}
           className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-            isComparing || !selectedBetslip
+            comparingLocal || !selectedBetslip
               ? "bg-gray-500 text-gray-300 cursor-not-allowed"
               : isBetslipAnalyzed()
               ? "bg-orange-500 text-white hover:bg-orange-600"
               : "bg-blue-500 text-white hover:bg-blue-600"
           }`}
         >
-          {isComparing
+          {comparingLocal
             ? "🔄 Comparing..."
             : !selectedBetslip
             ? "🔍 Select a betslip first"
@@ -802,16 +735,26 @@ const RecommendationAnalysisTab = ({
         </div>
       )}
 
-      {/* Initial State */}
-      {!comparisonResults && (
+      {/* Initial State - only when no betslip selected or no games loaded */}
+      {!selectedBetslip && (
         <div className="text-center py-8">
           <div className="text-4xl mb-4">🔍</div>
           <h4 className="text-lg font-semibold text-white mb-2">
-            Ready to Analyze
+            Select a betslip
           </h4>
           <p className="text-gray-300">
-            Click "Compare Recommendations vs Results" to analyze your stored
-            recommendations against actual game results.
+            Choose a betslip from the dropdown above to view its games and compare with Sheet1 results.
+          </p>
+        </div>
+      )}
+      {selectedBetslip && (!storedResults || !storedResults.matched || storedResults.matched.length === 0) && (
+        <div className="text-center py-8">
+          <div className="text-4xl mb-4">📋</div>
+          <h4 className="text-lg font-semibold text-white mb-2">
+            No games for this betslip
+          </h4>
+          <p className="text-gray-300">
+            No saved games found for this betslip. Upload this betslip from Bet Analysis first.
           </p>
         </div>
       )}

@@ -4,8 +4,8 @@ const BetAnalysisTab = ({
   analyzeNewBets,
   isAnalyzing,
   generatePDFReport,
-  updateDatabase,
-  isUpdatingDatabase,
+  saveBetslipToDb,
+  isSavingBetslip,
   analysisResults,
   handleAnalysisSort,
   analysisSortConfig,
@@ -85,21 +85,21 @@ const BetAnalysisTab = ({
           📄 Generate PDF Report
         </button>
         <button
-          onClick={updateDatabase}
+          onClick={saveBetslipToDb}
           disabled={
             !analysisResults ||
             analysisResults.length === 0 ||
-            isUpdatingDatabase
+            isSavingBetslip
           }
           className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
             !analysisResults ||
             analysisResults.length === 0 ||
-            isUpdatingDatabase
+            isSavingBetslip
               ? "bg-gray-500 text-gray-300 cursor-not-allowed"
-              : "bg-purple-500 text-white hover:bg-purple-600"
+              : "bg-indigo-500 text-white hover:bg-indigo-600"
           }`}
         >
-          {isUpdatingDatabase ? "💾 Saving..." : "💾 Update Database"}
+          {isSavingBetslip ? "💾 Uploading..." : "💾 Upload To DB"}
         </button>
       </div>
 
