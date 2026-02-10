@@ -126,7 +126,6 @@ function App() {
   } = useAppState();
   // Additional state not covered by useAppState
   const [storedPredictions, setStoredPredictions] = useState([]);
-  const [isUpdatingDatabase, setIsUpdatingDatabase] = useState(false);
   const [isSavingBetslip, setIsSavingBetslip] = useState(false);
   const [comparisonResults, setComparisonResults] = useState(null);
   const [isComparing, setIsComparing] = useState(false);
@@ -3434,118 +3433,6 @@ function App() {
       console.error("Error analyzing new bets:", error);
     } finally {
       setIsAnalyzing(false);
-    }
-  };
-
-  // Update database with recommendations
-  const updateDatabase = async () => {
-    try {
-      setIsUpdatingDatabase(true);
-
-      if (!analysisResults || analysisResults.length === 0) {
-        return;
-      }
-
-      // Generate a unique betslip ID for this analysis session
-      const betslipId = `analysis_${
-        new Date().toISOString().split("T")[0]
-      }_${Date.now()}`;
-
-      // Prepare recommendations data for database storage
-      // Store all 3 recommendations (Primary/Secondary/Tertiary) for each game in one record
-      const recommendations = analysisResults
-        .map((result) => {
-          // Get the full recommendation object that contains primary/secondary/tertiary
-          const matchString1 = `${result.HOME_TEAM} vs ${result.AWAY_TEAM}`;
-          const matchString2 = `${result.AWAY_TEAM} vs ${result.HOME_TEAM}`;
-
-          const fullRecommendation = betRecommendations.find(
-            (rec) => rec.match === matchString1 || rec.match === matchString2
-          );
-
-          if (fullRecommendation) {
-            return {
-              bet_id: result.BET_ID,
-              date: result.DATE,
-              home_team: result.HOME_TEAM,
-              away_team: result.AWAY_TEAM,
-              team_included: result.TEAM_INCLUDED,
-              bet_type: result.BET_TYPE,
-              bet_selection: result.BET_SELECTION,
-              odds1: result.ODDS1,
-              odds2: result.ODDS2,
-              oddsX: result.ODDSX,
-              // Store all 3 recommendations in one record
-              primary_recommendation:
-                fullRecommendation.primary.recommendation.bet,
-              primary_confidence:
-                fullRecommendation.primary.recommendation.confidence,
-              primary_reasoning:
-                fullRecommendation.primary.recommendation.reasoning ||
-                fullRecommendation.primary.recommendation.bet,
-              secondary_recommendation:
-                fullRecommendation.secondary.recommendation.bet,
-              secondary_confidence:
-                fullRecommendation.secondary.recommendation.confidence,
-              secondary_reasoning:
-                fullRecommendation.secondary.recommendation.reasoning ||
-                fullRecommendation.secondary.recommendation.bet,
-              tertiary_recommendation:
-                fullRecommendation.tertiary.recommendation.bet,
-              tertiary_confidence:
-                fullRecommendation.tertiary.recommendation.confidence,
-              tertiary_reasoning:
-                fullRecommendation.tertiary.recommendation.reasoning ||
-                fullRecommendation.tertiary.recommendation.bet,
-              // Use primary confidence as the main confidence score
-              confidence_score:
-                fullRecommendation.primary.recommendation.confidence,
-              confidence_breakdown: result.confidenceBreakdown,
-              historical_data: {
-                historicalBets: result.historicalBets,
-                historicalWins: result.historicalWins,
-                historicalLosses: result.historicalLosses,
-                winRate: result.winRate,
-                winDetails: result.winDetails,
-                lossDetails: result.lossDetails,
-                previousMatchups: result.previousMatchups,
-                competitions: result.competitions,
-              },
-              probabilities: result.probabilities,
-            };
-          }
-          return null;
-        })
-        .filter(Boolean);
-
-      // Send to database
-      const response = await fetch("/api/recommendations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          betslipId,
-          recommendations,
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to save recommendations");
-      }
-      const result = await response.json();
-      console.log(
-        `Successfully stored ${result.stored} recommendations to database`
-      );
-      alert(
-        `✅ Successfully saved ${result.stored} recommendations to database!`
-      );
-    } catch (error) {
-      console.error("Error updating database:", error);
-      alert(`❌ Error saving recommendations: ${error.message}`);
-    } finally {
-      setIsUpdatingDatabase(false);
     }
   };
 
