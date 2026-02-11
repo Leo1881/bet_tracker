@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { fetchSheetData } from "../utils/fetchSheetData";
 
+// Flexible lookup for Sheet1 row keys (handles Country, HOME_TEAM, Home Team, etc.)
+const getRowVal = (row, ...keys) => {
+  if (!row) return "";
+  const norm = (s) => String(s).toLowerCase().replace(/\s+/g, "_");
+  const keysNorm = keys.map((k) => norm(k));
+  const found = Object.keys(row).find((k) => {
+    const kN = norm(k);
+    return keysNorm.some((keyN) => kN === keyN || kN.includes(keyN) || keyN.includes(kN));
+  });
+  return found != null ? String(row[found] ?? "").trim() : "";
+};
+
 const BetslipAnalysisTab = () => {
   const [betIds, setBetIds] = useState([]);
   const [selectedBetId, setSelectedBetId] = useState("");
@@ -58,12 +70,9 @@ const BetslipAnalysisTab = () => {
     setError(null);
     try {
       const sheetRows = await fetchSheetData("Sheet1");
-      const betIdKey = "BET_ID";
-      const key = Object.keys(sheetRows[0] || {}).find(
-        (k) => k.toUpperCase() === "BET_ID"
-      );
+      const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
       const rowsForBet = (sheetRows || []).filter(
-        (row) => (row[key] || row[betIdKey] || "").toString().trim() === selectedBetId
+        (row) => norm(getRowVal(row, "BET_ID", "bet_id")) === norm(selectedBetId)
       );
       if (rowsForBet.length === 0) {
         alert(
@@ -78,12 +87,16 @@ const BetslipAnalysisTab = () => {
         body: JSON.stringify({
           bet_id: selectedBetId,
           results: rowsForBet.map((row) => ({
-            country: row.COUNTRY ?? row.country,
-            league: row.LEAGUE ?? row.league,
-            bet_type: row.BET_TYPE ?? row.bet_type,
-            bet_selection: row.BET_SELECTION ?? row.bet_selection,
-            team_included: row.TEAM_INCLUDED ?? row.team_included,
-            result: row.RESULT ?? row.result,
+            country: getRowVal(row, "COUNTRY", "country", "Country"),
+            league: getRowVal(row, "LEAGUE", "league", "League"),
+            bet_type: getRowVal(row, "BET_TYPE", "bet_type", "Bet Type"),
+            bet_selection: getRowVal(row, "BET_SELECTION", "bet_selection", "Bet Selection"),
+            team_included: getRowVal(row, "TEAM_INCLUDED", "team_included", "Team Included"),
+            home_team: getRowVal(row, "HOME_TEAM", "home_team", "Home Team"),
+            away_team: getRowVal(row, "AWAY_TEAM", "away_team", "Away Team"),
+            result: getRowVal(row, "RESULT", "result", "Result", "Win/Loss", "Outcome", "Actual Result", "actual_result"),
+            home_score: getRowVal(row, "HOME_SCORE", "home_score", "Home Score"),
+            away_score: getRowVal(row, "AWAY_SCORE", "away_score", "Away Score"),
           })),
         }),
       });

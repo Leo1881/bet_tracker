@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { fetchSheetData } from "../utils/fetchSheetData";
 
+// Flexible lookup for Sheet1 row keys (handles Country, HOME_TEAM, Home Team, etc.)
+const getRowVal = (row, ...keys) => {
+  if (!row) return "";
+  const norm = (s) => String(s).toLowerCase().replace(/\s+/g, "_");
+  const keysNorm = keys.map((k) => norm(k));
+  const found = Object.keys(row).find((k) => {
+    const kN = norm(k);
+    return keysNorm.some((keyN) => kN === keyN || kN.includes(keyN) || keyN.includes(kN));
+  });
+  return found != null ? String(row[found] ?? "").trim() : "";
+};
+
 const RecommendationAnalysisTab = ({
   compareRecommendationsWithResults,
   isComparing,
@@ -62,16 +74,19 @@ const RecommendationAnalysisTab = ({
           const matched = (Array.isArray(recommendations) ? recommendations : []).map((rec) => {
             const hasResult = rec.actual_result && String(rec.actual_result).trim() !== "";
             const isPending = !hasResult;
-            const resultLower = hasResult ? String(rec.actual_result).toLowerCase() : "";
-            const recLower = (rec.recommendation || "").toLowerCase();
             let isCorrect = false;
             if (hasResult) {
-              if (rec.prediction_accurate === true || rec.prediction_accurate === "true") {
+              if (rec.system_prediction_accurate === true || rec.system_prediction_accurate === "true") {
                 isCorrect = true;
-              } else if (rec.analysis_type === "Both Correct" || rec.analysis_type === "System Right, You Lost") {
-                isCorrect = true;
+              } else if (rec.system_prediction_accurate === false || rec.system_prediction_accurate === "false") {
+                isCorrect = false;
               } else {
-                isCorrect = (resultLower.includes("win") && recLower.includes("win")) || (resultLower.includes("loss") && (recLower.includes("avoid") || recLower.includes("loss")));
+                // Fallback when server didn't compute: "X or Draw" + Win = system wrong (not "No clear winner" – that falls back to other tiers)
+                const primary = (rec.primary_recommendation || rec.recommendation || "").toLowerCase();
+                const resultLower = String(rec.actual_result).toLowerCase();
+                const isWin = resultLower.includes("win") && !resultLower.includes("draw");
+                if (primary.match(/\s+or\s+draw$/i) && isWin) isCorrect = false;
+                // else: leave isCorrect = false (conservative when we can't evaluate)
               }
             }
             let failureReason = "";
@@ -93,7 +108,7 @@ const RecommendationAnalysisTab = ({
               bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
-              prediction_accurate: rec.prediction_accurate,
+              prediction_accurate: rec.system_prediction_accurate != null ? rec.system_prediction_accurate : rec.prediction_accurate,
               your_bet_won: rec.your_bet_won,
               analysis_type: rec.analysis_type,
               insight: rec.insight,
@@ -147,28 +162,64 @@ const RecommendationAnalysisTab = ({
     setComparingLocal(true);
     try {
       const sheetRows = await fetchSheetData("Sheet1");
-      const key = Object.keys(sheetRows[0] || {}).find((k) => k.toUpperCase() === "BET_ID") || "BET_ID";
+      const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
       const rowsForBet = (sheetRows || []).filter(
-        (row) => (row[key] || row.BET_ID || "").toString().trim() === selectedBetslip
+        (row) => norm(getRowVal(row, "BET_ID", "bet_id")) === norm(selectedBetslip)
       );
       if (rowsForBet.length === 0) {
         alert(`No rows on Sheet1 with BET_ID "${selectedBetslip}". Add results on Sheet1 first.`);
         setComparingLocal(false);
         return;
       }
+      // Debug: log Sheet1 column names and sample of first 3 rows being sent
+      if (rowsForBet.length > 0) {
+        console.log("[Compare] Sheet1 column names:", Object.keys(rowsForBet[0]));
+        const sample = rowsForBet.slice(0, 3).map((row) => {
+          let home = getRowVal(row, "HOME_TEAM", "home_team", "Home Team");
+          let away = getRowVal(row, "AWAY_TEAM", "away_team", "Away Team");
+          if ((!home || !away)) {
+            const matchCol = getRowVal(row, "Match", "Game", "match", "game");
+            const vsMatch = matchCol.match(/^(.+?)\s+vs\s+(.+)$/i);
+            if (vsMatch) {
+              home = home || vsMatch[1].trim();
+              away = away || vsMatch[2].trim();
+            }
+          }
+          const result = getRowVal(row, "RESULT", "result", "Result", "Win/Loss", "Outcome", "Actual Result", "actual_result");
+          return { home, away, result };
+        });
+        console.log("[Compare] First 3 rows payload sample:", JSON.stringify(sample, null, 2));
+      }
       const res = await fetch("/api/betslip-recommendations/compare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bet_id: selectedBetslip,
-          results: rowsForBet.map((row) => ({
-            country: row.COUNTRY ?? row.country,
-            league: row.LEAGUE ?? row.league,
-            bet_type: row.BET_TYPE ?? row.bet_type,
-            bet_selection: row.BET_SELECTION ?? row.bet_selection,
-            team_included: row.TEAM_INCLUDED ?? row.team_included,
-            result: row.RESULT ?? row.result,
-          })),
+          results: rowsForBet.map((row) => {
+            let home = getRowVal(row, "HOME_TEAM", "home_team", "Home Team");
+            let away = getRowVal(row, "AWAY_TEAM", "away_team", "Away Team");
+            // Fallback: parse "Match" or "Game" column like "Coleraine FC vs Portadown FC"
+            if ((!home || !away)) {
+              const matchCol = getRowVal(row, "Match", "Game", "match", "game");
+              const vsMatch = matchCol.match(/^(.+?)\s+vs\s+(.+)$/i);
+              if (vsMatch) {
+                home = home || vsMatch[1].trim();
+                away = away || vsMatch[2].trim();
+              }
+            }
+            return {
+              country: getRowVal(row, "COUNTRY", "country", "Country"),
+              league: getRowVal(row, "LEAGUE", "league", "League"),
+              bet_type: getRowVal(row, "BET_TYPE", "bet_type", "Bet Type"),
+              bet_selection: getRowVal(row, "BET_SELECTION", "bet_selection", "Bet Selection"),
+              team_included: getRowVal(row, "TEAM_INCLUDED", "team_included", "Team Included"),
+              home_team: home,
+              away_team: away,
+              result: getRowVal(row, "RESULT", "result", "Result", "Win/Loss", "Outcome", "Actual Result", "actual_result"),
+              home_score: getRowVal(row, "HOME_SCORE", "home_score", "Home Score"),
+              away_score: getRowVal(row, "AWAY_SCORE", "away_score", "Away Score"),
+            };
+          }),
         }),
       });
       if (!res.ok) {
@@ -176,7 +227,32 @@ const RecommendationAnalysisTab = ({
         throw new Error(err.error || "Compare failed");
       }
       const data = await res.json();
-      alert(`Updated ${data.updated} of ${data.total} games with results from Sheet1.`);
+      console.group("%c[Compare] API Response - expand to see debug", "color: #00ff00; font-size: 14px; font-weight: bold");
+      console.log("Updated:", data.updated, "/ Total:", data.total);
+      if (data.debug) {
+        if (data.debug.matchTrace?.length) {
+          console.table(data.debug.matchTrace);
+        }
+        console.log("Fallback rows from Sheet1:", data.debug.fallbackRowsSample);
+        console.log("Full debug object:", data.debug);
+      } else {
+        console.warn("No debug in API response");
+      }
+      console.groupEnd();
+      const d = data.debug || {};
+      const hint =
+        d.rowsWithResult !== undefined && d.rowsWithResult < rowsForBet.length
+          ? `\n\n⚠️ Only ${d.rowsWithResult} of ${rowsForBet.length} Sheet1 rows have a RESULT value. Fill in Win/Loss for all games on Sheet1.`
+          : d.rowsWithHomeAway !== undefined && d.rowsWithHomeAway < rowsForBet.length
+          ? `\n\n⚠️ Only ${d.rowsWithHomeAway} of ${rowsForBet.length} Sheet1 rows have home/away teams. Check column names (HOME_TEAM, AWAY_TEAM or Match).`
+          : rowsForBet.length > 1 && data.updated < data.total
+          ? "\n\n⚠️ Open browser console (F12 → Console) and look for [Compare Debug] to see sample keys."
+          : "";
+      alert(
+        `Updated ${data.updated} of ${data.total} games.\n\n` +
+        `Sent ${rowsForBet.length} rows from Sheet1 for this betslip.\n` +
+        hint
+      );
 
       // Refresh stored results after comparison
       const response = await fetch(
@@ -194,6 +270,11 @@ const RecommendationAnalysisTab = ({
             let isCorrect = false;
             let isPending = false;
 
+            // Use server-evaluated system_prediction_accurate only; avoid prediction_accurate/analysis_type fallbacks
+            const effectiveAccurate = rec.system_prediction_accurate;
+            const effectiveAccurateBool =
+              effectiveAccurate === true || effectiveAccurate === "true";
+
             // Check if this is a pending result (no actual_result entered yet)
             if (!rec.actual_result || rec.actual_result.trim() === "") {
               isPending = true;
@@ -201,23 +282,21 @@ const RecommendationAnalysisTab = ({
               console.log(
                 `Game: ${rec.home_team} vs ${rec.away_team} - PENDING (no actual_result)`
               );
-            } else if (
-              rec.prediction_accurate === true ||
-              rec.prediction_accurate === "true"
-            ) {
+            } else if (effectiveAccurateBool) {
               isCorrect = true;
               isPending = false;
             } else if (
-              rec.prediction_accurate === false ||
-              rec.prediction_accurate === "false"
+              effectiveAccurate === false ||
+              effectiveAccurate === "false"
             ) {
               isCorrect = false;
               isPending = false;
             } else if (rec.actual_result && rec.actual_result.trim() !== "") {
-              // If we have an actual result but no prediction_accurate, we can infer it
-              isCorrect =
-                rec.actual_result.toLowerCase().includes("win") &&
-                rec.recommendation.toLowerCase().includes("win");
+              // Fallback when server didn't compute: "X or Draw" + Win = system wrong
+              const primary = (rec.primary_recommendation || rec.recommendation || "").toLowerCase();
+              const resultLower = String(rec.actual_result).toLowerCase();
+              const isWin = resultLower.includes("win") && !resultLower.includes("draw");
+              if (primary.match(/\s+or\s+draw$/i) && isWin) isCorrect = false;
               isPending = false;
             }
 
@@ -299,7 +378,7 @@ const RecommendationAnalysisTab = ({
               bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
-              prediction_accurate: rec.prediction_accurate,
+              prediction_accurate: rec.system_prediction_accurate != null ? rec.system_prediction_accurate : rec.prediction_accurate,
               your_bet_won: rec.your_bet_won,
               analysis_type: rec.analysis_type,
               insight: rec.insight,

@@ -1,62 +1,39 @@
 import React, { useState, useEffect } from "react";
 
-const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
-  const [metrics, setMetrics] = useState({
-    totalPredictions: 0,
-    correctPredictions: 0,
-    overallAccuracy: 0,
-    byConfidence: {},
-    byBetType: {},
-    byRecommendationType: {},
-  });
+const PredictionAccuracyTab = () => {
+  const [tierAccuracy, setTierAccuracy] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getPredictionAccuracyMetrics();
-        setMetrics(result);
-      } catch (err) {
-        console.error("Error fetching metrics:", err);
-        setError("Failed to load prediction accuracy data");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMetrics();
-  }, [getPredictionAccuracyMetrics]);
-
-  // Force refresh when component mounts or when refresh button is clicked
-  const forceRefresh = () => {
-    const fetchMetrics = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getPredictionAccuracyMetrics();
-        setMetrics(result);
-      } catch (err) {
-        console.error("Error fetching metrics:", err);
-        setError("Failed to load prediction accuracy data");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMetrics();
+  const fetchTierAccuracy = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch("/api/betslip-recommendations/tier-accuracy");
+      if (!res.ok) throw new Error("Failed to fetch tier accuracy");
+      const data = await res.json();
+      setTierAccuracy(data);
+    } catch (err) {
+      console.error("Error fetching tier accuracy:", err);
+      setError("Failed to load system tier accuracy");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchTierAccuracy();
+  }, []);
 
   if (loading) {
     return (
       <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         <h3 className="text-lg font-bold text-white mb-4">
-          Prediction Accuracy Dashboard
+          System Recommendation Accuracy
         </h3>
         <div className="text-center py-8">
           <div className="text-4xl mb-4">⏳</div>
-          <p className="text-gray-300">Loading prediction accuracy data...</p>
+          <p className="text-gray-300">Loading accuracy data...</p>
         </div>
       </div>
     );
@@ -66,7 +43,7 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
     return (
       <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         <h3 className="text-lg font-bold text-white mb-4">
-          Prediction Accuracy Dashboard
+          System Recommendation Accuracy
         </h3>
         <div className="text-center py-8">
           <div className="text-4xl mb-4">❌</div>
@@ -76,91 +53,93 @@ const PredictionAccuracyTab = ({ getPredictionAccuracyMetrics }) => {
     );
   }
 
+  const { primary, secondary, tertiary, totalBets, gamesWithoutScores } = tierAccuracy || {};
+  const tiers = [
+    { label: "Primary", emoji: "🥇", ...primary, desc: "System's top recommendation" },
+    { label: "Secondary", emoji: "🥈", ...secondary, desc: "System's second choice" },
+    { label: "Tertiary", emoji: "🥉", ...tertiary, desc: "System's third choice" },
+  ];
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
-        Prediction Accuracy Dashboard
+        System Recommendation Accuracy
       </h3>
       <div className="text-gray-300 mb-6">
         <p>
-          Track how accurate the system's predictions are compared to actual
-          results. Data is sourced from database recommendations with analyzed
-          prediction accuracy.
+          How accurate is each tier of the system's recommendations? Each tier
+          is evaluated against the actual match outcome (scores). For example:
+          if Primary was "OVER 1.5" and the result was 1-1, Primary is correct.
+          If Tertiary was "Man Utd" and the result was draw, Tertiary is incorrect.
+        </p>
+        <p className="text-amber-200/80 text-sm mt-2">
+          Requirement: Add HOME_SCORE and AWAY_SCORE to Sheet1 and run Compare for accuracy to work.
         </p>
       </div>
 
-      {(() => {
-        return (
-          <div className="space-y-6">
-            {/* Overall Performance */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-2xl font-bold text-white">
-                  {metrics.totalPredictions}
-                </div>
-                <div className="text-gray-300 text-sm">Total Predictions</div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-2xl font-bold text-blue-400">
-                  {metrics.overallAccuracy.toFixed(1)}%
-                </div>
-                <div className="text-gray-300 text-sm">Overall Accuracy</div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-2xl font-bold text-green-400">
-                  {metrics.correctPredictions}
-                </div>
-                <div className="text-gray-300 text-sm">Correct Predictions</div>
-              </div>
+      {totalBets === 0 ? (
+        <div className="text-center py-8">
+          <div className="text-4xl mb-4">📊</div>
+          <h4 className="text-lg font-semibold text-white mb-2">
+            No Data Yet
+          </h4>
+          <p className="text-gray-300 mb-4">
+            Upload betslips from Bet Analysis, run Compare from Recommendation
+            Analysis to add results from Sheet1, then return here to see the
+            system's tier accuracy.
+          </p>
+          {tierAccuracy?.debug && (
+            <div className="mt-4 p-4 bg-black/20 rounded-lg text-left text-sm text-gray-400 max-w-xl mx-auto">
+              <p>Debug: {tierAccuracy.debug.rowsWithResult} rows have results. {tierAccuracy.debug.unmatchedRows?.length ?? 0} didn't match any tier.</p>
+              {tierAccuracy.debug.unmatchedRows?.length > 0 && (
+                <pre className="mt-2 text-xs overflow-auto">
+                  {JSON.stringify(tierAccuracy.debug.unmatchedRows, null, 2)}
+                </pre>
+              )}
             </div>
-
-            {/* Accuracy by Bet Type */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <h4 className="text-lg font-semibold text-white mb-4">
-                Accuracy by System Recommendation Type
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(metrics.byBetType).map(([betType, data]) => (
-                  <div key={betType} className="text-center">
-                    <div className="text-xl font-bold text-purple-400">
-                      {data.accuracy?.toFixed(1) || 0}%
-                    </div>
-                    <div className="text-gray-300 text-sm">
-                      {betType} ({data.total || 0} total)
-                    </div>
-                    <div className="text-yellow-400 text-xs">
-                      {data.pending || 0} pending
-                    </div>
-                  </div>
-                ))}
-              </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {tierAccuracy?.gamesWithoutScores?.length > 0 && (
+            <div className="p-3 bg-amber-500/10 rounded-lg text-amber-200 text-sm">
+              {tierAccuracy.gamesWithoutScores.length} game(s) skipped (no HOME_SCORE/AWAY_SCORE in Sheet1): {tierAccuracy.gamesWithoutScores.join(", ")}
             </div>
-
-            {metrics.totalPredictions === 0 && (
-              <div className="text-center py-8">
-                <div className="text-4xl mb-4">📊</div>
-                <h4 className="text-lg font-semibold text-white mb-2">
-                  No Prediction Data Yet
-                </h4>
-                <p className="text-gray-300">
-                  Run "Fetch & Analyze New Bets" to generate predictions and
-                  track their accuracy.
-                </p>
-              </div>
-            )}
-
-            {/* Refresh Button */}
-            <div className="text-center pt-4">
-              <button
-                onClick={forceRefresh}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {tiers.map((tier) => (
+              <div
+                key={tier.label}
+                className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20"
               >
-                🔄 Refresh Data
-              </button>
-            </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">{tier.emoji}</span>
+                  <h4 className="text-lg font-semibold text-white">
+                    {tier.label}
+                  </h4>
+                </div>
+                <p className="text-gray-400 text-xs mb-3">{tier.desc}</p>
+                <div className="text-3xl font-bold text-green-400">
+                  {tier.total > 0 ? tier.accuracy.toFixed(1) : "—"}%
+                </div>
+                <div className="text-gray-300 text-sm mt-1">
+                  {tier.correct} correct / {tier.total} bets
+                </div>
+              </div>
+            ))}
           </div>
-        );
-      })()}
+
+          <div className="flex justify-between items-center text-sm text-gray-400">
+            <span>Total bets tracked: {totalBets}</span>
+            <button
+              onClick={fetchTierAccuracy}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+            >
+              🔄 Refresh
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

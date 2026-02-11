@@ -828,6 +828,52 @@ app.post("/api/betslip-recommendations", async (req, res) => {
   }
 });
 
+// Evaluate if a recommendation was correct given actual scores (shared logic)
+// actualResult: optional string like "Home Win", "Away Win", "Draw" for when scores are missing
+function evaluateRecommendation(rec, homeTeam, awayTeam, homeScore, awayScore, actualResult) {
+  if (!rec || String(rec).trim() === "") return null;
+  const recLower = String(rec).toLowerCase();
+  const hasScores = homeScore != null && awayScore != null;
+  const total = (homeScore ?? 0) + (awayScore ?? 0);
+  const homeWon = (homeScore ?? 0) > (awayScore ?? 0);
+  const awayWon = (awayScore ?? 0) > (homeScore ?? 0);
+  const draw = hasScores && homeScore === awayScore;
+  const ar = String(actualResult || "").toLowerCase();
+  const isDrawFromResult = ar.includes("draw") && !ar.includes("win");
+  const isWinFromResult = ar.includes("win") && !ar.includes("draw");
+
+  // "No clear winner" = system abstained from a clear prediction; not evaluable, fall back to secondary/tertiary
+  if (recLower.includes("no clear")) return null;
+
+  const normalize = (v) => (v == null ? "" : String(v).trim().toLowerCase());
+  const normRec = (s) => normalize(s).replace(/\s+(to\s+)?win$/, "").replace(/\s+avoid$/, "").replace(/\s+fc\.?\s*$/i, "").trim();
+  const TEAM_ALIASES = { "man utd": "manchester united", "man united": "manchester united", "hearts": "heart of midlothian", "heart of midlothian": "heart of midlothian" };
+  const normTeam = (t) => TEAM_ALIASES[normRec(t)] ?? normRec(t);
+  const teamMatches = (recTeam, gameTeam) => {
+    const r = normTeam(recTeam);
+    const g = normTeam(gameTeam);
+    return r === g || g.includes(r) || r.includes(g);
+  };
+  const r = normRec(rec);
+  const overMatch = r.match(/over\s+([\d.]+)/);
+  if (overMatch) return hasScores ? total > parseFloat(overMatch[1]) : null;
+  const underMatch = r.match(/under\s+([\d.]+)/);
+  if (underMatch) return hasScores ? total < parseFloat(underMatch[1]) : null;
+  // "X or Draw" (double chance) ≠ "X to win" – different risk. Only correct when result is draw.
+  const orDrawMatch = r.match(/^(.+?)\s+or\s+draw$/);
+  if (orDrawMatch) {
+    const teamPart = orDrawMatch[1].trim();
+    if (teamMatches(teamPart, homeTeam) || teamMatches(teamPart, awayTeam)) {
+      const wasDraw = hasScores ? draw : (isDrawFromResult ? true : (isWinFromResult ? false : null));
+      return wasDraw;
+    }
+    return null;
+  }
+  if (teamMatches(rec, homeTeam)) return homeWon;
+  if (teamMatches(rec, awayTeam)) return awayWon;
+  return null;
+}
+
 // List saved betslips / games (optional ?bet_id= filter)
 app.get("/api/betslip-recommendations", async (req, res) => {
   try {
@@ -839,9 +885,96 @@ app.get("/api/betslip-recommendations", async (req, res) => {
       params.push(bet_id);
     }
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    const rows = result.rows.map((row) => {
+      const hs = row.actual_home_score != null ? Number(row.actual_home_score) : null;
+      const as = row.actual_away_score != null ? Number(row.actual_away_score) : null;
+      const primary = row.primary_recommendation ?? row.recommendation;
+      const evalRow = (rec) => evaluateRecommendation(rec, row.home_team, row.away_team, hs, as, row.actual_result);
+      const pCorrect = evalRow(primary);
+      const sCorrect = evalRow(row.secondary_recommendation);
+      const tCorrect = evalRow(row.tertiary_recommendation);
+      // Prioritize primary: if primary is evaluable, use it; else fall back to secondary, then tertiary
+      const systemCorrect = pCorrect !== null ? pCorrect : (sCorrect !== null ? sCorrect : tCorrect);
+      const systemKnown = pCorrect !== null || sCorrect !== null || tCorrect !== null;
+      return { ...row, system_primary_correct: pCorrect, system_secondary_correct: sCorrect, system_tertiary_correct: tCorrect, system_prediction_accurate: systemKnown ? systemCorrect : null };
+    });
+    res.json(rows);
   } catch (error) {
     console.error("Error fetching betslip recommendations:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Tier accuracy: Evaluate SYSTEM recommendations against actual match outcome (not user's bet)
+app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT date, home_team, away_team, primary_recommendation, secondary_recommendation, tertiary_recommendation, recommendation, actual_result, actual_home_score, actual_away_score
+       FROM betslip_recommendations
+       WHERE actual_result IS NOT NULL AND TRIM(actual_result) != ''`
+    );
+    const normalize = (v) => (v == null ? "" : String(v).trim().toLowerCase());
+    const normRec = (s) => normalize(s).replace(/\s+(to\s+)?win$/, "").replace(/\s+avoid$/, "").replace(/\s+fc\.?\s*$/i, "").trim();
+    const TEAM_ALIASES = { "man utd": "manchester united", "man united": "manchester united", "hearts": "heart of midlothian", "heart of midlothian": "heart of midlothian", "coleraine": "coleraine", "hibernian": "hibernian" };
+    const normTeam = (t) => TEAM_ALIASES[normRec(t)] ?? normRec(t);
+    const teamMatches = (recTeam, gameTeam) => {
+      const r = normTeam(recTeam);
+      const g = normTeam(gameTeam);
+      return r === g || g.includes(r) || r.includes(g);
+    };
+
+    // Dedupe by game (same game can appear on multiple betslips)
+    const gameKey = (r) => `${normRec(r.home_team)}|${normRec(r.away_team)}|${r.date}`;
+    const seen = new Set();
+    const games = result.rows.filter((r) => {
+      const k = gameKey(r);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    const tiers = { primary: { correct: 0, total: 0 }, secondary: { correct: 0, total: 0 }, tertiary: { correct: 0, total: 0 } };
+    const gamesWithoutScores = [];
+    for (const row of games) {
+      const hs = row.actual_home_score != null ? Number(row.actual_home_score) : null;
+      const as = row.actual_away_score != null ? Number(row.actual_away_score) : null;
+      const canEvaluate = (hs != null && as != null) || (row.actual_result && String(row.actual_result).trim() !== "");
+      if (!canEvaluate) {
+        gamesWithoutScores.push(`${row.home_team} vs ${row.away_team}`);
+        continue;
+      }
+      const primary = row.primary_recommendation ?? row.recommendation;
+      const pCorrect = evaluateRecommendation(primary, row.home_team, row.away_team, hs, as, row.actual_result);
+      const sCorrect = evaluateRecommendation(row.secondary_recommendation, row.home_team, row.away_team, hs, as, row.actual_result);
+      const tCorrect = evaluateRecommendation(row.tertiary_recommendation, row.home_team, row.away_team, hs, as, row.actual_result);
+
+      if (pCorrect !== null) {
+        tiers.primary.total++;
+        if (pCorrect) tiers.primary.correct++;
+      }
+      if (sCorrect !== null) {
+        tiers.secondary.total++;
+        if (sCorrect) tiers.secondary.correct++;
+      }
+      if (tCorrect !== null) {
+        tiers.tertiary.total++;
+        if (tCorrect) tiers.tertiary.correct++;
+      }
+    }
+
+    const primaryAcc = tiers.primary.total > 0 ? (tiers.primary.correct / tiers.primary.total) * 100 : 0;
+    const secondaryAcc = tiers.secondary.total > 0 ? (tiers.secondary.correct / tiers.secondary.total) * 100 : 0;
+    const tertiaryAcc = tiers.tertiary.total > 0 ? (tiers.tertiary.correct / tiers.tertiary.total) * 100 : 0;
+    const totalBets = tiers.primary.total + tiers.secondary.total + tiers.tertiary.total;
+    res.json({
+      primary: { correct: tiers.primary.correct, total: tiers.primary.total, accuracy: primaryAcc },
+      secondary: { correct: tiers.secondary.correct, total: tiers.secondary.total, accuracy: secondaryAcc },
+      tertiary: { correct: tiers.tertiary.correct, total: tiers.tertiary.total, accuracy: tertiaryAcc },
+      totalBets,
+      gamesWithoutScores: gamesWithoutScores.length > 0 ? gamesWithoutScores : undefined,
+    });
+  } catch (error) {
+    console.error("Error fetching tier accuracy:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -867,12 +1000,64 @@ app.post("/api/betslip-recommendations/compare", async (req, res) => {
       return res.status(400).json({ error: "Invalid request: need bet_id and results array" });
     }
     const rows = await pool.query(
-      `SELECT id, bet_id, country, league, bet_type, bet_selection, team_included FROM betslip_recommendations WHERE bet_id = $1`,
+      `SELECT id, bet_id, country, league, bet_type, bet_selection, team_included, home_team, away_team FROM betslip_recommendations WHERE bet_id = $1`,
       [bet_id]
     );
-    const normalize = (v) => (v == null ? "" : String(v).trim().toLowerCase());
+    const normalize = (v) => {
+      let s = (v == null ? "" : String(v).trim().toLowerCase().replace(/\s+/g, " "));
+      return s.replace(/\s+fc\.?\s*$/i, "").trim();
+    };
+    // Team name aliases for matching (Sheet1 may use abbreviations; DB may use full names)
+    const TEAM_ALIASES = {
+      "man utd": "manchester united",
+      "man united": "manchester united",
+      "man city": "manchester city",
+      "leeds": "leeds united",
+      "leeds united": "leeds united",
+      "west ham": "west ham united",
+      "west ham united": "west ham united",
+      "chelsea fc": "chelsea",
+      "chelsea": "chelsea",
+      "spurs": "tottenham hotspur",
+      "tottenham": "tottenham hotspur",
+      "liv": "liverpool",
+      "celtic glasgow": "celtic",
+      "celtic": "celtic",
+      "psg": "paris saint-germain",
+      "paris sg": "paris saint-germain",
+      "inter": "inter milan",
+      "inter milan": "inter milan",
+      "juve": "juventus turin",
+      "juventus": "juventus turin",
+      "rb leipzig": "rb leipzig",
+      "bayern": "bayern munich",
+      "bayern munich": "bayern munich",
+      "real madrid": "real madrid",
+      "barcelona": "fc barcelona",
+      "fc barcelona": "fc barcelona",
+      "sl benfica": "benfica",
+      "benfica": "benfica",
+      "sporting lisbon": "sporting cp",
+      "sporting cp": "sporting cp",
+      "fc porto": "porto",
+      "porto": "porto",
+      "livingston fc": "livingston",
+      "livingston": "livingston",
+      "heart of midlothian": "hearts",
+      "hibernian": "hibernian",
+      "hearts": "hearts",
+    };
+    const canonicalTeam = (name) => {
+      const n = normalize(name);
+      return TEAM_ALIASES[n] ?? n;
+    };
     const resultMap = new Map();
-    for (const row of results) {
+    const fallbackRows = []; // { home, away, result } from Sheet1 - match by iterating
+    const resultsByIndex = []; // [result|null, ...] - match by row position when Sheet1 and DB have same order
+    let rowsWithResult = 0;
+    let rowsWithHomeAway = 0;
+    for (let i = 0; i < results.length; i++) {
+      const row = results[i];
       const key = [
         normalize(row.country ?? row.COUNTRY),
         normalize(row.league ?? row.LEAGUE),
@@ -880,11 +1065,68 @@ app.post("/api/betslip-recommendations/compare", async (req, res) => {
         normalize(row.bet_selection ?? row.BET_SELECTION),
         normalize(row.team_included ?? row.TEAM_INCLUDED),
       ].join("|");
-      const resVal = row.result ?? row.RESULT ?? row.actual_result;
-      if (resVal !== undefined && resVal !== null) resultMap.set(key, String(resVal).trim());
+      const resVal = row.result ?? row.RESULT ?? row.actual_result ?? row.outcome ?? row["Win/Loss"];
+      const home = normalize(row.home_team ?? row.HOME_TEAM);
+      const away = normalize(row.away_team ?? row.AWAY_TEAM);
+      if (home || away) rowsWithHomeAway++;
+      const val = (resVal !== undefined && resVal !== null && String(resVal).trim() !== "") ? String(resVal).trim() : null;
+      const parseScore = (s) => { const n = parseInt(String(s || ""), 10); return isNaN(n) ? null : n; };
+      const hs = parseScore(row.home_score ?? row.HOME_SCORE);
+      const as = parseScore(row.away_score ?? row.AWAY_SCORE);
+      if (val) {
+        rowsWithResult++;
+        resultMap.set(key, { result: val, home_score: hs, away_score: as });
+        if (home || away) {
+          const h = canonicalTeam(row.home_team ?? row.HOME_TEAM);
+          const a = canonicalTeam(row.away_team ?? row.AWAY_TEAM);
+          fallbackRows.push({ home, away, result: val, home_score: hs, away_score: as });
+          fallbackRows.push({ home: h, away: a, result: val, home_score: hs, away_score: as });
+        }
+      }
+      resultsByIndex[i] = val ? { result: val, home_score: hs, away_score: as } : null;
     }
+    // Helper: find result + scores from fallbackRows by matching home|away
+    const findFallbackResult = (dbHome, dbAway) => {
+      const h = normalize(dbHome);
+      const a = normalize(dbAway);
+      const hc = canonicalTeam(dbHome);
+      const ac = canonicalTeam(dbAway);
+      for (const r of fallbackRows) {
+        if ((r.home === h && r.away === a) || (r.home === hc && r.away === ac) ||
+            (r.home === a && r.away === h) || (r.home === ac && r.away === hc)) {
+          return r;
+        }
+      }
+      return null;
+    };
+    // Debug: log first 2 Sheet1 keys and first 2 DB keys to diagnose matching
+    const sampleResults = results.slice(0, 2).map((r) => ({
+      home: r.home_team ?? r.HOME_TEAM,
+      away: r.away_team ?? r.AWAY_TEAM,
+      fallbackKey: `${normalize(r.home_team ?? r.HOME_TEAM)}|${normalize(r.away_team ?? r.AWAY_TEAM)}`,
+    }));
+    const sampleDb = rows.rows.slice(0, 2).map((r) => ({
+      home: r.home_team,
+      away: r.away_team,
+      fallbackKey: `${normalize(r.home_team)}|${normalize(r.away_team)}`,
+    }));
+    console.log("[Compare] Sample Sheet1 keys:", JSON.stringify(sampleResults));
+    console.log("[Compare] Sample DB keys:", JSON.stringify(sampleDb));
+    console.log("[Compare] FallbackRows size:", fallbackRows.length, "ResultMap size:", resultMap.size);
     let updated = 0;
-    for (const rec of rows.rows) {
+    const unmatched = [];
+    const matchTrace = [];
+    // Index match: when same count AND first row matches (validates same order)
+    const firstDbMatch = rows.rows.length > 0 && results.length > 0 && (() => {
+      const dbH = normalize(rows.rows[0].home_team);
+      const dbA = normalize(rows.rows[0].away_team);
+      const shH = normalize(results[0].home_team ?? results[0].HOME_TEAM);
+      const shA = normalize(results[0].away_team ?? results[0].AWAY_TEAM);
+      return (dbH === shH && dbA === shA) || (dbH === canonicalTeam(results[0].home_team ?? results[0].HOME_TEAM) && dbA === canonicalTeam(results[0].away_team ?? results[0].AWAY_TEAM));
+    })();
+    const useIndexMatch = results.length === rows.rows.length && firstDbMatch;
+    for (let i = 0; i < rows.rows.length; i++) {
+      const rec = rows.rows[i];
       const key = [
         normalize(rec.country),
         normalize(rec.league),
@@ -892,16 +1134,61 @@ app.post("/api/betslip-recommendations/compare", async (req, res) => {
         normalize(rec.bet_selection),
         normalize(rec.team_included),
       ].join("|");
-      const actualResult = resultMap.get(key);
+      let matchVal = resultMap.get(key);
+      if (!matchVal && rec.home_team && rec.away_team) {
+        matchVal = findFallbackResult(rec.home_team, rec.away_team);
+      }
+      if (!matchVal && useIndexMatch && resultsByIndex[i]) {
+        matchVal = resultsByIndex[i];
+      }
+      const actualResult = matchVal?.result ?? (typeof matchVal === "string" ? matchVal : null);
+      const actualHomeScore = matchVal?.home_score ?? null;
+      const actualAwayScore = matchVal?.away_score ?? null;
+      if (matchTrace.length < 5) {
+        matchTrace.push({
+          game: `${rec.home_team} vs ${rec.away_team}`,
+          dbNorm: `${normalize(rec.home_team)}|${normalize(rec.away_team)}`,
+          dbCanon: `${canonicalTeam(rec.home_team)}|${canonicalTeam(rec.away_team)}`,
+          found: !!actualResult,
+          byIndex: useIndexMatch && !!resultsByIndex[i],
+        });
+      }
+      if (!actualResult && rec.home_team && rec.away_team && unmatched.length < 5) {
+        unmatched.push({
+          game: `${rec.home_team} vs ${rec.away_team}`,
+          dbKey: `${normalize(rec.home_team)}|${normalize(rec.away_team)}`,
+          dbCanonKey: `${canonicalTeam(rec.home_team)}|${canonicalTeam(rec.away_team)}`,
+        });
+      }
       if (actualResult) {
         await pool.query(
-          `UPDATE betslip_recommendations SET actual_result = $1, result_updated_at = NOW(), updated_at = NOW() WHERE id = $2`,
-          [actualResult, rec.id]
+          `UPDATE betslip_recommendations SET actual_result = $1, actual_home_score = $2, actual_away_score = $3, result_updated_at = NOW(), updated_at = NOW() WHERE id = $4`,
+          [actualResult, actualHomeScore, actualAwayScore, rec.id]
         );
         updated++;
       }
     }
-    res.json({ success: true, bet_id, updated, total: rows.rows.length });
+    res.json({
+      success: true,
+      bet_id,
+      updated,
+      total: rows.rows.length,
+      debug: {
+        sampleSheet1: sampleResults,
+        sampleDb,
+        fallbackRowsSize: fallbackRows.length,
+        resultMapSize: resultMap.size,
+        rowsWithResult,
+        rowsWithHomeAway,
+        totalSheetRows: results.length,
+        useIndexMatch,
+        firstDbMatch,
+        resultsWithResultCount: resultsByIndex.filter(Boolean).length,
+        fallbackRowsSample: fallbackRows.slice(0, 8),
+        matchTrace,
+        unmatchedSample: unmatched,
+      },
+    });
   } catch (error) {
     console.error("Error comparing betslip recommendations:", error);
     res.status(500).json({ error: error.message });
@@ -923,6 +1210,7 @@ app.listen(PORT, () => {
   console.log(`  GET /api/recommendation-analysis - Get analysis results`);
   console.log(`  POST /api/betslip-recommendations - Save betslip (new flow)`);
   console.log(`  GET /api/betslip-recommendations - List games (?bet_id=)`);
+  console.log(`  GET /api/betslip-recommendations/tier-accuracy - Primary/Secondary/Tertiary accuracy`);
   console.log(`  GET /api/betslip-recommendations/bet-ids - List bet IDs`);
   console.log(`  POST /api/betslip-recommendations/compare - Compare with Sheet1 results`);
 });

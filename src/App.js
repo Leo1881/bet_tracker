@@ -5793,11 +5793,7 @@ function App() {
             />
           )}
 
-          {activeTab === "predictionAccuracy" && (
-            <PredictionAccuracyTab
-              getPredictionAccuracyMetrics={getPredictionAccuracyMetrics}
-            />
-          )}
+          {activeTab === "predictionAccuracy" && <PredictionAccuracyTab />}
 
           {activeTab === "recommendationAnalysis" && (
             <RecommendationAnalysisTab

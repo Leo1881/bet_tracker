@@ -32,21 +32,32 @@ const fetchFromGoogleSheets = async (range) => {
   }
 };
 
+// Find header row (in case row 0 is a title) - look for BET_ID, HOME_TEAM, or similar
+const findHeaderRow = (sheetsData) => {
+  const markers = ["bet_id", "home_team", "date", "country", "result"];
+  for (let i = 0; i < Math.min(5, sheetsData.length); i++) {
+    const row = sheetsData[i] || [];
+    const rowStr = row.map((c) => String(c || "").toLowerCase()).join("|");
+    if (markers.some((m) => rowStr.includes(m))) return i;
+  }
+  return 0;
+};
+
 // Helper function to convert Google Sheets data to the expected format
 const convertSheetsDataToBets = (sheetsData) => {
   if (!sheetsData || sheetsData.length === 0) return [];
 
-  const headers = sheetsData[0];
-  const dataRows = sheetsData.slice(1);
+  const headerRowIndex = findHeaderRow(sheetsData);
+  const headers = sheetsData[headerRowIndex];
+  const dataRows = sheetsData.slice(headerRowIndex + 1);
 
   return dataRows.map((row, index) => {
     const bet = {};
     headers.forEach((header, colIndex) => {
-      const value = row[colIndex] || "";
+      const value = row[colIndex] ?? "";
       bet[header] = value;
     });
 
-    // Add an id for consistency
     bet.id = index + 1;
 
     return bet;
