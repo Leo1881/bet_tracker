@@ -1177,6 +1177,34 @@ function App() {
     };
   };
 
+  // Calculate your overall league performance (all bets in that league regardless of team)
+  // Used to factor in whether you tend to do well or poorly when betting on a specific league
+  const getLeaguePerformance = (country, league) => {
+    if (!bets || bets.length === 0) return null;
+
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis;
+    const countryLower = (country || "").toLowerCase();
+    const leagueLower = (league || "").toLowerCase();
+    const leagueBets = deduplicatedBets.filter(
+      (b) =>
+        (b.COUNTRY || "").toLowerCase() === countryLower &&
+        (b.LEAGUE || "").toLowerCase() === leagueLower &&
+        b.RESULT &&
+        (b.RESULT.toLowerCase().includes("win") || b.RESULT.toLowerCase().includes("loss"))
+    );
+
+    if (leagueBets.length === 0) return null;
+
+    const wins = leagueBets.filter((b) => b.RESULT.toLowerCase().includes("win")).length;
+    const winRate = wins / leagueBets.length;
+
+    return {
+      winRate: winRate,
+      totalBets: leagueBets.length,
+      wins: wins,
+    };
+  };
+
   // Calculate data-driven multipliers based on historical bet type performance
   const calculateBetTypeMultipliers = () => {
     if (!bets || bets.length === 0) {
@@ -1845,6 +1873,17 @@ function App() {
           }
         }
 
+        // Factor in your overall league performance (do you tend to win/lose when betting on this league?)
+        const leaguePerformance = getLeaguePerformance(country, league);
+        if (leaguePerformance && leaguePerformance.totalBets >= 5) {
+          const leagueWinRate = leaguePerformance.winRate;
+          // Penalize poor league performance, slight boost for strong league performance
+          const leagueMultiplier = leagueWinRate >= 0.5
+            ? Math.min(1.08, 1.0 + (leagueWinRate - 0.5) * 0.4) // Up to 8% boost for 70%+ league win rate
+            : Math.max(0.8, 1.0 - (0.5 - leagueWinRate) * 0.6); // Up to 20% penalty for poor league performance
+          adjustedScore = adjustedScore * leagueMultiplier;
+        }
+
         return {
           ...betOption,
           adjustedScore: adjustedScore,
@@ -1947,6 +1986,8 @@ function App() {
       const proposedBetVerdict = getProposedBetVerdict(bet, bestBet, homeTeam, awayTeam);
       const proposedBetLabel = [bet.BET_TYPE, bet.BET_SELECTION].filter(Boolean).join(" – ") || bet.TEAM_INCLUDED || "";
 
+      const leaguePerformance = getLeaguePerformance(country, league);
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
@@ -1962,6 +2003,7 @@ function App() {
         recentFormData: recentFormData,
         proposedBetVerdict: proposedBetVerdict,
         proposedBetLabel: proposedBetLabel,
+        leaguePerformance: leaguePerformance,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
         doubleChance: doubleChanceRecommendation,

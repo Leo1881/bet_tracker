@@ -400,6 +400,11 @@ const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
                 <div>
                   <h4 className="text-lg font-bold text-white">{rec.match}</h4>
                   <p className="text-gray-400 text-sm mt-0.5">{rec.country} · {rec.league}</p>
+                  {rec.leaguePerformance && rec.leaguePerformance.totalBets >= 5 && (
+                    <p className={`text-xs mt-1 ${rec.leaguePerformance.winRate >= 0.5 ? "text-green-400" : rec.leaguePerformance.winRate >= 0.4 ? "text-amber-400" : "text-red-400"}`}>
+                      Your {rec.league} record: {(rec.leaguePerformance.winRate * 100).toFixed(0)}% ({rec.leaguePerformance.wins}W-{rec.leaguePerformance.totalBets - rec.leaguePerformance.wins}L)
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-baseline gap-4 text-sm">
                   <span className="text-blue-400 font-medium">{rec.confidence.toFixed(1)}%</span>
