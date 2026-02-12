@@ -414,54 +414,44 @@ function App() {
     return filtered;
   };
 
-  // Get stats for the filtered team (when team filter is set) - shows team's actual W/L record
+  // Stats cards: when team filter is set, stats show the filtered team's record.
+  // If user bet ON the filtered team: RESULT Win=team win, Loss=team loss.
+  // If user bet AGAINST them (TEAM_INCLUDED=opponent): RESULT Win=team loss, Loss=team win.
   const getFilteredTeamStats = () => {
     const filteredBets = getDeduplicatedFilteredBets();
     if (!filters.team) {
       const wins = filteredBets.filter((b) => b.RESULT?.toLowerCase().includes("win")).length;
       const losses = filteredBets.filter((b) => b.RESULT?.toLowerCase().includes("loss")).length;
-      const pending = filteredBets.filter((b) => !b.RESULT || b.RESULT.trim() === "").length;
+      const pending = filteredBets.filter((b) => !b.RESULT || b.RESULT.trim() === "" || (b.RESULT || "").toLowerCase().includes("unknown")).length;
       const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : "0.0";
       return { filteredBets, wins, losses, pending, winRate };
     }
 
-    const teamLower = filters.team.toLowerCase();
-    const inferHomeTeamWon = (b) => {
-      const userWon = b.RESULT?.toLowerCase().includes("win");
-      const homeName = (b.HOME_TEAM || "").toLowerCase().trim();
-      const awayName = (b.AWAY_TEAM || "").toLowerCase().trim();
-      const teamBet = (b.TEAM_INCLUDED || "").toLowerCase().trim();
-      const userBetOnHome = teamBet === homeName || homeName.includes(teamBet) || teamBet.includes(homeName);
-      const userBetOnAway = teamBet === awayName || awayName.includes(teamBet) || teamBet.includes(awayName);
-      if (userBetOnHome && !userBetOnAway) return userWon;
-      if (userBetOnAway && !userBetOnHome) return !userWon;
-      return false;
+    const teamLower = filters.team.toLowerCase().trim();
+    const teamMatches = (name) => {
+      const n = (name || "").toLowerCase().trim();
+      return n === teamLower || n.includes(teamLower) || teamLower.includes(n);
     };
-
-    const byGame = new Map();
-    filteredBets.forEach((b) => {
-      const key = `${b.DATE || ""}_${b.HOME_TEAM || ""}_${b.AWAY_TEAM || ""}_${b.COUNTRY || ""}_${b.LEAGUE || ""}`;
-      if (!byGame.has(key)) byGame.set(key, b);
-    });
-    const uniqueGames = Array.from(byGame.values());
 
     let wins = 0;
     let losses = 0;
     let pending = 0;
-    uniqueGames.forEach((b) => {
-      if (!b.RESULT || b.RESULT.trim() === "" || (!b.RESULT.toLowerCase().includes("win") && !b.RESULT.toLowerCase().includes("loss"))) {
+    filteredBets.forEach((b) => {
+      const r = (b.RESULT || "").toLowerCase().trim();
+      if (!r || r === "" || r.includes("unknown")) {
         pending++;
         return;
       }
-      const homeName = (b.HOME_TEAM || "").toLowerCase().trim();
-      const filteredTeamIsHome = teamLower === homeName || homeName.includes(teamLower) || teamLower.includes(homeName);
-      const homeWon = inferHomeTeamWon(b);
-      if (filteredTeamIsHome) {
-        wins += homeWon ? 1 : 0;
-        losses += homeWon ? 0 : 1;
+      const userWon = r.includes("win");
+      const userLost = r.includes("loss");
+      const userBetOnFilteredTeam = teamMatches(b.TEAM_INCLUDED);
+
+      if (userBetOnFilteredTeam) {
+        wins += userWon ? 1 : 0;
+        losses += userLost ? 1 : 0;
       } else {
-        wins += homeWon ? 0 : 1;
-        losses += homeWon ? 1 : 0;
+        wins += userLost ? 1 : 0;
+        losses += userWon ? 1 : 0;
       }
     });
 
