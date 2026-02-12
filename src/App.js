@@ -2279,7 +2279,7 @@ function App() {
     );
 
     // Fallback: if no home/away specific data, use general team data
-    const homeTeamBets = homeTeamHomeBets.length > 0 
+    const homeTeamBetsRaw = homeTeamHomeBets.length > 0 
       ? homeTeamHomeBets 
       : (bets || []).filter(
           (b) =>
@@ -2291,7 +2291,7 @@ function App() {
             b.RESULT.trim() !== ""
         );
 
-    const awayTeamBets = awayTeamAwayBets.length > 0
+    const awayTeamBetsRaw = awayTeamAwayBets.length > 0
       ? awayTeamAwayBets
       : (bets || []).filter(
           (b) =>
@@ -2302,6 +2302,19 @@ function App() {
             b.RESULT &&
             b.RESULT.trim() !== ""
         );
+
+    // Deduplicate by game (one row per DATE + HOME_TEAM + AWAY_TEAM) to avoid inflated counts
+    const deduplicateByGame = (betsList) => {
+      const byGame = new Map();
+      betsList.forEach((b) => {
+        const key = `${b.DATE || ""}_${b.HOME_TEAM || ""}_${b.AWAY_TEAM || ""}_${b.COUNTRY || ""}_${b.LEAGUE || ""}`;
+        if (!byGame.has(key)) byGame.set(key, b);
+      });
+      return Array.from(byGame.values());
+    };
+
+    const homeTeamBets = deduplicateByGame(homeTeamBetsRaw);
+    const awayTeamBets = deduplicateByGame(awayTeamBetsRaw);
 
     // Infer actual match result from TEAM_INCLUDED + RESULT (not user's win rate)
     const inferHomeTeamWon = (b) => {
