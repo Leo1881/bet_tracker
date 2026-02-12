@@ -2303,16 +2303,24 @@ function App() {
             b.RESULT.trim() !== ""
         );
 
-    // Calculate wins and totals
-    const homeWins = homeTeamBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
-    ).length;
+    // Infer actual match result from TEAM_INCLUDED + RESULT (not user's win rate)
+    const inferHomeTeamWon = (b) => {
+      const userWon = b.RESULT?.toLowerCase().includes("win");
+      const homeName = (b.HOME_TEAM || "").toLowerCase().trim();
+      const awayName = (b.AWAY_TEAM || "").toLowerCase().trim();
+      const teamBet = (b.TEAM_INCLUDED || "").toLowerCase().trim();
+      const userBetOnHome = teamBet === homeName || homeName.includes(teamBet) || teamBet.includes(homeName);
+      const userBetOnAway = teamBet === awayName || awayName.includes(teamBet) || teamBet.includes(awayName);
+      if (userBetOnHome && !userBetOnAway) return userWon;
+      if (userBetOnAway && !userBetOnHome) return !userWon;
+      return false;
+    };
+
+    const homeWins = homeTeamBets.filter((b) => inferHomeTeamWon(b)).length;
     const homeTotal = homeTeamBets.length;
     const homeWinRate = homeTotal > 0 ? (homeWins / homeTotal) * 100 : 0;
 
-    const awayWins = awayTeamBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
-    ).length;
+    const awayWins = awayTeamBets.filter((b) => !inferHomeTeamWon(b)).length;
     const awayTotal = awayTeamBets.length;
     const awayWinRate = awayTotal > 0 ? (awayWins / awayTotal) * 100 : 0;
 
