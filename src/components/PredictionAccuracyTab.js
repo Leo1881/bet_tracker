@@ -53,7 +53,7 @@ const PredictionAccuracyTab = () => {
     );
   }
 
-  const { primary, secondary, tertiary, totalBets, gamesWithoutScores } = tierAccuracy || {};
+  const { primary, secondary, tertiary, totalBets } = tierAccuracy || {};
   const tiers = [
     { label: "Primary", emoji: "🥇", ...primary, desc: "System's top recommendation" },
     { label: "Secondary", emoji: "🥈", ...secondary, desc: "System's second choice" },

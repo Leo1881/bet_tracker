@@ -583,6 +583,7 @@ function App() {
   };
 
   // Get prediction accuracy metrics from database recommendations
+  // eslint-disable-next-line no-unused-vars
   const getPredictionAccuracyMetrics = async () => {
     try {
       // Fetch database recommendations
