@@ -348,16 +348,12 @@ function App() {
     let filtered = [...deduplicatedBets];
 
     if (filters.team) {
+      const teamLower = filters.team.toLowerCase();
       filtered = filtered.filter(
         (bet) =>
-          // Only filter by TEAM_INCLUDED - this is the team you bet on/for
-          // HOME_TEAM/AWAY_TEAM are just the match participants, not necessarily the team you bet on
-          bet.TEAM_INCLUDED?.toLowerCase() === filters.team.toLowerCase() ||
-          // Fallback: if TEAM_INCLUDED is missing, check HOME_TEAM/AWAY_TEAM
-          (!bet.TEAM_INCLUDED && (
-            bet.HOME_TEAM?.toLowerCase() === filters.team.toLowerCase() ||
-            bet.AWAY_TEAM?.toLowerCase() === filters.team.toLowerCase()
-          ))
+          bet.TEAM_INCLUDED?.toLowerCase() === teamLower ||
+          bet.HOME_TEAM?.toLowerCase() === teamLower ||
+          bet.AWAY_TEAM?.toLowerCase() === teamLower
       );
     }
 
@@ -418,6 +414,61 @@ function App() {
     return filtered;
   };
 
+  // Get stats for the filtered team (when team filter is set) - shows team's actual W/L record
+  const getFilteredTeamStats = () => {
+    const filteredBets = getDeduplicatedFilteredBets();
+    if (!filters.team) {
+      const wins = filteredBets.filter((b) => b.RESULT?.toLowerCase().includes("win")).length;
+      const losses = filteredBets.filter((b) => b.RESULT?.toLowerCase().includes("loss")).length;
+      const pending = filteredBets.filter((b) => !b.RESULT || b.RESULT.trim() === "").length;
+      const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : "0.0";
+      return { filteredBets, wins, losses, pending, winRate };
+    }
+
+    const teamLower = filters.team.toLowerCase();
+    const inferHomeTeamWon = (b) => {
+      const userWon = b.RESULT?.toLowerCase().includes("win");
+      const homeName = (b.HOME_TEAM || "").toLowerCase().trim();
+      const awayName = (b.AWAY_TEAM || "").toLowerCase().trim();
+      const teamBet = (b.TEAM_INCLUDED || "").toLowerCase().trim();
+      const userBetOnHome = teamBet === homeName || homeName.includes(teamBet) || teamBet.includes(homeName);
+      const userBetOnAway = teamBet === awayName || awayName.includes(teamBet) || teamBet.includes(awayName);
+      if (userBetOnHome && !userBetOnAway) return userWon;
+      if (userBetOnAway && !userBetOnHome) return !userWon;
+      return false;
+    };
+
+    const byGame = new Map();
+    filteredBets.forEach((b) => {
+      const key = `${b.DATE || ""}_${b.HOME_TEAM || ""}_${b.AWAY_TEAM || ""}_${b.COUNTRY || ""}_${b.LEAGUE || ""}`;
+      if (!byGame.has(key)) byGame.set(key, b);
+    });
+    const uniqueGames = Array.from(byGame.values());
+
+    let wins = 0;
+    let losses = 0;
+    let pending = 0;
+    uniqueGames.forEach((b) => {
+      if (!b.RESULT || b.RESULT.trim() === "" || (!b.RESULT.toLowerCase().includes("win") && !b.RESULT.toLowerCase().includes("loss"))) {
+        pending++;
+        return;
+      }
+      const homeName = (b.HOME_TEAM || "").toLowerCase().trim();
+      const filteredTeamIsHome = teamLower === homeName || homeName.includes(teamLower) || teamLower.includes(homeName);
+      const homeWon = inferHomeTeamWon(b);
+      if (filteredTeamIsHome) {
+        wins += homeWon ? 1 : 0;
+        losses += homeWon ? 0 : 1;
+      } else {
+        wins += homeWon ? 0 : 1;
+        losses += homeWon ? 1 : 0;
+      }
+    });
+
+    const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : "0.0";
+    return { filteredBets, wins, losses, pending, winRate };
+  };
+
   // eslint-disable-next-line no-unused-vars
   const isTeamBlacklisted = (teamName) => {
     if (!teamName || !blacklistedTeams.length) return false;
@@ -441,7 +492,18 @@ function App() {
 
   const getUniqueValues = (field, context = {}) => {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis;
-    let values = deduplicatedBets.map((bet) => bet[field]).filter(Boolean);
+    let values;
+
+    if (field === "TEAM_INCLUDED") {
+      // Include all teams: bet on (TEAM_INCLUDED), home team, away team
+      values = deduplicatedBets.flatMap((bet) => [
+        bet.TEAM_INCLUDED,
+        bet.HOME_TEAM,
+        bet.AWAY_TEAM,
+      ]).filter(Boolean);
+    } else {
+      values = deduplicatedBets.map((bet) => bet[field]).filter(Boolean);
+    }
 
     // Apply context filtering
     if (context.country && field === "LEAGUE") {
@@ -3309,7 +3371,6 @@ function App() {
   const {
     getStatusColorClass,
     formatDateString,
-    calculateWinPercentageForBets,
     storePredictionsData,
     storeRecommendationsData,
   } = useUtility(bets, blacklistedTeams, storedPredictions);
@@ -4944,51 +5005,44 @@ function App() {
           </h1>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-            <div className="text-2xl font-bold text-white">
-              {getDeduplicatedFilteredBets().length}
+        {/* Stats Cards - when team filter is set, Wins/Losses/Win Rate show the team's record */}
+        {(() => {
+          const stats = getFilteredTeamStats();
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6 mb-6 md:mb-8">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-2xl font-bold text-white">
+                  {stats.filteredBets.length}
+                </div>
+                <div className="text-gray-300">Filtered Bets</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-2xl font-bold text-green-400">
+                  {stats.wins}
+                </div>
+                <div className="text-gray-300">Wins</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-2xl font-bold text-red-400">
+                  {stats.losses}
+                </div>
+                <div className="text-gray-300">Losses</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-2xl font-bold text-yellow-400">
+                  {stats.pending}
+                </div>
+                <div className="text-gray-300">Pending</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20 col-span-2 md:col-span-1">
+                <div className="text-2xl font-bold text-blue-400">
+                  {stats.winRate}%
+                </div>
+                <div className="text-gray-300">Win Rate</div>
+              </div>
             </div>
-            <div className="text-gray-300">Filtered Bets</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-            <div className="text-2xl font-bold text-green-400">
-              {
-                getDeduplicatedFilteredBets().filter((bet) =>
-                  bet.RESULT?.toLowerCase().includes("win")
-                ).length
-              }
-            </div>
-            <div className="text-gray-300">Wins</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-            <div className="text-2xl font-bold text-red-400">
-              {
-                getDeduplicatedFilteredBets().filter((bet) =>
-                  bet.RESULT?.toLowerCase().includes("loss")
-                ).length
-              }
-            </div>
-            <div className="text-gray-300">Losses</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-            <div className="text-2xl font-bold text-yellow-400">
-              {
-                getDeduplicatedFilteredBets().filter(
-                  (bet) => !bet.RESULT || bet.RESULT.trim() === ""
-                ).length
-              }
-            </div>
-            <div className="text-gray-300">Pending</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20 col-span-2 md:col-span-1">
-            <div className="text-2xl font-bold text-blue-400">
-              {calculateWinPercentageForBets(getDeduplicatedFilteredBets())}%
-            </div>
-            <div className="text-gray-300">Win Rate</div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Analytics Cards */}
         {(() => {
