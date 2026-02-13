@@ -38,9 +38,20 @@ const RecommendationsTab = ({
   const [filterRisk, setFilterRisk] = useState("all"); // all, high, medium, low
   const [filterHasAvoid, setFilterHasAvoid] = useState("all"); // all, yes, no
   const [filterTicketReady, setFilterTicketReady] = useState(false);
-  const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "scoring"
+  const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "scoring" | "list"
   const [scoringSortKey, setScoringSortKey] = useState("avgGoalsScored");
   const [scoringSortOrder, setScoringSortOrder] = useState("desc");
+  const [listSortKey, setListSortKey] = useState("confidence"); // match, league, topPick, type, confidence, odds
+  const [listSortOrder, setListSortOrder] = useState("desc");
+
+  const handleListSort = (key) => {
+    if (listSortKey === key) {
+      setListSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setListSortKey(key);
+      setListSortOrder(["match", "league", "topPick", "type"].includes(key) ? "asc" : "desc");
+    }
+  };
 
   const handleScoringSort = (key) => {
     if (scoringSortKey === key) {
@@ -186,6 +197,49 @@ const RecommendationsTab = ({
     return filtered;
   }, [betRecommendations, sortBy, sortOrder, filterConfidence, filterRisk, filterHasAvoid, filterTicketReady]);
 
+  // Sorted list for List tab (clickable column headers)
+  const sortedListRecommendations = useMemo(() => {
+    const list = [...filteredAndSortedRecommendations];
+    const dir = listSortOrder === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      const topA = a.bestBet || a.primary;
+      const topB = b.bestBet || b.primary;
+      let aVal, bVal;
+      if (listSortKey === "match") {
+        aVal = (a.match || "").toLowerCase();
+        bVal = (b.match || "").toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (listSortKey === "league") {
+        aVal = `${a.country || ""} ${a.league || ""}`.toLowerCase();
+        bVal = `${b.country || ""} ${b.league || ""}`.toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (listSortKey === "topPick") {
+        aVal = (topA?.recommendation?.bet ?? "").toLowerCase();
+        bVal = (topB?.recommendation?.bet ?? "").toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (listSortKey === "type") {
+        aVal = (topA?.type ?? "").toLowerCase();
+        bVal = (topB?.type ?? "").toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (listSortKey === "confidence") {
+        aVal = topA?.recommendation?.confidence ?? a.confidence ?? 0;
+        bVal = topB?.recommendation?.confidence ?? b.confidence ?? 0;
+        return dir * (aVal - bVal);
+      }
+      if (listSortKey === "odds") {
+        aVal = parseFloat(a.odds) || 0;
+        bVal = parseFloat(b.odds) || 0;
+        return dir * (aVal - bVal);
+      }
+      return 0;
+    });
+    return list;
+  }, [filteredAndSortedRecommendations, listSortKey, listSortOrder]);
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
@@ -234,7 +288,7 @@ const RecommendationsTab = ({
         )}
       </div>
 
-      {/* Sub-tabs: Recommendations | Scoring */}
+      {/* Sub-tabs: Recommendations | List | Scoring */}
       <div className="flex gap-2 mb-6 border-b border-white/20 pb-2">
         <button
           type="button"
@@ -249,6 +303,17 @@ const RecommendationsTab = ({
         </button>
         <button
           type="button"
+          onClick={() => setSubTab("list")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            subTab === "list"
+              ? "bg-blue-500 text-white"
+              : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
+          }`}
+        >
+          List
+        </button>
+        <button
+          type="button"
           onClick={() => setSubTab("scoring")}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             subTab === "scoring"
@@ -260,7 +325,157 @@ const RecommendationsTab = ({
         </button>
       </div>
 
-      {subTab === "scoring" ? (
+      {subTab === "list" ? (
+        <div className="space-y-4">
+          {/* Filter bar for list view */}
+          {betRecommendations.length > 0 && (
+            <div className="mb-5 bg-white/5 rounded-lg px-4 py-3 border border-white/10">
+              <div className="flex flex-wrap items-end gap-3">
+                {setRecommendationSortPreference && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-gray-400 text-xs whitespace-nowrap">Which 50 games</label>
+                    <select
+                      value={recommendationSortPreference}
+                      onChange={(e) => setRecommendationSortPreference(e.target.value)}
+                      className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
+                    >
+                      <option value="confidence">Top 50 by confidence</option>
+                      <option value="league_mix">League mix</option>
+                    </select>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-400 text-xs whitespace-nowrap">Sort</label>
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20">
+                    <option value="confidence">Confidence</option>
+                    <option value="odds">Odds</option>
+                    <option value="risk">Risk</option>
+                  </select>
+                  <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20">
+                    <option value="desc">↓</option>
+                    <option value="asc">↑</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-400 text-xs whitespace-nowrap">Confidence</label>
+                  <select value={filterConfidence} onChange={(e) => setFilterConfidence(e.target.value)} className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20">
+                    <option value="all">All</option>
+                    <option value="high">High (≥70%)</option>
+                    <option value="medium">Medium (50–69%)</option>
+                    <option value="low">Low (&lt;50%)</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-400 text-xs whitespace-nowrap">Risk</label>
+                  <select value={filterRisk} onChange={(e) => setFilterRisk(e.target.value)} className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20">
+                    <option value="all">All</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-1.5 text-gray-400 text-xs cursor-pointer">
+                  <input type="checkbox" checked={filterTicketReady} onChange={(e) => setFilterTicketReady(e.target.checked)} className="rounded" />
+                  Ticket-ready only
+                </label>
+              </div>
+            </div>
+          )}
+          {betRecommendations.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-white/20">
+                  <tr>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleListSort("match")}
+                    >
+                      <span className="flex items-center gap-1">
+                        Match
+                        {listSortKey === "match" && (listSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleListSort("league")}
+                    >
+                      <span className="flex items-center gap-1">
+                        League
+                        {listSortKey === "league" && (listSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleListSort("topPick")}
+                    >
+                      <span className="flex items-center gap-1">
+                        Top Pick
+                        {listSortKey === "topPick" && (listSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-gray-400 font-semibold text-xs cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleListSort("type")}
+                    >
+                      <span className="flex items-center gap-1">
+                        Type
+                        {listSortKey === "type" && (listSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-right text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleListSort("confidence")}
+                    >
+                      <span className="flex items-center gap-1 justify-end">
+                        Confidence
+                        {listSortKey === "confidence" && (listSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-right text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleListSort("odds")}
+                    >
+                      <span className="flex items-center gap-1 justify-end">
+                        Odds
+                        {listSortKey === "odds" && (listSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {sortedListRecommendations.map((rec, idx) => {
+                    const top = rec.bestBet || rec.primary;
+                    const pick = top?.recommendation?.bet ?? "—";
+                    const conf = top?.recommendation?.confidence ?? rec.confidence ?? 0;
+                    const betType = top?.type ?? "—";
+                    const isAvoid = pick === "AVOID" || pick === "No clear winner" || pick === "No clear trend";
+                    return (
+                      <tr key={idx} className="hover:bg-white/5">
+                        <td className="px-4 py-2 text-white font-medium">{rec.match}</td>
+                        <td className="px-4 py-2 text-gray-300">{rec.country} · {rec.league}</td>
+                        <td className={`px-4 py-2 font-medium ${isAvoid ? "text-red-400" : "text-green-400"}`}>
+                          {pick}
+                        </td>
+                        <td className="px-4 py-2 text-gray-400 text-sm">{betType}</td>
+                        <td className="px-4 py-2 text-right text-blue-300 font-mono">
+                          {typeof conf === "number" ? `${conf.toFixed(1)}%` : conf}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-400">{rec.odds}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
+              <p className="text-gray-400">
+                No recommendations yet. Run &quot;Fetch &amp; Analyze New Bets&quot; in the Bet Analysis tab first.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : subTab === "scoring" ? (
         <div className="space-y-4">
           <p className="text-gray-400 text-sm">
             <strong className="text-white">Only teams from your uploaded games.</strong> Shown where average goals scored is 2+. Run &quot;Analyze Scoring Patterns&quot; in Scoring Analysis if empty.
