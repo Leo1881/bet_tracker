@@ -2070,6 +2070,21 @@ function App() {
 
       const leaguePerformance = getLeaguePerformance(country, league);
 
+      // Odds based on recommended team: ODDS1 = home, ODDS2 = away, fallback for Over/Under/AVOID
+      const displayOdds = (() => {
+        const teamForBet = bestBet?.teamForBet;
+        const h = (homeTeam || "").toLowerCase();
+        const a = (awayTeam || "").toLowerCase();
+        const t = (teamForBet || "").toLowerCase();
+        if (teamForBet && (h.includes(t) || t.includes(h))) {
+          return parseFloat(bet.ODDS1) || 2.0;
+        }
+        if (teamForBet && (a.includes(t) || t.includes(a))) {
+          return parseFloat(bet.ODDS2) || 2.0;
+        }
+        return odds; // Fallback for Over/Under, AVOID, etc: use ODDS1
+      })();
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
@@ -2080,7 +2095,7 @@ function App() {
         secondary: secondary,
         tertiary: tertiary,
         confidence: confidence,
-        odds: odds,
+        odds: displayOdds,
         recommendationScore: recommendationScore,
         recentFormData: recentFormData,
         proposedBetVerdict: proposedBetVerdict,
