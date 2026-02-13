@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { fetchSheetData } from "../utils/fetchSheetData";
+import { debugLog } from "../utils/debug";
 
 // Flexible lookup for Sheet1 row keys (handles Country, HOME_TEAM, Home Team, etc.)
 const getRowVal = (row, ...keys) => {
@@ -58,16 +59,16 @@ const RecommendationAnalysisTab = ({
           const recommendations = await response.json();
 
           // Debug: Log what we got from the database
-          console.log("Fetched recommendations for betslip:", selectedBetslip);
-          console.log("Number of recommendations:", recommendations.length);
+          debugLog("Fetched recommendations for betslip:", selectedBetslip);
+          debugLog("Number of recommendations:", recommendations.length);
           if (recommendations.length > 0) {
-            console.log("First recommendation:", recommendations[0]);
-            console.log(
+            debugLog("First recommendation:", recommendations[0]);
+            debugLog(
               "prediction_accurate:",
               recommendations[0].prediction_accurate
             );
-            console.log("actual_result:", recommendations[0].actual_result);
-            console.log("bet_type from API:", recommendations[0].bet_type);
+            debugLog("actual_result:", recommendations[0].actual_result);
+            debugLog("bet_type from API:", recommendations[0].bet_type);
           }
 
           // Map betslip_recommendations rows to the format expected by the UI
@@ -132,8 +133,8 @@ const RecommendationAnalysisTab = ({
             pending: matched.filter((m) => m.analysis.isPending).length,
           };
 
-          console.log("Final analysis counts:", analysis);
-          console.log(
+          debugLog("Final analysis counts:", analysis);
+          debugLog(
             "Sample matches:",
             matched.slice(0, 3).map((m) => ({
               game: `${m.home_team} vs ${m.away_team}`,
@@ -173,7 +174,7 @@ const RecommendationAnalysisTab = ({
       }
       // Debug: log Sheet1 column names and sample of first 3 rows being sent
       if (rowsForBet.length > 0) {
-        console.log("[Compare] Sheet1 column names:", Object.keys(rowsForBet[0]));
+        debugLog("[Compare] Sheet1 column names:", Object.keys(rowsForBet[0]));
         const sample = rowsForBet.slice(0, 3).map((row) => {
           let home = getRowVal(row, "HOME_TEAM", "home_team", "Home Team");
           let away = getRowVal(row, "AWAY_TEAM", "away_team", "Away Team");
@@ -188,7 +189,7 @@ const RecommendationAnalysisTab = ({
           const result = getRowVal(row, "RESULT", "result", "Result", "Win/Loss", "Outcome", "Actual Result", "actual_result");
           return { home, away, result };
         });
-        console.log("[Compare] First 3 rows payload sample:", JSON.stringify(sample, null, 2));
+        debugLog("[Compare] First 3 rows payload sample:", JSON.stringify(sample, null, 2));
       }
       const res = await fetch("/api/betslip-recommendations/compare", {
         method: "POST",
@@ -228,13 +229,13 @@ const RecommendationAnalysisTab = ({
       }
       const data = await res.json();
       console.group("%c[Compare] API Response - expand to see debug", "color: #00ff00; font-size: 14px; font-weight: bold");
-      console.log("Updated:", data.updated, "/ Total:", data.total);
+      debugLog("Updated:", data.updated, "/ Total:", data.total);
       if (data.debug) {
         if (data.debug.matchTrace?.length) {
           console.table(data.debug.matchTrace);
         }
-        console.log("Fallback rows from Sheet1:", data.debug.fallbackRowsSample);
-        console.log("Full debug object:", data.debug);
+        debugLog("Fallback rows from Sheet1:", data.debug.fallbackRowsSample);
+        debugLog("Full debug object:", data.debug);
       } else {
         console.warn("No debug in API response");
       }
@@ -263,7 +264,7 @@ const RecommendationAnalysisTab = ({
 
           // Convert stored recommendations to the format expected by the UI
           const matched = recommendations.map((rec) => {
-            console.log(
+            debugLog(
               `Processing recommendation: ${rec.home_team} vs ${rec.away_team}, actual_result: "${rec.actual_result}"`
             );
             // Determine if the prediction was correct
@@ -279,7 +280,7 @@ const RecommendationAnalysisTab = ({
             if (!rec.actual_result || rec.actual_result.trim() === "") {
               isPending = true;
               isCorrect = false; // Pending results are neither correct nor wrong
-              console.log(
+              debugLog(
                 `Game: ${rec.home_team} vs ${rec.away_team} - PENDING (no actual_result)`
               );
             } else if (effectiveAccurateBool) {
@@ -457,25 +458,25 @@ const RecommendationAnalysisTab = ({
       const hasActualResults = storedResults.matched.some(
         (match) => match.actual_result && match.actual_result.trim() !== ""
       );
-      console.log(`isBetslipAnalyzed: hasActualResults = ${hasActualResults}`);
-      console.log(`storedResults.matched sample:`, storedResults.matched[0]);
-      console.log(
+      debugLog(`isBetslipAnalyzed: hasActualResults = ${hasActualResults}`);
+      debugLog(`storedResults.matched sample:`, storedResults.matched[0]);
+      debugLog(
         `actual_result value:`,
         storedResults.matched[0].actual_result
       );
-      console.log(
+      debugLog(
         `actual_result type:`,
         typeof storedResults.matched[0].actual_result
       );
-      console.log(
+      debugLog(
         `actual_result === null:`,
         storedResults.matched[0].actual_result === null
       );
 
       // Check all records to see which ones have actual_result
-      console.log(`Checking all ${storedResults.matched.length} records:`);
+      debugLog(`Checking all ${storedResults.matched.length} records:`);
       storedResults.matched.forEach((match, index) => {
-        console.log(
+        debugLog(
           `Record ${index}: actual_result = "${
             match.actual_result
           }" (type: ${typeof match.actual_result})`

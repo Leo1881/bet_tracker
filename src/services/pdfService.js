@@ -2,6 +2,7 @@
  * PDF Service
  * Handles PDF report generation for betting analysis
  */
+import { debugLog } from "../utils/debug";
 
 /**
  * Generate PDF report from analysis results
@@ -120,18 +121,18 @@ export const generatePDFReport = async (
         : null;
 
       // Debug: Log the recommendation structure and matching process
-      console.log("Looking for match:", `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`);
-      console.log(
+      debugLog("Looking for match:", `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`);
+      debugLog(
         "Available recommendations:",
         betRecommendations.map((r) => r.match)
       );
       if (matchingRec) {
-        console.log("Found matching recommendation:", matchingRec);
-        console.log("Primary:", matchingRec.primary);
-        console.log("Secondary:", matchingRec.secondary);
-        console.log("Tertiary:", matchingRec.tertiary);
+        debugLog("Found matching recommendation:", matchingRec);
+        debugLog("Primary:", matchingRec.primary);
+        debugLog("Secondary:", matchingRec.secondary);
+        debugLog("Tertiary:", matchingRec.tertiary);
       } else {
-        console.log("No matching recommendation found");
+        debugLog("No matching recommendation found");
       }
 
       // Primary Recommendation

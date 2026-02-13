@@ -62,6 +62,7 @@ export const useAppState = () => {
     key: null,
     direction: "asc",
   });
+  const [recommendationSortPreference, setRecommendationSortPreference] = useState("confidence"); // "confidence" | "league_mix"
 
   // Filters state
   const [filters, setFilters] = useState({
@@ -271,6 +272,8 @@ export const useAppState = () => {
     setSlipsSortConfig,
     teamNotesSortConfig,
     setTeamNotesSortConfig,
+    recommendationSortPreference,
+    setRecommendationSortPreference,
 
     // Filters state
     filters,

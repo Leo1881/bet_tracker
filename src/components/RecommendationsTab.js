@@ -26,7 +26,12 @@ const hasAnyTicketReady = (rec) =>
 
 const HIGH_SCORING_THRESHOLD = 2; // 2 or higher
 
-const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
+const RecommendationsTab = ({
+  betRecommendations,
+  scoringAnalysis = [],
+  recommendationSortPreference = "confidence",
+  setRecommendationSortPreference,
+}) => {
   const [sortBy, setSortBy] = useState("confidence"); // confidence, odds, risk
   const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
   const [filterConfidence, setFilterConfidence] = useState("all"); // all, high, medium, low
@@ -209,9 +214,24 @@ const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
           </li>
         </ul>
         <p className="mt-2">
-          Run "Fetch & Analyze New Bets" in the Bet Analysis tab to generate
+          Run &quot;Fetch &amp; Analyze New Bets&quot; in the Bet Analysis tab to generate
           recommendations.
         </p>
+        {setRecommendationSortPreference && (
+          <div className="mt-3 flex items-center gap-2">
+            <label className="text-gray-400 text-sm">Which 50 games:</label>
+            <select
+              value={recommendationSortPreference}
+              onChange={(e) => setRecommendationSortPreference(e.target.value)}
+              className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
+              title="Applies when you run Fetch &amp; Analyze New Bets"
+            >
+              <option value="confidence">Top 50 by confidence</option>
+              <option value="league_mix">League mix</option>
+            </select>
+            <span className="text-gray-500 text-xs">(applies on next Analyze)</span>
+          </div>
+        )}
       </div>
 
       {/* Sub-tabs: Recommendations | Scoring */}
@@ -314,6 +334,22 @@ const RecommendationsTab = ({ betRecommendations, scoringAnalysis = [] }) => {
       {betRecommendations.length > 0 && (
         <div className="mb-5 bg-white/5 rounded-lg px-4 py-3 border border-white/10">
           <div className="flex flex-wrap items-end gap-3">
+            {setRecommendationSortPreference && (
+              <div className="flex items-center gap-2">
+                <label className="text-gray-400 text-xs whitespace-nowrap" title="Applies when you run Fetch &amp; Analyze New Bets">
+                  Which 50 games
+                </label>
+                <select
+                  value={recommendationSortPreference}
+                  onChange={(e) => setRecommendationSortPreference(e.target.value)}
+                  className="bg-white/20 text-white text-sm rounded-md px-2 py-1.5 border border-white/20"
+                  title="Applies when you run Fetch &amp; Analyze New Bets"
+                >
+                  <option value="confidence">Top 50 by confidence</option>
+                  <option value="league_mix">League mix</option>
+                </select>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <label className="text-gray-400 text-xs whitespace-nowrap">Sort</label>
               <select

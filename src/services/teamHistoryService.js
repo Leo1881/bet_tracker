@@ -2,6 +2,7 @@
  * Team History Service
  * Handles team performance analysis, confidence calculations, and historical data processing
  */
+import { debugLog } from "../utils/debug";
 
 /**
  * Calculates team confidence based on historical performance using statistical confidence intervals
@@ -376,8 +377,8 @@ export const calculateRecentFormConfidence = (bet) => {
   let wins, draws, losses;
 
   // Debug: Log available properties in bet object
-  console.log("Available bet properties:", Object.keys(bet));
-  console.log("Recent form data found:", {
+  debugLog("Available bet properties:", Object.keys(bet));
+  debugLog("Recent form data found:", {
     LAST_5_WINS_HOME: bet.LAST_5_WINS_HOME,
     LAST_5_DRAWS_HOME: bet.LAST_5_DRAWS_HOME,
     LAST_5_LOSSES_HOME: bet.LAST_5_LOSSES_HOME,
@@ -400,7 +401,7 @@ export const calculateRecentFormConfidence = (bet) => {
 
   // If no recent form data available, return neutral score
   if (totalGames === 0) {
-    console.log("No recent form data available, returning neutral score");
+    debugLog("No recent form data available, returning neutral score");
     return 50;
   }
 
@@ -415,7 +416,7 @@ export const calculateRecentFormConfidence = (bet) => {
     confidence = Math.max(30, confidence - sampleSizePenalty);
   }
 
-  console.log(
+  debugLog(
     `Recent form for ${
       isBettingOnHomeTeam ? bet.home_team : bet.away_team
     }: ${wins}W-${draws}D-${losses}L (${recentFormScore.toFixed(
@@ -469,7 +470,7 @@ export const calculateMomentumConfidence = (teamName, bets) => {
     Math.max(10, (normalizedMomentum + 1) * 45 + 10)
   );
 
-  console.log(
+  debugLog(
     `Momentum calculation for ${teamName}: raw=${momentum.toFixed(
       2
     )}, normalized=${normalizedMomentum.toFixed(2)} → ${momentumConfidence.toFixed(1)}%`
@@ -566,8 +567,8 @@ const calculateDynamicWeights = (confidenceBreakdown, betType) => {
  * @returns {number} Overall confidence probability (0-100%)
  */
 export const calculateConfidenceScore = (bet) => {
-  console.log(`=== CALCULATING CONFIDENCE FOR: ${bet.team_included} ===`);
-  console.log(`Bet object:`, bet);
+  debugLog(`=== CALCULATING CONFIDENCE FOR: ${bet.team_included} ===`);
+  debugLog(`Bet object:`, bet);
 
   const teamConfidence = calculateTeamConfidence(
     bet.team_included,
@@ -653,7 +654,7 @@ export const calculateConfidenceScore = (bet) => {
 
   const finalScore = Math.round(weightedScore * 10) / 10;
 
-  console.log(`Confidence breakdown:`, {
+  debugLog(`Confidence breakdown:`, {
     team: teamConfidence.toFixed(1) + '%',
     recentForm: recentFormConfidence.toFixed(1) + '%',
     momentum: momentumConfidence.toFixed(1) + '%',
@@ -665,7 +666,7 @@ export const calculateConfidenceScore = (bet) => {
     final: finalScore.toFixed(1) + '%',
   });
 
-  console.log(`Dynamic weights applied:`, weights);
+  debugLog(`Dynamic weights applied:`, weights);
 
   return Math.min(100, Math.max(10, finalScore));
 };

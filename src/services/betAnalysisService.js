@@ -1,5 +1,6 @@
 import { calculateProbabilities } from "../utils/mathUtils";
 import { getPositionGapIndicator } from "./teamHistoryService";
+import { debugLog } from "../utils/debug";
 
 /**
  * Analyze new bets and generate recommendations
@@ -31,27 +32,27 @@ export const analyzeNewBets = async (
   storeRecommendations,
   analyzeScoringPatterns
 ) => {
-  console.log("=== STARTING BET ANALYSIS ===");
+  debugLog("=== STARTING BET ANALYSIS ===");
   try {
     // First, run scoring analysis to get historical scoring patterns
-    console.log("About to call analyzeScoringPatterns...");
+    debugLog("About to call analyzeScoringPatterns...");
     let scoringData = [];
     try {
       scoringData = await analyzeScoringPatterns();
-      console.log("analyzeScoringPatterns completed successfully");
-      console.log("Scoring data returned:", scoringData.length, "teams");
+      debugLog("analyzeScoringPatterns completed successfully");
+      debugLog("Scoring data returned:", scoringData.length, "teams");
     } catch (scoringError) {
       console.error("Error in analyzeScoringPatterns:", scoringError);
     }
 
     if (!newBets || newBets.length === 0) {
-      console.log("No new bets found or fetch failed");
+      debugLog("No new bets found or fetch failed");
       return { results: [], recommendations: [] };
     }
 
     // Deduplicate new bets to avoid counting multiple tickets for the same game
     const deduplicatedNewBets = getDeduplicatedNewBets(newBets);
-    console.log(
+    debugLog(
       `Original new bets: ${newBets.length}, Deduplicated: ${deduplicatedNewBets.length}`
     );
 
@@ -59,8 +60,8 @@ export const analyzeNewBets = async (
     const results = deduplicatedNewBets.map((newBet) => {
       // Debug: Check if BET_ID is in the newBet object
       if (deduplicatedNewBets.indexOf(newBet) === 0) {
-        console.log("First newBet object:", newBet);
-        console.log("BET_ID in newBet:", newBet.BET_ID);
+        debugLog("First newBet object:", newBet);
+        debugLog("BET_ID in newBet:", newBet.BET_ID);
       }
 
       const teamName = newBet.TEAM_INCLUDED;
@@ -159,7 +160,7 @@ export const analyzeNewBets = async (
       );
 
       // Calculate confidence score
-      console.log("ABOUT TO CALL calculateConfidenceScore for:", teamName);
+      debugLog("ABOUT TO CALL calculateConfidenceScore for:", teamName);
       const confidenceScore = calculateConfidence({
         team_included: teamName || "",
         country: country || "",
@@ -235,7 +236,7 @@ export const analyzeNewBets = async (
       }
 
       // Debug logging
-      console.log(
+      debugLog(
         `Bet: ${teamName} - Confidence: ${confidenceScore} - Recommendation: ${recommendation}`
       );
 
@@ -381,7 +382,7 @@ export const analyzeScoringPatterns = async (
   setScoringAnalysis,
   setScoringAnalysisLoading
 ) => {
-  console.log("=== STARTING SCORING ANALYSIS ===");
+  debugLog("=== STARTING SCORING ANALYSIS ===");
   try {
     setScoringAnalysisLoading(true);
 
@@ -398,17 +399,17 @@ export const analyzeScoringPatterns = async (
           bet.RESULT.toLowerCase().includes("loss"))
     );
 
-    console.log("Total bets:", (bets || []).length);
-    console.log("Sample bet fields:", Object.keys((bets || [])[0] || {}));
-    console.log(
+    debugLog("Total bets:", (bets || []).length);
+    debugLog("Sample bet fields:", Object.keys((bets || [])[0] || {}));
+    debugLog(
       "Sample bet with result:",
       (bets || []).find((bet) => bet.RESULT && bet.RESULT.trim() !== "")
     );
-    console.log("Completed bets with scores:", completedBetsWithScores.length);
-    console.log("Sample completed bet:", completedBetsWithScores[0]);
+    debugLog("Completed bets with scores:", completedBetsWithScores.length);
+    debugLog("Sample completed bet:", completedBetsWithScores[0]);
 
     if (completedBetsWithScores.length === 0) {
-      console.log("No completed bets with scores found!");
+      debugLog("No completed bets with scores found!");
       setScoringAnalysis([]);
       return [];
     }
@@ -453,7 +454,7 @@ export const analyzeScoringPatterns = async (
       }
     });
 
-    console.log(
+    debugLog(
       "Unique games found:",
       uniqueGames.size,
       "out of",
@@ -607,11 +608,11 @@ export const analyzeScoringPatterns = async (
       }))
       .sort((a, b) => parseFloat(b.avgGoals) - parseFloat(a.avgGoals)); // Sort by average goals descending
 
-    console.log("Scoring analysis results:", analysisResults);
-    console.log("Sample team stats:", analysisResults[0]);
+    debugLog("Scoring analysis results:", analysisResults);
+    debugLog("Sample team stats:", analysisResults[0]);
 
     setScoringAnalysis(analysisResults);
-    console.log("=== SCORING ANALYSIS COMPLETE ===");
+    debugLog("=== SCORING ANALYSIS COMPLETE ===");
     return analysisResults; // Return the results directly
   } catch (error) {
     console.error("Error analyzing scoring patterns:", error);
@@ -671,10 +672,10 @@ export const getScoringRecommendation = (
 ) => {
   if (!homeTeam || !awayTeam) return null;
 
-  console.log(
+  debugLog(
     `Getting ADVANCED scoring recommendation for ${homeTeam} vs ${awayTeam} in ${homeLeague}`
   );
-  console.log(
+  debugLog(
     "Available advanced scoring analysis:",
     scoringData.length,
     "teams"
@@ -682,9 +683,9 @@ export const getScoringRecommendation = (
   
   // Debug: Log if teams are found
   if (scoringData.length > 0) {
-    console.log("Sample scoring data structure:", scoringData[0]);
-    console.log("Looking for home team:", homeTeam, "in league:", homeLeague);
-    console.log("Looking for away team:", awayTeam, "in league:", awayLeague);
+    debugLog("Sample scoring data structure:", scoringData[0]);
+    debugLog("Looking for home team:", homeTeam, "in league:", homeLeague);
+    debugLog("Looking for away team:", awayTeam, "in league:", awayLeague);
   }
 
   // Find team stats with exact matching
@@ -789,13 +790,13 @@ export const getScoringRecommendation = (
   const awayData = getTeamData(awayStats, awayLeagueAvg);
   
   // Debug: Log what data we have
-  console.log("Home team data:", {
+  debugLog("Home team data:", {
     found: !!homeStats,
     totalGames: homeData.totalGames,
     avgGoalsScored: homeData.avgGoalsScored,
     avgGoals: homeData.avgGoals
   });
-  console.log("Away team data:", {
+  debugLog("Away team data:", {
     found: !!awayStats,
     totalGames: awayData.totalGames,
     avgGoalsScored: awayData.avgGoalsScored,
@@ -1063,7 +1064,7 @@ export const getScoringRecommendation = (
     allRecommendations: recommendations,
   };
 
-  console.log("Advanced scoring recommendation:", bestRecommendation);
+  debugLog("Advanced scoring recommendation:", bestRecommendation);
   return bestRecommendation;
 };
 

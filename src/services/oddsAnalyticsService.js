@@ -2,6 +2,7 @@
  * Odds Analytics Service
  * Handles odds analysis and calculations
  */
+import { debugLog } from "../utils/debug";
 
 /**
  * Analyzes odds patterns and ranges
@@ -13,7 +14,7 @@ export const getOddsAnalytics = (deduplicatedBets) => {
     return [];
   }
 
-  console.log("Total deduplicated bets to analyze:", deduplicatedBets.length);
+  debugLog("Total deduplicated bets to analyze:", deduplicatedBets.length);
 
   // Look specifically for Algeria record
   const algeriaBet = deduplicatedBets.find(
@@ -22,11 +23,11 @@ export const getOddsAnalytics = (deduplicatedBets) => {
       bet.AWAY_TEAM?.includes("Algeria") ||
       bet.TEAM_INCLUDED?.includes("Algeria")
   );
-  console.log("Algeria bet found:", algeriaBet);
+  debugLog("Algeria bet found:", algeriaBet);
 
   if (algeriaBet) {
-    console.log("Algeria bet ODDS1:", algeriaBet.ODDS1);
-    console.log("Algeria bet ODDS2:", algeriaBet.ODDS2);
+    debugLog("Algeria bet ODDS1:", algeriaBet.ODDS1);
+    debugLog("Algeria bet ODDS2:", algeriaBet.ODDS2);
 
     // Test the odds calculation for Algeria
     const algeriaOdds1 = parseFloat(algeriaBet.ODDS1) || 0;
@@ -35,7 +36,7 @@ export const getOddsAnalytics = (deduplicatedBets) => {
       algeriaOdds1 > 0 && algeriaOdds2 > 0
         ? (algeriaOdds1 + algeriaOdds2) / 2
         : Math.max(algeriaOdds1, algeriaOdds2);
-    console.log("Algeria average odds:", algeriaAvgOdds);
+    debugLog("Algeria average odds:", algeriaAvgOdds);
   }
 
   const oddsRanges = {};
@@ -96,7 +97,7 @@ export const getOddsAnalytics = (deduplicatedBets) => {
     }))
     .sort((a, b) => parseFloat(a.avgOdds) - parseFloat(b.avgOdds));
 
-  console.log("Odds analytics result:", result);
+  debugLog("Odds analytics result:", result);
   return result;
 };
 
