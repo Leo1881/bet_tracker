@@ -5,6 +5,7 @@ import {
   getBestPerformers,
   getHeadToHeadData,
   getTopTeams,
+  getNewStatsCards,
 } from "../services/analyticsService";
 
 /**
@@ -40,11 +41,17 @@ export const useAnalyticsFunctions = (deduplicatedBets) => {
     return getTopTeams(deduplicatedBets);
   }, [deduplicatedBets]);
 
+  // Get new stats cards (current form, best bet type, longest streak, leagues to avoid)
+  const getNewStatsCardsData = useCallback(() => {
+    return getNewStatsCards(deduplicatedBets);
+  }, [deduplicatedBets]);
+
   return {
     getLeagueAnalytics: getLeagueAnalyticsData,
     getCountryAnalytics: getCountryAnalyticsData,
     getBestPerformers: getBestPerformersData,
     getHeadToHeadData: getHeadToHeadDataData,
     getTopTeams: getTopTeamsData,
+    getNewStatsCards: getNewStatsCardsData,
   };
 };

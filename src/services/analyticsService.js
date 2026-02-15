@@ -135,6 +135,99 @@ export const getCountryAnalytics = (deduplicatedBets) => {
 };
 
 /**
+ * Map raw BET_TYPE to display category for stats
+ * @param {string} betType - Raw bet type from data
+ * @returns {string} Display category
+ */
+const mapBetTypeToCategory = (betType) => {
+  const t = (betType || "").toLowerCase();
+  if (t.includes("double chance")) return "Double Chance";
+  if (t.includes("over") || t.includes("under")) return "Over/Under";
+  if (t.includes("win") || t === "" || !t) return "Straight Win";
+  return betType || "Other";
+};
+
+/**
+ * Get new stats cards: current form, best bet type, longest win streak, leagues to avoid
+ * @param {Array} deduplicatedBets - Array of deduplicated bets
+ * @returns {Object} Stats for the 4 new cards
+ */
+export const getNewStatsCards = (deduplicatedBets) => {
+  const betsWithResult = (deduplicatedBets || []).filter(
+    (b) => b.RESULT && (b.RESULT.toLowerCase().includes("win") || b.RESULT.toLowerCase().includes("loss"))
+  );
+
+  // 1. Current form - last 20 bets, win rate
+  const last20 = [...betsWithResult]
+    .sort((a, b) => new Date(b.DATE) - new Date(a.DATE))
+    .slice(0, 20);
+  const currentFormWins = last20.filter((b) => b.RESULT?.toLowerCase().includes("win")).length;
+  const currentForm = {
+    winRate: last20.length > 0 ? ((currentFormWins / last20.length) * 100).toFixed(1) : 0,
+    sampleSize: last20.length,
+  };
+
+  // 2. Best bet type - group by category, min 5 bets, highest win rate
+  const betTypeGroups = {};
+  betsWithResult.forEach((bet) => {
+    const cat = mapBetTypeToCategory(bet.BET_TYPE);
+    if (!betTypeGroups[cat]) betTypeGroups[cat] = { wins: 0, total: 0 };
+    betTypeGroups[cat].total++;
+    if (bet.RESULT?.toLowerCase().includes("win")) betTypeGroups[cat].wins++;
+  });
+  const bestBetType = Object.entries(betTypeGroups)
+    .filter(([, s]) => s.total >= 5)
+    .map(([name, s]) => ({
+      name,
+      winRate: ((s.wins / s.total) * 100).toFixed(1),
+      total: s.total,
+    }))
+    .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate))[0] || null;
+
+  // 3. Longest win streak - bets sorted by date
+  const sortedByDate = [...betsWithResult].sort((a, b) => new Date(a.DATE) - new Date(b.DATE));
+  let maxStreak = 0;
+  let currentStreak = 0;
+  sortedByDate.forEach((bet) => {
+    if (bet.RESULT?.toLowerCase().includes("win")) {
+      currentStreak++;
+      maxStreak = Math.max(maxStreak, currentStreak);
+    } else {
+      currentStreak = 0;
+    }
+  });
+
+  // 4. League to avoid - worst league by win rate (min 5 bets); highlight if <40%
+  const leagueStats = {};
+  betsWithResult.forEach((bet) => {
+    const key = `${bet.LEAGUE || "Unknown"} (${bet.COUNTRY || "Unknown"})`;
+    if (!leagueStats[key]) leagueStats[key] = { wins: 0, total: 0, league: bet.LEAGUE, country: bet.COUNTRY };
+    leagueStats[key].total++;
+    if (bet.RESULT?.toLowerCase().includes("win")) leagueStats[key].wins++;
+  });
+  const allLeagues = Object.entries(leagueStats)
+    .filter(([, s]) => s.total >= 5)
+    .map(([key, s]) => ({
+      leagueDisplay: key,
+      league: s.league,
+      country: s.country,
+      winRate: ((s.wins / s.total) * 100).toFixed(1),
+      total: s.total,
+      isAvoid: (s.wins / s.total) * 100 < 40,
+    }))
+    .sort((a, b) => parseFloat(a.winRate) - parseFloat(b.winRate));
+
+  const leaguesToAvoid = allLeagues[0] || null;
+
+  return {
+    currentForm,
+    bestBetType,
+    longestWinStreak: maxStreak,
+    leaguesToAvoid,
+  };
+};
+
+/**
  * Get best performers across leagues and countries
  * @param {Array} leagueAnalytics - Array of league analytics data
  * @param {Array} countryAnalytics - Array of country analytics data

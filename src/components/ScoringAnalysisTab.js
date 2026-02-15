@@ -227,27 +227,61 @@ const ScoringAnalysisTab = ({
     return filtered
       .sort((a, b) => {
         let aValue, bValue;
+        const aView = getViewModeData(a);
+        const bView = getViewModeData(b);
+        const aLeague = getLeagueStats(a);
+        const bLeague = getLeagueStats(b);
 
         switch (sortConfig.key) {
+          case "team":
+            aValue = (a.team || "").toLowerCase();
+            bValue = (b.team || "").toLowerCase();
+            const teamCompare = aValue.localeCompare(bValue);
+            return sortConfig.direction === "asc" ? teamCompare : -teamCompare;
+          case "league":
+            aValue = `${a.country || ""} - ${a.league || ""}`.toLowerCase();
+            bValue = `${b.country || ""} - ${b.league || ""}`.toLowerCase();
+            const leagueCompare = aValue.localeCompare(bValue);
+            return sortConfig.direction === "asc" ? leagueCompare : -leagueCompare;
+          case "confidence":
+            aValue = aView.totalGames;
+            bValue = bView.totalGames;
+            break;
           case "totalGames":
-            aValue = a.totalGames;
-            bValue = b.totalGames;
+            aValue = aView.totalGames;
+            bValue = bView.totalGames;
             break;
           case "avgGoals":
-            aValue = parseFloat(a.avgGoals);
-            bValue = parseFloat(b.avgGoals);
+            aValue = parseFloat(aView.avgGoals) || 0;
+            bValue = parseFloat(bView.avgGoals) || 0;
+            break;
+          case "avgGoalsScored":
+            aValue = parseFloat(aView.avgGoalsScored) || 0;
+            bValue = parseFloat(bView.avgGoalsScored) || 0;
+            break;
+          case "avgConceded":
+            aValue = parseFloat(aView.avgConceded) ?? -1;
+            bValue = parseFloat(bView.avgConceded) ?? -1;
             break;
           case "over1_5Rate":
-            aValue = parseFloat(a.over1_5Rate);
-            bValue = parseFloat(b.over1_5Rate);
+            aValue = parseFloat(aView.over1_5Rate) || 0;
+            bValue = parseFloat(bView.over1_5Rate) || 0;
             break;
           case "over2_5Rate":
-            aValue = parseFloat(a.over2_5Rate);
-            bValue = parseFloat(b.over2_5Rate);
+            aValue = parseFloat(aView.over2_5Rate) || 0;
+            bValue = parseFloat(bView.over2_5Rate) || 0;
             break;
           case "over3_5Rate":
-            aValue = parseFloat(a.over3_5Rate);
-            bValue = parseFloat(b.over3_5Rate);
+            aValue = parseFloat(aView.over3_5Rate) || 0;
+            bValue = parseFloat(bView.over3_5Rate) || 0;
+            break;
+          case "leagueAvg":
+            aValue = parseFloat(aLeague.leagueAvg) || 0;
+            bValue = parseFloat(bLeague.leagueAvg) || 0;
+            break;
+          case "leagueRank":
+            aValue = aLeague.leagueRank || 999;
+            bValue = bLeague.leagueRank || 999;
             break;
           default:
             return 0;
@@ -532,14 +566,44 @@ const ScoringAnalysisTab = ({
             <table className="w-full">
               <thead className="bg-white/20">
                 <tr>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Team
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("team")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Team</span>
+                      {sortConfig.key === "team" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    League
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("league")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>League</span>
+                      {sortConfig.key === "league" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Confidence
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("confidence")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Confidence</span>
+                      {sortConfig.key === "confidence" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
                   <th
                     className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
@@ -567,11 +631,31 @@ const ScoringAnalysisTab = ({
                       )}
                     </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Scored Avg
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("avgGoalsScored")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Scored Avg</span>
+                      {sortConfig.key === "avgGoalsScored" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    Conceded Avg
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("avgConceded")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Conceded Avg</span>
+                      {sortConfig.key === "avgConceded" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
                   <th
                     className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
@@ -612,11 +696,31 @@ const ScoringAnalysisTab = ({
                       )}
                     </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    League Avg O1.5
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("leagueAvg")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>League Avg O1.5</span>
+                      {sortConfig.key === "leagueAvg" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-4 py-2 text-left text-white font-semibold">
-                    League Rank
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("leagueRank")}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>League Rank</span>
+                      {sortConfig.key === "leagueRank" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
                   </th>
                 </tr>
               </thead>

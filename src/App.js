@@ -3480,6 +3480,7 @@ function App() {
     getBestPerformers: getBestPerformersService,
     getHeadToHeadData: getHeadToHeadDataService,
     getTopTeams: getTopTeamsService,
+    getNewStatsCards: getNewStatsCardsService,
   } = useAnalyticsFunctions(getDeduplicatedBetsForAnalysis);
 
   // Query system functions - using service functions
@@ -3534,6 +3535,10 @@ function App() {
 
   const getBestPerformers = () => {
     return getBestPerformersService();
+  };
+
+  const getNewStatsCards = () => {
+    return getNewStatsCardsService();
   };
 
   // Get best team for the currently filtered league/country
@@ -5089,7 +5094,7 @@ function App() {
 
         {/* Analytics Cards */}
         {(() => {
-          const performers = getBestPerformers();
+          const newStats = getNewStatsCards();
           const bestTeamForLeague = getBestTeamForFilteredLeague();
           const showBestTeam = bestTeamForLeague !== null;
           
@@ -5097,39 +5102,43 @@ function App() {
             <div className={`grid grid-cols-2 md:grid-cols-2 ${showBestTeam ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 md:gap-6 mb-6`}>
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
                 <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
-                  Best League
+                  Current Form
                 </div>
                 <div className="text-lg md:text-2xl font-bold text-white">
-                  {performers.bestLeague.leagueDisplay ||
-                    performers.bestLeague.league ||
-                    "N/A"}
+                  {newStats.currentForm.sampleSize > 0
+                    ? `${newStats.currentForm.winRate}%`
+                    : "—"}
                 </div>
                 <div className="text-xs md:text-sm text-gray-300">
-                  {performers.bestLeague.winRate || 0}% Win Rate
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
-                <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
-                  Best Country
-                </div>
-                <div className="text-lg md:text-2xl font-bold text-white">
-                  {performers.bestCountry.country || "N/A"}
-                </div>
-                <div className="text-xs md:text-sm text-gray-300">
-                  {performers.bestCountry.winRate || 0}% Win Rate
+                  Last {newStats.currentForm.sampleSize} bets
                 </div>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
                 <div className="text-sm md:text-lg font-bold text-blue-400 mb-1 md:mb-2">
-                  Most Bets
+                  Best Bet Type
                 </div>
                 <div className="text-lg md:text-2xl font-bold text-white">
-                  {performers.mostBetsLeague.leagueDisplay ||
-                    performers.mostBetsLeague.league ||
-                    "N/A"}
+                  {newStats.bestBetType
+                    ? newStats.bestBetType.name
+                    : "—"}
                 </div>
                 <div className="text-xs md:text-sm text-gray-300">
-                  {performers.mostBetsLeague.total || 0} Bets
+                  {newStats.bestBetType
+                    ? `${newStats.bestBetType.winRate}% (${newStats.bestBetType.total} bets)`
+                    : "Need 5+ bets per type"}
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
+                <div className="text-sm md:text-lg font-bold text-yellow-400 mb-1 md:mb-2">
+                  Longest Win Streak
+                </div>
+                <div className="text-lg md:text-2xl font-bold text-white">
+                  {newStats.longestWinStreak > 0
+                    ? `${newStats.longestWinStreak} wins`
+                    : "—"}
+                </div>
+                <div className="text-xs md:text-sm text-gray-300">
+                  Best consecutive wins
                 </div>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
@@ -5137,12 +5146,14 @@ function App() {
                   Worst League
                 </div>
                 <div className="text-lg md:text-2xl font-bold text-white">
-                  {performers.worstLeague.leagueDisplay ||
-                    performers.worstLeague.league ||
-                    "N/A"}
+                  {newStats.leaguesToAvoid
+                    ? newStats.leaguesToAvoid.leagueDisplay
+                    : "—"}
                 </div>
                 <div className="text-xs md:text-sm text-gray-300">
-                  {performers.worstLeague.winRate || 0}% Win Rate
+                  {newStats.leaguesToAvoid
+                    ? `${newStats.leaguesToAvoid.winRate}% (${newStats.leaguesToAvoid.total} bets)${newStats.leaguesToAvoid.isAvoid ? " · Avoid" : ""}`
+                    : "Need 5+ bets in a league"}
                 </div>
               </div>
               {/* 5th card: Best Team for filtered league - only shows when filters are active */}
