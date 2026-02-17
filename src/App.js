@@ -1,4 +1,4 @@
-import Reacanges, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { fetchNewBets, fetchSheetData } from "./utils/fetchSheetData";
 import { applyFilters } from "./utils/dataProcessingUtils";
 import { useAppState } from "./hooks/useAppState";
