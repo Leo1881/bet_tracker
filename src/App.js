@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import Reacanges, { useEffect, useState, useCallback } from "react";
 import { fetchNewBets, fetchSheetData } from "./utils/fetchSheetData";
 import { applyFilters } from "./utils/dataProcessingUtils";
 import { useAppState } from "./hooks/useAppState";
@@ -19,7 +19,7 @@ import {
   getBetsForOddsRange as getBetsForOddsRangeService,
   getTeamOddsAnalytics as getTeamOddsAnalyticsService,
 } from "./services/oddsAnalyticsService";
-import { debugLog } from "./utils/debug";
+import { debugLog, debugVerdictLog } from "./utils/debug";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -184,7 +184,7 @@ function App() {
       setTeamNotesSortConfig,
       setAnalyticsSortConfig,
       setScoringSortConfig,
-    }
+    },
   );
 
   const getSortedLeagueDataLocal = () => {
@@ -217,7 +217,7 @@ function App() {
       slipsData,
       slipsSortConfig,
       filters.status,
-      showCompletedSlips
+      showCompletedSlips,
     );
   };
 
@@ -279,7 +279,7 @@ function App() {
       }
       setExpandedAnalyticsTeams(newExpanded);
     },
-    [expandedAnalyticsTeams, setExpandedAnalyticsTeams]
+    [expandedAnalyticsTeams, setExpandedAnalyticsTeams],
   );
 
   // Get deduplicated bets for team performance analytics
@@ -320,7 +320,7 @@ function App() {
 
     const result = Array.from(uniqueBets.values());
     debugLog(
-      `Deduplication: ${bets.length} original bets -> ${result.length} unique bets`
+      `Deduplication: ${bets.length} original bets -> ${result.length} unique bets`,
     );
     return result;
   };
@@ -356,39 +356,39 @@ function App() {
         (bet) =>
           bet.TEAM_INCLUDED?.toLowerCase() === teamLower ||
           bet.HOME_TEAM?.toLowerCase() === teamLower ||
-          bet.AWAY_TEAM?.toLowerCase() === teamLower
+          bet.AWAY_TEAM?.toLowerCase() === teamLower,
       );
     }
 
     if (filters.betType) {
       filtered = filtered.filter((bet) =>
-        bet.BET_TYPE?.toLowerCase().includes(filters.betType.toLowerCase())
+        bet.BET_TYPE?.toLowerCase().includes(filters.betType.toLowerCase()),
       );
     }
 
     if (filters.betSelection) {
       filtered = filtered.filter((bet) =>
         bet.BET_SELECTION?.toLowerCase().includes(
-          filters.betSelection.toLowerCase()
-        )
+          filters.betSelection.toLowerCase(),
+        ),
       );
     }
 
     if (filters.country) {
       filtered = filtered.filter((bet) =>
-        bet.COUNTRY?.toLowerCase().includes(filters.country.toLowerCase())
+        bet.COUNTRY?.toLowerCase().includes(filters.country.toLowerCase()),
       );
     }
 
     if (filters.league) {
       filtered = filtered.filter((bet) =>
-        bet.LEAGUE?.toLowerCase().includes(filters.league.toLowerCase())
+        bet.LEAGUE?.toLowerCase().includes(filters.league.toLowerCase()),
       );
     }
 
     if (filters.result) {
       filtered = filtered.filter((bet) =>
-        bet.RESULT?.toLowerCase().includes(filters.result.toLowerCase())
+        bet.RESULT?.toLowerCase().includes(filters.result.toLowerCase()),
       );
     }
 
@@ -423,10 +423,20 @@ function App() {
   const getFilteredTeamStats = () => {
     const filteredBets = getDeduplicatedFilteredBets();
     if (!filters.team) {
-      const wins = filteredBets.filter((b) => b.RESULT?.toLowerCase().includes("win")).length;
-      const losses = filteredBets.filter((b) => b.RESULT?.toLowerCase().includes("loss")).length;
-      const pending = filteredBets.filter((b) => !b.RESULT || b.RESULT.trim() === "" || (b.RESULT || "").toLowerCase().includes("unknown")).length;
-      const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : "0.0";
+      const wins = filteredBets.filter((b) =>
+        b.RESULT?.toLowerCase().includes("win"),
+      ).length;
+      const losses = filteredBets.filter((b) =>
+        b.RESULT?.toLowerCase().includes("loss"),
+      ).length;
+      const pending = filteredBets.filter(
+        (b) =>
+          !b.RESULT ||
+          b.RESULT.trim() === "" ||
+          (b.RESULT || "").toLowerCase().includes("unknown"),
+      ).length;
+      const winRate =
+        wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : "0.0";
       return { filteredBets, wins, losses, pending, winRate };
     }
 
@@ -458,7 +468,8 @@ function App() {
       }
     });
 
-    const winRate = wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : "0.0";
+    const winRate =
+      wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(1) : "0.0";
     return { filteredBets, wins, losses, pending, winRate };
   };
 
@@ -489,11 +500,9 @@ function App() {
 
     if (field === "TEAM_INCLUDED") {
       // Include all teams: bet on (TEAM_INCLUDED), home team, away team
-      values = deduplicatedBets.flatMap((bet) => [
-        bet.TEAM_INCLUDED,
-        bet.HOME_TEAM,
-        bet.AWAY_TEAM,
-      ]).filter(Boolean);
+      values = deduplicatedBets
+        .flatMap((bet) => [bet.TEAM_INCLUDED, bet.HOME_TEAM, bet.AWAY_TEAM])
+        .filter(Boolean);
     } else {
       values = deduplicatedBets.map((bet) => bet[field]).filter(Boolean);
     }
@@ -564,11 +573,11 @@ function App() {
 
       localStorage.setItem(
         "betRecommendations",
-        JSON.stringify(recommendations)
+        JSON.stringify(recommendations),
       );
       debugLog(
         "Stored recommendations for accuracy tracking:",
-        recommendations.length
+        recommendations.length,
       );
     } catch (error) {
       console.error("Error storing recommendations:", error);
@@ -648,10 +657,7 @@ function App() {
       }
 
       const dbRecommendations = await dbResponse.json();
-      debugLog(
-        "Fetched database recommendations:",
-        dbRecommendations.length
-      );
+      debugLog("Fetched database recommendations:", dbRecommendations.length);
       debugLog("First few recommendations:", dbRecommendations.slice(0, 3));
 
       // Include all recommendations (even those without results yet)
@@ -659,7 +665,7 @@ function App() {
 
       debugLog(
         "Recommendations with results:",
-        recommendationsWithResults.length
+        recommendationsWithResults.length,
       );
 
       if (recommendationsWithResults.length === 0) {
@@ -677,7 +683,7 @@ function App() {
       const calculateSystemAccuracy = (
         recommendation,
         actualResult,
-        recommendationType
+        recommendationType,
       ) => {
         if (!recommendation || !actualResult) {
           debugLog("Missing data:", {
@@ -751,8 +757,8 @@ function App() {
         calculateSystemAccuracy(
           rec.recommendation,
           rec.actual_result,
-          rec.recommendation_type
-        )
+          rec.recommendation_type,
+        ),
       ).length;
       const overallAccuracy =
         totalPredictions > 0
@@ -768,22 +774,18 @@ function App() {
 
       const confidenceGroups = {
         "High (80-100%)": recommendationsWithResults.filter(
-          (rec) => normalizeConfidence(rec.confidence_score) >= 80
+          (rec) => normalizeConfidence(rec.confidence_score) >= 80,
         ),
-        "Medium (60-79%)": recommendationsWithResults.filter(
-          (rec) => {
-            const normalized = normalizeConfidence(rec.confidence_score);
-            return normalized >= 60 && normalized < 80;
-          }
-        ),
-        "Low (40-59%)": recommendationsWithResults.filter(
-          (rec) => {
-            const normalized = normalizeConfidence(rec.confidence_score);
-            return normalized >= 40 && normalized < 60;
-          }
-        ),
+        "Medium (60-79%)": recommendationsWithResults.filter((rec) => {
+          const normalized = normalizeConfidence(rec.confidence_score);
+          return normalized >= 60 && normalized < 80;
+        }),
+        "Low (40-59%)": recommendationsWithResults.filter((rec) => {
+          const normalized = normalizeConfidence(rec.confidence_score);
+          return normalized >= 40 && normalized < 60;
+        }),
         "Very Low (10-39%)": recommendationsWithResults.filter(
-          (rec) => normalizeConfidence(rec.confidence_score) < 40
+          (rec) => normalizeConfidence(rec.confidence_score) < 40,
         ),
       };
 
@@ -793,8 +795,8 @@ function App() {
           calculateSystemAccuracy(
             rec.recommendation,
             rec.actual_result,
-            rec.recommendation_type
-          )
+            rec.recommendation_type,
+          ),
         ).length;
         return group.length > 0 ? (correct / group.length) * 100 : 0;
       };
@@ -882,7 +884,7 @@ function App() {
       recommendationsWithResults.forEach((rec) => {
         const recCategory = categorizeSystemRecommendation(rec.recommendation);
         debugLog(
-          `Recommendation: "${rec.recommendation}" -> Category: "${recCategory}"`
+          `Recommendation: "${rec.recommendation}" -> Category: "${recCategory}"`,
         );
         if (!systemRecommendationGroups[recCategory]) {
           systemRecommendationGroups[recCategory] = [];
@@ -892,13 +894,13 @@ function App() {
 
       debugLog(
         "System recommendation groups:",
-        Object.keys(systemRecommendationGroups)
+        Object.keys(systemRecommendationGroups),
       );
       debugLog(
         "Group counts:",
         Object.entries(systemRecommendationGroups).map(
-          ([key, value]) => `${key}: ${value.length}`
-        )
+          ([key, value]) => `${key}: ${value.length}`,
+        ),
       );
 
       // Calculate accuracy by system recommendation type using system accuracy
@@ -913,11 +915,11 @@ function App() {
           return calculateSystemAccuracy(
             rec.recommendation,
             rec.actual_result,
-            rec.recommendation_type
+            rec.recommendation_type,
           );
         }).length;
         const pending = group.filter(
-          (rec) => !rec.actual_result || rec.actual_result.trim() === ""
+          (rec) => !rec.actual_result || rec.actual_result.trim() === "",
         ).length;
         accuracyByBetType[recCategory] = {
           total: group.length,
@@ -945,8 +947,8 @@ function App() {
           calculateSystemAccuracy(
             rec.recommendation,
             rec.actual_result,
-            rec.recommendation_type
-          )
+            rec.recommendation_type,
+          ),
         ).length;
         accuracyByRecommendationType[recType] = {
           total: group.length,
@@ -966,13 +968,12 @@ function App() {
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
-                rec.recommendation_type
-              )
-            ).length,
-            accuracy:
-              Math.round(
-                calculateGroupAccuracy(confidenceGroups["High (80-100%)"]) * 100
+                rec.recommendation_type,
               ),
+            ).length,
+            accuracy: Math.round(
+              calculateGroupAccuracy(confidenceGroups["High (80-100%)"]) * 100,
+            ),
           },
           "Medium (60-79%)": {
             total: confidenceGroups["Medium (60-79%)"].length,
@@ -980,13 +981,12 @@ function App() {
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
-                rec.recommendation_type
-              )
-            ).length,
-            accuracy:
-              Math.round(
-                calculateGroupAccuracy(confidenceGroups["Medium (60-79%)"]) * 100
+                rec.recommendation_type,
               ),
+            ).length,
+            accuracy: Math.round(
+              calculateGroupAccuracy(confidenceGroups["Medium (60-79%)"]) * 100,
+            ),
           },
           "Low (40-59%)": {
             total: confidenceGroups["Low (40-59%)"].length,
@@ -994,13 +994,12 @@ function App() {
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
-                rec.recommendation_type
-              )
-            ).length,
-            accuracy:
-              Math.round(
-                calculateGroupAccuracy(confidenceGroups["Low (40-59%)"]) * 100
+                rec.recommendation_type,
               ),
+            ).length,
+            accuracy: Math.round(
+              calculateGroupAccuracy(confidenceGroups["Low (40-59%)"]) * 100,
+            ),
           },
           "Very Low (10-39%)": {
             total: confidenceGroups["Very Low (10-39%)"].length,
@@ -1008,13 +1007,13 @@ function App() {
               calculateSystemAccuracy(
                 rec.recommendation,
                 rec.actual_result,
-                rec.recommendation_type
-              )
-            ).length,
-            accuracy:
-              Math.round(
-                calculateGroupAccuracy(confidenceGroups["Very Low (10-39%)"]) * 100
+                rec.recommendation_type,
               ),
+            ).length,
+            accuracy: Math.round(
+              calculateGroupAccuracy(confidenceGroups["Very Low (10-39%)"]) *
+                100,
+            ),
           },
         },
         byBetType: accuracyByBetType,
@@ -1085,27 +1084,27 @@ function App() {
     const betslipSet = new Set(
       betslipGames.map(
         (game) =>
-          `${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`
-      )
+          `${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`,
+      ),
     );
     const analysisSet = new Set(
       analysisGames.map(
         (game) =>
-          `${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`
-      )
+          `${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`,
+      ),
     );
 
     const missingFromBetslip = analysisGames.filter(
       (game) =>
         !betslipSet.has(
-          `${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`
-        )
+          `${game.home_team?.toLowerCase()}-${game.away_team?.toLowerCase()}`,
+        ),
     );
     const extraInBetslip = betslipGames.filter(
       (game) =>
         !analysisSet.has(
-          `${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`
-        )
+          `${game.HOME_TEAM?.toLowerCase()}-${game.AWAY_TEAM?.toLowerCase()}`,
+        ),
     );
 
     return {
@@ -1179,12 +1178,12 @@ function App() {
 
     const deduplicatedBets = getDeduplicatedBetsForAnalysis;
     const betsWithResults = deduplicatedBets.filter(
-      (b) => b.RESULT && b.RESULT.trim() !== ""
+      (b) => b.RESULT && b.RESULT.trim() !== "",
     );
 
     // Filter bets for this specific team in this league/country
     let teamBets = [];
-    
+
     if (betType === "Straight Win") {
       teamBets = betsWithResults.filter(
         (b) =>
@@ -1194,7 +1193,7 @@ function App() {
           (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
           !b.BET_TYPE?.toLowerCase().includes("double chance") &&
           !b.BET_TYPE?.toLowerCase().includes("over") &&
-          !b.BET_TYPE?.toLowerCase().includes("under")
+          !b.BET_TYPE?.toLowerCase().includes("under"),
       );
     } else if (betType === "Double Chance") {
       teamBets = betsWithResults.filter(
@@ -1203,7 +1202,7 @@ function App() {
           b.COUNTRY === country &&
           b.LEAGUE === league &&
           b.BET_TYPE &&
-          b.BET_TYPE.toLowerCase().includes("double chance")
+          b.BET_TYPE.toLowerCase().includes("double chance"),
       );
     } else if (betType === "Over/Under") {
       teamBets = betsWithResults.filter(
@@ -1213,14 +1212,14 @@ function App() {
           b.LEAGUE === league &&
           b.BET_TYPE &&
           (b.BET_TYPE.toLowerCase().includes("over") ||
-            b.BET_TYPE.toLowerCase().includes("under"))
+            b.BET_TYPE.toLowerCase().includes("under")),
       );
     }
 
     if (teamBets.length === 0) return null;
 
     const wins = teamBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
+      b.RESULT.toLowerCase().includes("win"),
     ).length;
     const winRate = wins / teamBets.length;
     const wilsonScore = calculateWilsonScore(wins, teamBets.length);
@@ -1246,12 +1245,15 @@ function App() {
         (b.COUNTRY || "").toLowerCase() === countryLower &&
         (b.LEAGUE || "").toLowerCase() === leagueLower &&
         b.RESULT &&
-        (b.RESULT.toLowerCase().includes("win") || b.RESULT.toLowerCase().includes("loss"))
+        (b.RESULT.toLowerCase().includes("win") ||
+          b.RESULT.toLowerCase().includes("loss")),
     );
 
     if (leagueBets.length === 0) return null;
 
-    const wins = leagueBets.filter((b) => b.RESULT.toLowerCase().includes("win")).length;
+    const wins = leagueBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win"),
+    ).length;
     const winRate = wins / leagueBets.length;
 
     return {
@@ -1274,7 +1276,7 @@ function App() {
 
     // Filter bets with results
     const betsWithResults = bets.filter(
-      (b) => b.RESULT && b.RESULT.trim() !== ""
+      (b) => b.RESULT && b.RESULT.trim() !== "",
     );
 
     // Calculate win rates for each bet type
@@ -1283,21 +1285,19 @@ function App() {
         (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
         !b.BET_TYPE?.toLowerCase().includes("double chance") &&
         !b.BET_TYPE?.toLowerCase().includes("over") &&
-        !b.BET_TYPE?.toLowerCase().includes("under")
+        !b.BET_TYPE?.toLowerCase().includes("under"),
     );
     const straightWinWins = straightWinBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
+      b.RESULT.toLowerCase().includes("win"),
     ).length;
     const straightWinRate =
       straightWinBets.length > 0 ? straightWinWins / straightWinBets.length : 0;
 
     const doubleChanceBets = betsWithResults.filter(
-      (b) =>
-        b.BET_TYPE &&
-        b.BET_TYPE.toLowerCase().includes("double chance")
+      (b) => b.BET_TYPE && b.BET_TYPE.toLowerCase().includes("double chance"),
     );
     const doubleChanceWins = doubleChanceBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
+      b.RESULT.toLowerCase().includes("win"),
     ).length;
     const doubleChanceRate =
       doubleChanceBets.length > 0
@@ -1308,10 +1308,10 @@ function App() {
       (b) =>
         b.BET_TYPE &&
         (b.BET_TYPE.toLowerCase().includes("over") ||
-          b.BET_TYPE.toLowerCase().includes("under"))
+          b.BET_TYPE.toLowerCase().includes("under")),
     );
     const overUnderWins = overUnderBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
+      b.RESULT.toLowerCase().includes("win"),
     ).length;
     const overUnderRate =
       overUnderBets.length > 0 ? overUnderWins / overUnderBets.length : 0;
@@ -1321,7 +1321,7 @@ function App() {
       straightWinRate,
       doubleChanceRate,
       overUnderRate,
-      0.5
+      0.5,
     ); // Minimum 0.5 to avoid division issues
 
     // Calculate small multiplier adjustments (±3-5% max)
@@ -1330,39 +1330,48 @@ function App() {
     // This keeps confidence as the primary ranking factor, with multipliers as a small boost
     const maxMultiplierBoost = 0.05; // Maximum 5% boost for best performing type
     const maxMultiplierPenalty = 0.05; // Maximum 5% penalty for worst performing type
-    
+
     // Calculate performance difference from best (in decimal form, e.g., 0.75 - 0.65 = 0.10 = 10%)
     const straightWinDiff = straightWinRate - maxRate;
     const doubleChanceDiff = doubleChanceRate - maxRate;
     const overUnderDiff = overUnderRate - maxRate;
-    
+
     // Convert difference to small multiplier adjustment
     // Use a scaling factor to keep adjustments small (e.g., 0.5 = 50% of difference becomes multiplier adjustment)
     // Example: If Double Chance wins 75% and Straight Win wins 65% (10% difference = 0.10),
     // multiplier adjustment = 0.10 * 0.5 = 0.05, so Straight Win gets 0.95 multiplier
     // This creates a 5% difference instead of the full 10%, keeping confidence as primary factor
     const adjustmentScale = 0.5; // Scale down the adjustment (50% of the difference)
-    
+
     const multipliers = {
       straightWin:
         straightWinBets.length >= 10
           ? Math.max(
               1.0 - maxMultiplierPenalty,
-              Math.min(1.0 + maxMultiplierBoost, 1.0 + (straightWinDiff * adjustmentScale))
+              Math.min(
+                1.0 + maxMultiplierBoost,
+                1.0 + straightWinDiff * adjustmentScale,
+              ),
             )
           : 1.0, // Default to 1.0 if insufficient data
       doubleChance:
         doubleChanceBets.length >= 10
           ? Math.max(
               1.0 - maxMultiplierPenalty,
-              Math.min(1.0 + maxMultiplierBoost, 1.0 + (doubleChanceDiff * adjustmentScale))
+              Math.min(
+                1.0 + maxMultiplierBoost,
+                1.0 + doubleChanceDiff * adjustmentScale,
+              ),
             )
           : 1.0, // Default to 1.0 if insufficient data (no bias)
       overUnder:
         overUnderBets.length >= 10
           ? Math.max(
               1.0 - maxMultiplierPenalty,
-              Math.min(1.0 + maxMultiplierBoost, 1.0 + (overUnderDiff * adjustmentScale))
+              Math.min(
+                1.0 + maxMultiplierBoost,
+                1.0 + overUnderDiff * adjustmentScale,
+              ),
             )
           : 1.0, // Default to 1.0 if insufficient data (no bias)
     };
@@ -1375,7 +1384,7 @@ function App() {
     recommendation,
     betType,
     betData,
-    teamOddsAnalytics
+    teamOddsAnalytics,
   ) => {
     // Skip if recommendation is AVOID
     if (
@@ -1389,7 +1398,7 @@ function App() {
     // Always use TEAM_INCLUDED - this is the team you're betting on, not the recommended team
     // The odds performance should show how well you've done betting on this team at these odds
     let teamName = betData.TEAM_INCLUDED;
-    
+
     if (!teamName) {
       return {
         type: "no_data",
@@ -1453,16 +1462,16 @@ function App() {
         team.country.toLowerCase() === betData.COUNTRY.toLowerCase() &&
         team.league &&
         betData.LEAGUE &&
-        team.league.toLowerCase() === betData.LEAGUE.toLowerCase()
+        team.league.toLowerCase() === betData.LEAGUE.toLowerCase(),
     );
-    
+
     // Fallback to team name only if no exact match found
     if (!teamOddsData) {
       teamOddsData = teamOddsAnalytics.find(
         (team) =>
           team.teamName &&
           teamName &&
-          team.teamName.toLowerCase() === teamName.toLowerCase()
+          team.teamName.toLowerCase() === teamName.toLowerCase(),
       );
     }
 
@@ -1475,7 +1484,7 @@ function App() {
 
     // Find the odds range data for this team
     const rangeData = teamOddsData.oddsRanges.find(
-      (r) => r.range === oddsRange
+      (r) => r.range === oddsRange,
     );
 
     if (!rangeData) {
@@ -1492,37 +1501,38 @@ function App() {
     // Try to find the bet type - check both exact match and case-insensitive
     let lossesForBetType = 0;
     let winsForBetType = 0;
-    
+
     // First try exact match
     if (lossBetTypes[mappedBetType] !== undefined) {
       lossesForBetType = lossBetTypes[mappedBetType];
     } else {
       // Try case-insensitive match
       const betTypeKey = Object.keys(lossBetTypes).find(
-        (key) => key.toLowerCase() === mappedBetType.toLowerCase()
+        (key) => key.toLowerCase() === mappedBetType.toLowerCase(),
       );
       if (betTypeKey) {
         lossesForBetType = lossBetTypes[betTypeKey];
       }
     }
-    
+
     if (winBetTypes[mappedBetType] !== undefined) {
       winsForBetType = winBetTypes[mappedBetType];
     } else {
       const betTypeKey = Object.keys(winBetTypes).find(
-        (key) => key.toLowerCase() === mappedBetType.toLowerCase()
+        (key) => key.toLowerCase() === mappedBetType.toLowerCase(),
       );
       if (betTypeKey) {
         winsForBetType = winBetTypes[betTypeKey];
       }
     }
-    
+
     const totalForBetType = lossesForBetType + winsForBetType;
 
     // Check if this is an outlier range
-    const isOutlier = teamOddsData.outlierRanges && teamOddsData.outlierRanges.length > 0
-      ? teamOddsData.outlierRanges.some((or) => or.range === oddsRange)
-      : false;
+    const isOutlier =
+      teamOddsData.outlierRanges && teamOddsData.outlierRanges.length > 0
+        ? teamOddsData.outlierRanges.some((or) => or.range === oddsRange)
+        : false;
     const isMostCommon = oddsRange === teamOddsData.mostCommonRange;
 
     // Build notification
@@ -1588,23 +1598,63 @@ function App() {
    * @param {string} awayTeam - Away team name
    * @returns {{ agrees: boolean, reason?: string } | null} - null if no proposed bet to compare
    */
+  // Helper: teams match if equal (case-insensitive) or one contains the other (for "Man Utd" vs "Manchester United")
+  const teamsMatch = (a, b) => {
+    if (!a || !b) return false;
+    const x = a.toLowerCase().trim();
+    const y = b.toLowerCase().trim();
+    if (x === y) return true;
+    if (x.includes(y) || y.includes(x)) return true;
+    return false;
+  };
+
   const getProposedBetVerdict = (bet, bestBet, homeTeam, awayTeam) => {
-    const proposedType = (bet.BET_TYPE || "").toLowerCase().trim();
-    const proposedSelection = (bet.BET_SELECTION || "").toLowerCase().trim();
-    const teamIncluded = (bet.TEAM_INCLUDED || "").trim();
+    const h = (homeTeam || "").trim();
+    const a = (awayTeam || "").trim();
+    // Support multiple header formats (BET_TYPE, bet_type, Bet Type, etc.)
+    const getBetField = (obj, ...keys) => {
+      for (const k of keys) {
+        const v = obj?.[k];
+        if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+      }
+      return "";
+    };
+    const proposedType = getBetField(bet, "BET_TYPE", "bet_type", "Bet Type").toLowerCase();
+    const proposedSelection = getBetField(bet, "BET_SELECTION", "bet_selection", "Bet Selection").toLowerCase();
+    const teamIncluded = getBetField(bet, "TEAM_INCLUDED", "team_included", "Team Included");
     if (!proposedType && !proposedSelection && !teamIncluded) return null;
 
     const ourType = bestBet?.type || "";
     const ourBet = (bestBet?.recommendation?.bet ?? "").toString().trim();
     const ourReasoning = bestBet?.recommendation?.reasoning || "";
 
+    debugVerdictLog(`Match: ${h} vs ${a}`, {
+      proposedType,
+      proposedSelection,
+      teamIncluded,
+      ourType,
+      ourBet,
+    });
+
     const isWin = (t, s) =>
       (t.includes("win") && !t.includes("double")) ||
-      (!t.includes("double") && !t.includes("over") && !t.includes("under") && (s.includes("win") || s === "1" || s === "2"));
+      (!t.includes("double") &&
+        !t.includes("over") &&
+        !t.includes("under") &&
+        (s.includes("win") || s === "1" || s === "2"));
     const isDoubleChance = (t, s) =>
-      t.includes("double") || t.includes("chance") || /^[12]?x[12]?$/i.test(s.replace(/\s/g, "")) || s === "1x" || s === "x2" || s === "12";
+      t.includes("double") ||
+      t.includes("chance") ||
+      /^[12]?x[12]?$/i.test((s || "").replace(/\s/g, "")) ||
+      (s || "") === "1x" ||
+      (s || "") === "x2" ||
+      (s || "") === "12" ||
+      (s || "").includes(" or draw");
     const isOverUnder = (t, s) =>
-      t.includes("over") || t.includes("under") || s.includes("over") || s.includes("under");
+      t.includes("over") ||
+      t.includes("under") ||
+      (s || "").includes("over") ||
+      (s || "").includes("under");
 
     const ourIsAvoid = ourBet === "AVOID";
     const ourIsStraightWin = ourType === "Straight Win";
@@ -1612,43 +1662,78 @@ function App() {
     const ourIsOverUnder = ourType === "Over/Under";
 
     if (ourIsAvoid) {
+      debugVerdictLog("Verdict: DISAGREE (we recommend AVOID)");
       return {
         agrees: false,
-        reason: ourReasoning || "We recommend avoiding this match based on the analysis.",
+        reason:
+          ourReasoning ||
+          "We recommend avoiding this match based on the analysis.",
       };
     }
 
     if (ourIsStraightWin) {
       const ourTeam = ourBet;
       const userBacksHome =
-        teamIncluded.toLowerCase() === (homeTeam || "").toLowerCase() ||
-        proposedSelection.includes("home");
+        teamsMatch(teamIncluded, h) || proposedSelection.includes("home");
       const userBacksAway =
-        teamIncluded.toLowerCase() === (awayTeam || "").toLowerCase() ||
-        proposedSelection.includes("away");
-      const weBackHome = ourTeam === homeTeam;
-      const weBackAway = ourTeam === awayTeam;
-      const agrees = isWin(proposedType, proposedSelection) && ((weBackHome && userBacksHome) || (weBackAway && userBacksAway));
+        teamsMatch(teamIncluded, a) || proposedSelection.includes("away");
+      const weBackHome = teamsMatch(ourTeam, h);
+      const weBackAway = teamsMatch(ourTeam, a);
+      const agrees =
+        isWin(proposedType, proposedSelection) &&
+        ((weBackHome && userBacksHome) || (weBackAway && userBacksAway));
+
+      if (!agrees) {
+        debugVerdictLog("Verdict: DISAGREE (Straight Win)", {
+          ourTeam,
+          userBacksHome,
+          userBacksAway,
+          weBackHome,
+          weBackAway,
+          isWin: isWin(proposedType, proposedSelection),
+        });
+      }
       return {
         agrees: !!agrees,
-        reason: agrees ? undefined : (ourReasoning || `We recommend Straight Win: ${ourTeam}.`),
+        reason: agrees
+          ? undefined
+          : ourReasoning || `We recommend Straight Win: ${ourTeam}.`,
       };
     }
 
     if (ourIsDoubleChance) {
-      const ourTeam = ourBet;
+      // Extract team from "Man Utd or Draw" format
+      const ourTeam = ourBet.replace(/\s+or\s+draw$/i, "").trim();
       const userBacksHome =
-        teamIncluded.toLowerCase() === (homeTeam || "").toLowerCase() ||
-        /1x|x1/.test(proposedSelection.replace(/\s/g, ""));
+        teamsMatch(teamIncluded, h) ||
+        /1x|x1/.test((proposedSelection || "").replace(/\s/g, "")) ||
+        teamsMatch((proposedSelection || "").replace(/\s+or\s+draw$/i, "").trim(), h);
       const userBacksAway =
-        teamIncluded.toLowerCase() === (awayTeam || "").toLowerCase() ||
-        /x2|2x/.test(proposedSelection.replace(/\s/g, ""));
-      const weBackHome = ourTeam === homeTeam;
-      const weBackAway = ourTeam === awayTeam;
-      const agrees = isDoubleChance(proposedType, proposedSelection) && ((weBackHome && userBacksHome) || (weBackAway && userBacksAway));
+        teamsMatch(teamIncluded, a) ||
+        /x2|2x/.test((proposedSelection || "").replace(/\s/g, "")) ||
+        teamsMatch((proposedSelection || "").replace(/\s+or\s+draw$/i, "").trim(), a);
+      const weBackHome = teamsMatch(ourTeam, h);
+      const weBackAway = teamsMatch(ourTeam, a);
+      const agrees =
+        isDoubleChance(proposedType, proposedSelection) &&
+        ((weBackHome && userBacksHome) || (weBackAway && userBacksAway));
+
+      if (!agrees) {
+        debugVerdictLog("Verdict: DISAGREE (Double Chance)", {
+          ourTeam,
+          ourBet,
+          userBacksHome,
+          userBacksAway,
+          weBackHome,
+          weBackAway,
+          isDoubleChance: isDoubleChance(proposedType, proposedSelection),
+        });
+      }
       return {
         agrees: !!agrees,
-        reason: agrees ? undefined : (ourReasoning || `We recommend Double Chance: ${ourTeam}.`),
+        reason: agrees
+          ? undefined
+          : ourReasoning || `We recommend Double Chance: ${ourBet}.`,
       };
     }
 
@@ -1660,14 +1745,34 @@ function App() {
         (ourLine.includes("under") && proposedLine.includes("under"));
       const proposedNum = (proposedSelection.match(/[\d.]+/) || [])[0];
       const ourNum = (ourBet.match(/[\d.]+/) || [])[0];
-      const agrees = isOverUnder(proposedType, proposedSelection) && sameLine && (ourNum === proposedNum || !ourNum || !proposedNum);
+      const agrees =
+        isOverUnder(proposedType, proposedSelection) &&
+        sameLine &&
+        (ourNum === proposedNum || !ourNum || !proposedNum);
+
+      if (!agrees) {
+        debugVerdictLog("Verdict: DISAGREE (Over/Under)", {
+          ourLine,
+          proposedLine,
+          sameLine,
+          ourNum,
+          proposedNum,
+          isOverUnder: isOverUnder(proposedType, proposedSelection),
+        });
+      }
       return {
         agrees: !!agrees,
-        reason: agrees ? undefined : (ourReasoning || `We recommend Over/Under: ${ourBet}.`),
+        reason: agrees
+          ? undefined
+          : ourReasoning || `We recommend Over/Under: ${ourBet}.`,
       };
     }
 
-    return { agrees: false, reason: ourReasoning || "Recommendation type could not be compared." };
+    debugVerdictLog("Verdict: DISAGREE (could not compare)", { ourType, ourBet });
+    return {
+      agrees: false,
+      reason: ourReasoning || "Recommendation type could not be compared.",
+    };
   };
 
   const generateBetRecommendations = (analysisResults) => {
@@ -1683,25 +1788,31 @@ function App() {
 
     // Include all bets (including "Avoid" ones) and sort by confidence
     const validBets = analysisResults.sort(
-      (a, b) => b.confidenceScore - a.confidenceScore
+      (a, b) => b.confidenceScore - a.confidenceScore,
     );
 
     // Filter out bets with no form data (both teams have 0W 0D 0L)
     // This prevents showing recommendations for games with insufficient data
     let betsWithFormData = validBets.filter((bet) => {
       // Check if we have form data from new columns
-      const hasHomeSequence = bet.LAST_5_RESULT_HOME || bet.LAST_4_RESULT_HOME || 
-                              bet.LAST_3_RESULT_HOME || bet.LAST_2_RESULT_HOME || 
-                              bet.LAST_1_RESULT_HOME;
-      const hasAwaySequence = bet.LAST_5_RESULT_AWAY || bet.LAST_4_RESULT_AWAY || 
-                              bet.LAST_3_RESULT_AWAY || bet.LAST_2_RESULT_AWAY || 
-                              bet.LAST_1_RESULT_AWAY;
-      
+      const hasHomeSequence =
+        bet.LAST_5_RESULT_HOME ||
+        bet.LAST_4_RESULT_HOME ||
+        bet.LAST_3_RESULT_HOME ||
+        bet.LAST_2_RESULT_HOME ||
+        bet.LAST_1_RESULT_HOME;
+      const hasAwaySequence =
+        bet.LAST_5_RESULT_AWAY ||
+        bet.LAST_4_RESULT_AWAY ||
+        bet.LAST_3_RESULT_AWAY ||
+        bet.LAST_2_RESULT_AWAY ||
+        bet.LAST_1_RESULT_AWAY;
+
       // If using new sequence columns, check if at least one team has data
       if (hasHomeSequence || hasAwaySequence) {
         return true; // At least one team has sequence data
       }
-      
+
       // Fallback to old aggregate columns
       const homeWins = parseInt(bet.LAST_5_WINS_HOME) || 0;
       const homeDraws = parseInt(bet.LAST_5_DRAWS_HOME) || 0;
@@ -1709,10 +1820,10 @@ function App() {
       const awayWins = parseInt(bet.LAST_5_WINS_AWAY) || 0;
       const awayDraws = parseInt(bet.LAST_5_DRAWS_AWAY) || 0;
       const awayLosses = parseInt(bet.LAST_5_LOSSES_AWAY) || 0;
-      
+
       const homeHasData = homeWins + homeDraws + homeLosses > 0;
       const awayHasData = awayWins + awayDraws + awayLosses > 0;
-      
+
       // Include if at least one team has form data
       return homeHasData || awayHasData;
     });
@@ -1730,7 +1841,10 @@ function App() {
       const leagueArrays = Array.from(byLeague.values());
       selectedBets = [];
       let idx = 0;
-      while (selectedBets.length < 50 && leagueArrays.some((arr) => arr.length > 0)) {
+      while (
+        selectedBets.length < 50 &&
+        leagueArrays.some((arr) => arr.length > 0)
+      ) {
         const leagueArr = leagueArrays[idx % leagueArrays.length];
         if (leagueArr.length > 0) {
           selectedBets.push(leagueArr.shift());
@@ -1759,16 +1873,22 @@ function App() {
 
       // Extract recent form data before analysis
       // Support both new individual result columns and old aggregate columns (backward compatibility)
-      const getFormDataFromResults = (result5, result4, result3, result2, result1) => {
+      const getFormDataFromResults = (
+        result5,
+        result4,
+        result3,
+        result2,
+        result1,
+      ) => {
         const results = [result5, result4, result3, result2, result1]
-          .filter(r => r && typeof r === 'string')
-          .map(r => r.toUpperCase().trim());
-        
+          .filter((r) => r && typeof r === "string")
+          .map((r) => r.toUpperCase().trim());
+
         return {
-          wins: results.filter(r => r === 'W').length,
-          draws: results.filter(r => r === 'D').length,
-          losses: results.filter(r => r === 'L').length,
-          sequence: results // Store sequence for advanced analysis
+          wins: results.filter((r) => r === "W").length,
+          draws: results.filter((r) => r === "D").length,
+          losses: results.filter((r) => r === "L").length,
+          sequence: results, // Store sequence for advanced analysis
         };
       };
 
@@ -1778,38 +1898,44 @@ function App() {
         bet.LAST_4_RESULT_HOME,
         bet.LAST_3_RESULT_HOME,
         bet.LAST_2_RESULT_HOME,
-        bet.LAST_1_RESULT_HOME
+        bet.LAST_1_RESULT_HOME,
       );
-      
+
       const awayFormFromResults = getFormDataFromResults(
         bet.LAST_5_RESULT_AWAY,
         bet.LAST_4_RESULT_AWAY,
         bet.LAST_3_RESULT_AWAY,
         bet.LAST_2_RESULT_AWAY,
-        bet.LAST_1_RESULT_AWAY
+        bet.LAST_1_RESULT_AWAY,
       );
 
       // Use new columns if available, otherwise use old aggregate columns
       const recentFormData = {
-        homeWins: homeFormFromResults.sequence.length > 0 
-          ? homeFormFromResults.wins 
-          : (parseInt(bet.LAST_5_WINS_HOME) || 0),
-        homeDraws: homeFormFromResults.sequence.length > 0 
-          ? homeFormFromResults.draws 
-          : (parseInt(bet.LAST_5_DRAWS_HOME) || 0),
-        homeLosses: homeFormFromResults.sequence.length > 0 
-          ? homeFormFromResults.losses 
-          : (parseInt(bet.LAST_5_LOSSES_HOME) || 0),
+        homeWins:
+          homeFormFromResults.sequence.length > 0
+            ? homeFormFromResults.wins
+            : parseInt(bet.LAST_5_WINS_HOME) || 0,
+        homeDraws:
+          homeFormFromResults.sequence.length > 0
+            ? homeFormFromResults.draws
+            : parseInt(bet.LAST_5_DRAWS_HOME) || 0,
+        homeLosses:
+          homeFormFromResults.sequence.length > 0
+            ? homeFormFromResults.losses
+            : parseInt(bet.LAST_5_LOSSES_HOME) || 0,
         homeSequence: homeFormFromResults.sequence, // Store sequence for sequence-based analysis
-        awayWins: awayFormFromResults.sequence.length > 0 
-          ? awayFormFromResults.wins 
-          : (parseInt(bet.LAST_5_WINS_AWAY) || 0),
-        awayDraws: awayFormFromResults.sequence.length > 0 
-          ? awayFormFromResults.draws 
-          : (parseInt(bet.LAST_5_DRAWS_AWAY) || 0),
-        awayLosses: awayFormFromResults.sequence.length > 0 
-          ? awayFormFromResults.losses 
-          : (parseInt(bet.LAST_5_LOSSES_AWAY) || 0),
+        awayWins:
+          awayFormFromResults.sequence.length > 0
+            ? awayFormFromResults.wins
+            : parseInt(bet.LAST_5_WINS_AWAY) || 0,
+        awayDraws:
+          awayFormFromResults.sequence.length > 0
+            ? awayFormFromResults.draws
+            : parseInt(bet.LAST_5_DRAWS_AWAY) || 0,
+        awayLosses:
+          awayFormFromResults.sequence.length > 0
+            ? awayFormFromResults.losses
+            : parseInt(bet.LAST_5_LOSSES_AWAY) || 0,
         awaySequence: awayFormFromResults.sequence, // Store sequence for sequence-based analysis
       };
 
@@ -1820,7 +1946,7 @@ function App() {
         country,
         league,
         bet,
-        recentFormData
+        recentFormData,
       );
 
       // Analyze double chance recommendation
@@ -1830,7 +1956,7 @@ function App() {
         country,
         league,
         bet,
-        recentFormData
+        recentFormData,
       );
 
       // Analyze over/under recommendation
@@ -1840,7 +1966,7 @@ function App() {
         country,
         league,
         bet,
-        recentFormData
+        recentFormData,
       );
 
       // Create array of all bet recommendations with their types
@@ -1864,7 +1990,10 @@ function App() {
 
       // Helper function to determine which team is being bet on for each recommendation
       const getTeamForRecommendation = (rec) => {
-        if (rec.recommendation.bet === "AVOID" || rec.recommendation.bet === "No clear winner") {
+        if (
+          rec.recommendation.bet === "AVOID" ||
+          rec.recommendation.bet === "No clear winner"
+        ) {
           return null;
         }
         // For Straight Win, the bet is the team name
@@ -1873,9 +2002,17 @@ function App() {
         }
         // For Double Chance, check if it mentions home or away team
         if (rec.type === "Double Chance") {
-          if (rec.recommendation.bet.toLowerCase().includes(homeTeam.toLowerCase())) {
+          if (
+            rec.recommendation.bet
+              .toLowerCase()
+              .includes(homeTeam.toLowerCase())
+          ) {
             return homeTeam;
-          } else if (rec.recommendation.bet.toLowerCase().includes(awayTeam.toLowerCase())) {
+          } else if (
+            rec.recommendation.bet
+              .toLowerCase()
+              .includes(awayTeam.toLowerCase())
+          ) {
             return awayTeam;
           }
         }
@@ -1890,7 +2027,7 @@ function App() {
       // Use underlying Wilson rate when confidence is capped at 10.0 to preserve actual confidence levels
       const rankedBets = allBets.map((betOption) => {
         let baseScore = betOption.recommendation.confidence;
-        
+
         // If confidence is capped at 100%, use underlying Wilson rate for ranking
         // This preserves the actual confidence difference when multiple bets are maxed out
         // Example: Straight Win with 95% Wilson (capped to 100%) vs Double Chance with 85% Wilson (capped to 100%)
@@ -1903,13 +2040,13 @@ function App() {
             baseScore = betOption.recommendation.wilsonWinRate;
           } else if (betOption.recommendation.overWilsonRate !== undefined) {
             // Over/Under: use overWilsonRate or underWilsonRate (already percentage)
-            baseScore = betOption.recommendation.overWilsonRate 
-              ? betOption.recommendation.overWilsonRate 
-              : (betOption.recommendation.underWilsonRate || 0);
+            baseScore = betOption.recommendation.overWilsonRate
+              ? betOption.recommendation.overWilsonRate
+              : betOption.recommendation.underWilsonRate || 0;
           }
           // If no Wilson rate available, keep using capped confidence (shouldn't happen)
         }
-        
+
         let adjustedScore = baseScore;
 
         // Apply data-driven multipliers based on historical performance (global across all teams)
@@ -1924,24 +2061,31 @@ function App() {
         // Factor in team-specific bet type performance for ranking
         // This ensures teams that perform better on specific bet types rank higher for those bet types
         const teamForBet = getTeamForRecommendation(betOption);
-        if (teamForBet && betOption.recommendation.bet !== "AVOID" && betOption.recommendation.bet !== "No clear winner") {
+        if (
+          teamForBet &&
+          betOption.recommendation.bet !== "AVOID" &&
+          betOption.recommendation.bet !== "No clear winner"
+        ) {
           const teamPerformance = getTeamBetTypePerformance(
             teamForBet,
             country,
             league,
-            betOption.type
+            betOption.type,
           );
 
           if (teamPerformance && teamPerformance.totalBets >= 3) {
             // Factor in team-specific performance
             // If team has good performance (win rate > 50%), boost the score
             // If team has poor performance (win rate < 40%), penalize the score
-            const performanceMultiplier = teamPerformance.winRate >= 0.5
-              ? 1.0 + (teamPerformance.winRate - 0.5) * 0.4 // Boost up to 20% for 100% win rate
-              : 1.0 - (0.5 - teamPerformance.winRate) * 0.6; // Penalize up to 30% for 0% win rate
+            const performanceMultiplier =
+              teamPerformance.winRate >= 0.5
+                ? 1.0 + (teamPerformance.winRate - 0.5) * 0.4 // Boost up to 20% for 100% win rate
+                : 1.0 - (0.5 - teamPerformance.winRate) * 0.6; // Penalize up to 30% for 0% win rate
 
             // Apply multiplier, but cap the impact
-            adjustedScore = adjustedScore * Math.max(0.7, Math.min(1.2, performanceMultiplier));
+            adjustedScore =
+              adjustedScore *
+              Math.max(0.7, Math.min(1.2, performanceMultiplier));
 
             // Add sample size bonus (more bets = more reliable)
             if (teamPerformance.totalBets >= 10) {
@@ -1960,9 +2104,10 @@ function App() {
         if (leaguePerformance && leaguePerformance.totalBets >= 5) {
           const leagueWinRate = leaguePerformance.winRate;
           // Penalize poor league performance, slight boost for strong league performance
-          const leagueMultiplier = leagueWinRate >= 0.5
-            ? Math.min(1.08, 1.0 + (leagueWinRate - 0.5) * 0.4) // Up to 8% boost for 70%+ league win rate
-            : Math.max(0.8, 1.0 - (0.5 - leagueWinRate) * 0.6); // Up to 20% penalty for poor league performance
+          const leagueMultiplier =
+            leagueWinRate >= 0.5
+              ? Math.min(1.08, 1.0 + (leagueWinRate - 0.5) * 0.4) // Up to 8% boost for 70%+ league win rate
+              : Math.max(0.8, 1.0 - (0.5 - leagueWinRate) * 0.6); // Up to 20% penalty for poor league performance
           adjustedScore = adjustedScore * leagueMultiplier;
         }
 
@@ -1986,19 +2131,19 @@ function App() {
         primary.recommendation,
         primary.type,
         bet,
-        teamOddsAnalytics
+        teamOddsAnalytics,
       );
       secondary.oddsPerformance = getOddsPerformanceNotification(
         secondary.recommendation,
         secondary.type,
         bet,
-        teamOddsAnalytics
+        teamOddsAnalytics,
       );
       tertiary.oddsPerformance = getOddsPerformanceNotification(
         tertiary.recommendation,
         tertiary.type,
         bet,
-        teamOddsAnalytics
+        teamOddsAnalytics,
       );
 
       // Calculate Best Bet - uses adjusted scores that already include team-specific bet type performance
@@ -2011,13 +2156,15 @@ function App() {
         const recommendationOdds = odds; // Use the main odds for now
         const impliedProbability = 1 / recommendationOdds;
         const confidenceProbability = betOption.recommendation.confidence / 100;
-        
-        // If confidence suggests higher probability than odds imply, that's value
-        const valueMultiplier = confidenceProbability > impliedProbability
-          ? 1.0 + (confidenceProbability - impliedProbability) * 0.3 // Up to 30% boost for value
-          : 1.0 - (impliedProbability - confidenceProbability) * 0.2; // Up to 20% penalty for poor value
 
-        bestBetScore = bestBetScore * Math.max(0.8, Math.min(1.3, valueMultiplier));
+        // If confidence suggests higher probability than odds imply, that's value
+        const valueMultiplier =
+          confidenceProbability > impliedProbability
+            ? 1.0 + (confidenceProbability - impliedProbability) * 0.3 // Up to 30% boost for value
+            : 1.0 - (impliedProbability - confidenceProbability) * 0.2; // Up to 20% penalty for poor value
+
+        bestBetScore =
+          bestBetScore * Math.max(0.8, Math.min(1.3, valueMultiplier));
 
         // Factor in risk level (lower risk = slightly higher score for best bet)
         if (betOption.riskLevel === "Low" || betOption.riskLevel === "Medium") {
@@ -2026,25 +2173,35 @@ function App() {
 
         // Factor in opponent strength for Best Bet selection
         // Get opponent position and form
-        const opponentPosition = teamForBet === homeTeam
-          ? (bet.AWAY_TEAM_POSITION_NUMBER || bet.AWAY_TEAM_POSITION)
-          : (bet.HOME_TEAM_POSITION_NUMBER || bet.HOME_TEAM_POSITION);
-        const opponentForm = teamForBet === homeTeam
-          ? (recentFormData ? {
-              wins: recentFormData.awayWins || 0,
-              draws: recentFormData.awayDraws || 0,
-              losses: recentFormData.awayLosses || 0
-            } : null)
-          : (recentFormData ? {
-              wins: recentFormData.homeWins || 0,
-              draws: recentFormData.homeDraws || 0,
-              losses: recentFormData.homeLosses || 0
-            } : null);
-        
-        const opponentStrengthImpact = calculateOpponentStrengthImpact(opponentPosition, opponentForm);
+        const opponentPosition =
+          teamForBet === homeTeam
+            ? bet.AWAY_TEAM_POSITION_NUMBER || bet.AWAY_TEAM_POSITION
+            : bet.HOME_TEAM_POSITION_NUMBER || bet.HOME_TEAM_POSITION;
+        const opponentForm =
+          teamForBet === homeTeam
+            ? recentFormData
+              ? {
+                  wins: recentFormData.awayWins || 0,
+                  draws: recentFormData.awayDraws || 0,
+                  losses: recentFormData.awayLosses || 0,
+                }
+              : null
+            : recentFormData
+              ? {
+                  wins: recentFormData.homeWins || 0,
+                  draws: recentFormData.homeDraws || 0,
+                  losses: recentFormData.homeLosses || 0,
+                }
+              : null;
+
+        const opponentStrengthImpact = calculateOpponentStrengthImpact(
+          opponentPosition,
+          opponentForm,
+        );
         // For Best Bet, favor bets against weaker opponents
         // Strong opponent (low multiplier) = reduce score, Weak opponent (high multiplier) = boost score
-        bestBetScore = bestBetScore * Math.max(0.9, Math.min(1.1, opponentStrengthImpact));
+        bestBetScore =
+          bestBetScore * Math.max(0.9, Math.min(1.1, opponentStrengthImpact));
 
         return {
           ...betOption,
@@ -2053,8 +2210,13 @@ function App() {
         };
       });
 
-      // Sort by best bet score and select the top one
-      bestBetScores.sort((a, b) => b.bestBetScore - a.bestBetScore);
+      // Sort by best bet score (with stable tie-breaker: Straight Win > Double Chance > Over/Under)
+      const typeOrder = { "Straight Win": 0, "Double Chance": 1, "Over/Under": 2 };
+      bestBetScores.sort((a, b) => {
+        const scoreDiff = b.bestBetScore - a.bestBetScore;
+        if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
+        return (typeOrder[a.type] ?? 99) - (typeOrder[b.type] ?? 99);
+      });
       const bestBet = bestBetScores[0];
 
       // Add odds performance notification to best bet
@@ -2062,11 +2224,19 @@ function App() {
         bestBet.recommendation,
         bestBet.type,
         bet,
-        teamOddsAnalytics
+        teamOddsAnalytics,
       );
 
-      const proposedBetVerdict = getProposedBetVerdict(bet, bestBet, homeTeam, awayTeam);
-      const proposedBetLabel = [bet.BET_TYPE, bet.BET_SELECTION].filter(Boolean).join(" – ") || bet.TEAM_INCLUDED || "";
+      const proposedBetVerdict = getProposedBetVerdict(
+        bet,
+        bestBet,
+        homeTeam,
+        awayTeam,
+      );
+      const proposedBetLabel =
+        [bet.BET_TYPE, bet.BET_SELECTION].filter(Boolean).join(" – ") ||
+        bet.TEAM_INCLUDED ||
+        "";
 
       const leaguePerformance = getLeaguePerformance(country, league);
 
@@ -2123,9 +2293,12 @@ function App() {
 
   // Calculate opponent strength impact based on league position and recent form
   // Returns a multiplier (0.85 to 1.15) based on opponent strength
-  const calculateOpponentStrengthImpact = (opponentPosition, opponentRecentForm) => {
+  const calculateOpponentStrengthImpact = (
+    opponentPosition,
+    opponentRecentForm,
+  ) => {
     let multiplier = 1.0; // Neutral base
-    
+
     // Factor 1: League Position Impact
     if (opponentPosition) {
       const pos = parseInt(opponentPosition);
@@ -2143,16 +2316,16 @@ function App() {
         multiplier *= 1.04; // 4% boost
       }
     }
-    
+
     // Factor 2: Recent Form Impact (opponent's last 5 games)
     if (opponentRecentForm) {
       const { wins, draws, losses } = opponentRecentForm;
       const totalGames = wins + draws + losses;
-      
+
       if (totalGames >= 3) {
         // Calculate opponent's recent form score
         const formScore = (wins + 0.5 * draws) / totalGames;
-        
+
         // If opponent has poor form (low wins), boost our confidence
         if (formScore < 0.3) {
           // Opponent struggling (0-1 wins in last 5) - boost confidence
@@ -2169,15 +2342,18 @@ function App() {
         }
       }
     }
-    
+
     // Cap the multiplier between 0.85 and 1.15
     return Math.max(0.85, Math.min(1.15, multiplier));
   };
 
   // Get opponent status description for reasoning
-  const getOpponentStatusDescription = (opponentPosition, opponentRecentForm) => {
+  const getOpponentStatusDescription = (
+    opponentPosition,
+    opponentRecentForm,
+  ) => {
     const statusParts = [];
-    
+
     if (opponentPosition) {
       const pos = parseInt(opponentPosition);
       if (pos <= 3) {
@@ -2190,26 +2366,36 @@ function App() {
         statusParts.push(`bottom half`);
       }
     }
-    
+
     if (opponentRecentForm) {
       const { wins, draws, losses } = opponentRecentForm;
       const totalGames = wins + draws + losses;
-      
+
       if (totalGames >= 3) {
         const formScore = (wins + 0.5 * draws) / totalGames;
         if (formScore < 0.3) {
-          statusParts.push(`struggling form (${wins}W-${draws}D-${losses}L in last 5)`);
+          statusParts.push(
+            `struggling form (${wins}W-${draws}D-${losses}L in last 5)`,
+          );
         } else if (formScore < 0.4) {
-          statusParts.push(`poor form (${wins}W-${draws}D-${losses}L in last 5)`);
+          statusParts.push(
+            `poor form (${wins}W-${draws}D-${losses}L in last 5)`,
+          );
         } else if (formScore > 0.7) {
-          statusParts.push(`strong form (${wins}W-${draws}D-${losses}L in last 5)`);
+          statusParts.push(
+            `strong form (${wins}W-${draws}D-${losses}L in last 5)`,
+          );
         } else if (formScore > 0.6) {
-          statusParts.push(`good form (${wins}W-${draws}D-${losses}L in last 5)`);
+          statusParts.push(
+            `good form (${wins}W-${draws}D-${losses}L in last 5)`,
+          );
         }
       }
     }
-    
-    return statusParts.length > 0 ? ` (Opponent: ${statusParts.join(', ')})` : '';
+
+    return statusParts.length > 0
+      ? ` (Opponent: ${statusParts.join(", ")})`
+      : "";
   };
 
   // Calculate recent form impact on confidence
@@ -2219,7 +2405,7 @@ function App() {
     if (!recentForm) return 1.0; // No form data = neutral impact
 
     let wins, draws, losses, sequence;
-    
+
     if (isHomeTeam) {
       wins = recentForm.homeWins || 0;
       draws = recentForm.homeDraws || 0;
@@ -2239,10 +2425,10 @@ function App() {
 
     // Calculate recent form score (wins + 0.5*draws) / total
     const formScore = (wins + 0.5 * draws) / totalGames;
-    
+
     // Base multiplier from form score (0.5 = 0.9x, 1.0 = 1.1x)
-    let multiplier = 0.9 + (formScore * 0.4); // Range: 0.9 to 1.3
-    
+    let multiplier = 0.9 + formScore * 0.4; // Range: 0.9 to 1.3
+
     // Enhanced analysis if we have sequence data
     if (sequence && sequence.length > 0) {
       // Recency weighting: most recent games weighted more heavily
@@ -2250,58 +2436,60 @@ function App() {
       const recencyWeights = [0.6, 0.7, 0.8, 0.9, 1.0];
       let weightedScore = 0;
       let totalWeight = 0;
-      
+
       sequence.forEach((result, index) => {
         const weight = recencyWeights[sequence.length - 1 - index] || 1.0;
         totalWeight += weight;
-        if (result === 'W') {
+        if (result === "W") {
           weightedScore += weight * 1.0;
-        } else if (result === 'D') {
+        } else if (result === "D") {
           weightedScore += weight * 0.5;
-        } else if (result === 'L') {
+        } else if (result === "L") {
           weightedScore += weight * 0.0;
         }
       });
-      
+
       if (totalWeight > 0) {
         const weightedFormScore = weightedScore / totalWeight;
         // Use weighted score for more accurate multiplier
-        multiplier = 0.9 + (weightedFormScore * 0.4);
+        multiplier = 0.9 + weightedFormScore * 0.4;
       }
-      
+
       // Sequence-based momentum detection
       // Check last 3 games for stronger momentum signal
       const last3Games = sequence.slice(-3);
-      const last3Wins = last3Games.filter(r => r === 'W').length;
-      const last3Losses = last3Games.filter(r => r === 'L').length;
-      
+      const last3Wins = last3Games.filter((r) => r === "W").length;
+      const last3Losses = last3Games.filter((r) => r === "L").length;
+
       // Strong recent momentum: 2+ wins in last 3
       if (last3Wins >= 2 && last3Losses === 0) {
         multiplier *= 1.06; // Boost for strong recent momentum
       }
       // Poor recent momentum: 2+ losses in last 3
       else if (last3Losses >= 2 && last3Wins === 0) {
-        multiplier *= 0.90; // Reduce for poor recent momentum
+        multiplier *= 0.9; // Reduce for poor recent momentum
       }
-      
+
       // Trend analysis: improving vs declining
       // Compare first half vs second half of sequence
       if (sequence.length >= 4) {
         const firstHalf = sequence.slice(0, Math.floor(sequence.length / 2));
         const secondHalf = sequence.slice(Math.floor(sequence.length / 2));
-        
-        const firstHalfScore = firstHalf.reduce((score, r) => {
-          if (r === 'W') return score + 1.0;
-          if (r === 'D') return score + 0.5;
-          return score;
-        }, 0) / firstHalf.length;
-        
-        const secondHalfScore = secondHalf.reduce((score, r) => {
-          if (r === 'W') return score + 1.0;
-          if (r === 'D') return score + 0.5;
-          return score;
-        }, 0) / secondHalf.length;
-        
+
+        const firstHalfScore =
+          firstHalf.reduce((score, r) => {
+            if (r === "W") return score + 1.0;
+            if (r === "D") return score + 0.5;
+            return score;
+          }, 0) / firstHalf.length;
+
+        const secondHalfScore =
+          secondHalf.reduce((score, r) => {
+            if (r === "W") return score + 1.0;
+            if (r === "D") return score + 0.5;
+            return score;
+          }, 0) / secondHalf.length;
+
         // Improving trend: second half better than first half
         if (secondHalfScore > firstHalfScore + 0.2) {
           multiplier *= 1.04; // Boost for improving trend
@@ -2311,7 +2499,7 @@ function App() {
           multiplier *= 0.94; // Reduce for declining trend
         }
       }
-      
+
       // Streak detection: consecutive wins or losses
       const lastGame = sequence[sequence.length - 1];
       let streakLength = 1;
@@ -2322,32 +2510,39 @@ function App() {
           break;
         }
       }
-      
+
       // Boost for winning streaks, reduce for losing streaks
-      if (lastGame === 'W' && streakLength >= 2) {
+      if (lastGame === "W" && streakLength >= 2) {
         multiplier *= 1.02; // Small boost for winning streak
-      } else if (lastGame === 'L' && streakLength >= 2) {
+      } else if (lastGame === "L" && streakLength >= 2) {
         multiplier *= 0.98; // Small reduction for losing streak
       }
     } else {
       // Fallback to aggregate-based momentum (backward compatibility)
       const strongMomentum = wins >= 3 && losses <= 1;
       const poorMomentum = losses >= 3 && wins <= 1;
-      
+
       if (strongMomentum) {
         multiplier *= 1.05; // Boost for strong momentum
       } else if (poorMomentum) {
         multiplier *= 0.92; // Reduce for poor momentum
       }
     }
-    
+
     // Cap the multiplier between 0.8 and 1.2
     multiplier = Math.max(0.8, Math.min(1.2, multiplier));
-    
+
     return multiplier;
   };
 
-  const analyzeStraightWin = (homeTeam, awayTeam, country, league, betData, recentFormData) => {
+  const analyzeStraightWin = (
+    homeTeam,
+    awayTeam,
+    country,
+    league,
+    betData,
+    recentFormData,
+  ) => {
     // Check if this is an "Avoid" bet
     if (betData.recommendation && betData.recommendation.includes("Avoid")) {
       return {
@@ -2370,7 +2565,7 @@ function App() {
         b.LEAGUE === league &&
         (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
         b.RESULT &&
-        b.RESULT.trim() !== ""
+        b.RESULT.trim() !== "",
     );
 
     // For away team: get bets where they played away
@@ -2381,33 +2576,35 @@ function App() {
         b.LEAGUE === league &&
         (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
         b.RESULT &&
-        b.RESULT.trim() !== ""
+        b.RESULT.trim() !== "",
     );
 
     // Fallback: if no home/away specific data, use general team data
-    const homeTeamBetsRaw = homeTeamHomeBets.length > 0 
-      ? homeTeamHomeBets 
-      : (bets || []).filter(
-          (b) =>
-            b.TEAM_INCLUDED === homeTeam &&
-            b.COUNTRY === country &&
-            b.LEAGUE === league &&
-            (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
-            b.RESULT &&
-            b.RESULT.trim() !== ""
-        );
+    const homeTeamBetsRaw =
+      homeTeamHomeBets.length > 0
+        ? homeTeamHomeBets
+        : (bets || []).filter(
+            (b) =>
+              b.TEAM_INCLUDED === homeTeam &&
+              b.COUNTRY === country &&
+              b.LEAGUE === league &&
+              (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+              b.RESULT &&
+              b.RESULT.trim() !== "",
+          );
 
-    const awayTeamBetsRaw = awayTeamAwayBets.length > 0
-      ? awayTeamAwayBets
-      : (bets || []).filter(
-          (b) =>
-            b.TEAM_INCLUDED === awayTeam &&
-            b.COUNTRY === country &&
-            b.LEAGUE === league &&
-            (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
-            b.RESULT &&
-            b.RESULT.trim() !== ""
-        );
+    const awayTeamBetsRaw =
+      awayTeamAwayBets.length > 0
+        ? awayTeamAwayBets
+        : (bets || []).filter(
+            (b) =>
+              b.TEAM_INCLUDED === awayTeam &&
+              b.COUNTRY === country &&
+              b.LEAGUE === league &&
+              (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+              b.RESULT &&
+              b.RESULT.trim() !== "",
+          );
 
     // Deduplicate by game (one row per DATE + HOME_TEAM + AWAY_TEAM) to avoid inflated counts
     const deduplicateByGame = (betsList) => {
@@ -2428,8 +2625,14 @@ function App() {
       const homeName = (b.HOME_TEAM || "").toLowerCase().trim();
       const awayName = (b.AWAY_TEAM || "").toLowerCase().trim();
       const teamBet = (b.TEAM_INCLUDED || "").toLowerCase().trim();
-      const userBetOnHome = teamBet === homeName || homeName.includes(teamBet) || teamBet.includes(homeName);
-      const userBetOnAway = teamBet === awayName || awayName.includes(teamBet) || teamBet.includes(awayName);
+      const userBetOnHome =
+        teamBet === homeName ||
+        homeName.includes(teamBet) ||
+        teamBet.includes(homeName);
+      const userBetOnAway =
+        teamBet === awayName ||
+        awayName.includes(teamBet) ||
+        teamBet.includes(awayName);
       if (userBetOnHome && !userBetOnAway) return userWon;
       if (userBetOnAway && !userBetOnHome) return !userWon;
       return false;
@@ -2444,10 +2647,12 @@ function App() {
     const awayWinRate = awayTotal > 0 ? (awayWins / awayTotal) * 100 : 0;
 
     // Calculate Wilson Scores for statistical confidence
-    const homeWilsonScore = homeTotal > 0 ? calculateWilsonScore(homeWins, homeTotal) : 0;
+    const homeWilsonScore =
+      homeTotal > 0 ? calculateWilsonScore(homeWins, homeTotal) : 0;
     const homeWilsonRate = homeWilsonScore * 100;
-    
-    const awayWilsonScore = awayTotal > 0 ? calculateWilsonScore(awayWins, awayTotal) : 0;
+
+    const awayWilsonScore =
+      awayTotal > 0 ? calculateWilsonScore(awayWins, awayTotal) : 0;
     const awayWilsonRate = awayWilsonScore * 100;
 
     // Minimum sample size requirement: 3 games
@@ -2474,88 +2679,137 @@ function App() {
     const minDifference = 5; // Minimum 5% difference in Wilson Score
 
     // Get opponent data for strength analysis
-    const homeOpponentPosition = betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION;
-    const awayOpponentPosition = betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION;
-    const homeOpponentForm = recentFormData ? {
-      wins: recentFormData.awayWins || 0,
-      draws: recentFormData.awayDraws || 0,
-      losses: recentFormData.awayLosses || 0
-    } : null;
-    const awayOpponentForm = recentFormData ? {
-      wins: recentFormData.homeWins || 0,
-      draws: recentFormData.homeDraws || 0,
-      losses: recentFormData.homeLosses || 0
-    } : null;
+    const homeOpponentPosition =
+      betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION;
+    const awayOpponentPosition =
+      betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION;
+    const homeOpponentForm = recentFormData
+      ? {
+          wins: recentFormData.awayWins || 0,
+          draws: recentFormData.awayDraws || 0,
+          losses: recentFormData.awayLosses || 0,
+        }
+      : null;
+    const awayOpponentForm = recentFormData
+      ? {
+          wins: recentFormData.homeWins || 0,
+          draws: recentFormData.homeDraws || 0,
+          losses: recentFormData.homeLosses || 0,
+        }
+      : null;
 
     // Determine recommendation based on Wilson Score
-    if (hasHomeData && (!hasAwayData || homeWilsonRate > awayWilsonRate + minDifference)) {
+    if (
+      hasHomeData &&
+      (!hasAwayData || homeWilsonRate > awayWilsonRate + minDifference)
+    ) {
       // Wilson rate is already a percentage (0-100%), use it directly
       let confidence = Math.min(homeWilsonRate, 100);
       // Apply recent form impact for home team
-      const homeFormImpact = calculateRecentFormImpact(recentFormData, true, false);
+      const homeFormImpact = calculateRecentFormImpact(
+        recentFormData,
+        true,
+        false,
+      );
       confidence = Math.min(confidence * homeFormImpact, 100);
-      
+
       // Apply opponent strength impact (away team is opponent)
-      const opponentStrengthImpact = calculateOpponentStrengthImpact(homeOpponentPosition, homeOpponentForm);
+      const opponentStrengthImpact = calculateOpponentStrengthImpact(
+        homeOpponentPosition,
+        homeOpponentForm,
+      );
       confidence = Math.min(confidence * opponentStrengthImpact, 100);
-      
-      const formNote = homeFormImpact !== 1.0 
-        ? ` (Recent form: ${homeFormImpact > 1.0 ? '+' : ''}${((homeFormImpact - 1) * 100).toFixed(0)}%)`
-        : '';
-      const opponentNote = getOpponentStatusDescription(homeOpponentPosition, homeOpponentForm);
-      
+
+      const formNote =
+        homeFormImpact !== 1.0
+          ? ` (Recent form: ${homeFormImpact > 1.0 ? "+" : ""}${((homeFormImpact - 1) * 100).toFixed(0)}%)`
+          : "";
+      const opponentNote = getOpponentStatusDescription(
+        homeOpponentPosition,
+        homeOpponentForm,
+      );
+
       return {
         bet: homeTeam,
         confidence: confidence,
         winRate: homeWinRate,
         wilsonWinRate: homeWilsonRate,
         totalBets: homeTotal,
-        reasoning: `${homeTeam} has ${homeWinRate.toFixed(1)}% win rate (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}. ${awayTeam} has ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}.${formNote}${opponentNote}`,
+        reasoning: `${homeTeam} has ${homeWinRate.toFixed(1)}% win rate (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? " at home" : ""}. ${awayTeam} has ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? " away" : ""}.${formNote}${opponentNote}`,
       };
-    } else if (hasAwayData && (!hasHomeData || awayWilsonRate > homeWilsonRate + minDifference)) {
+    } else if (
+      hasAwayData &&
+      (!hasHomeData || awayWilsonRate > homeWilsonRate + minDifference)
+    ) {
       // Wilson rate is already a percentage (0-100%), use it directly
       let confidence = Math.min(awayWilsonRate, 100);
       // Apply recent form impact for away team
-      const awayFormImpact = calculateRecentFormImpact(recentFormData, false, true);
+      const awayFormImpact = calculateRecentFormImpact(
+        recentFormData,
+        false,
+        true,
+      );
       confidence = Math.min(confidence * awayFormImpact, 100);
-      
+
       // Apply opponent strength impact (home team is opponent)
-      const opponentStrengthImpact = calculateOpponentStrengthImpact(awayOpponentPosition, awayOpponentForm);
+      const opponentStrengthImpact = calculateOpponentStrengthImpact(
+        awayOpponentPosition,
+        awayOpponentForm,
+      );
       confidence = Math.min(confidence * opponentStrengthImpact, 100);
-      
-      const formNote = awayFormImpact !== 1.0 
-        ? ` (Recent form: ${awayFormImpact > 1.0 ? '+' : ''}${((awayFormImpact - 1) * 100).toFixed(0)}%)`
-        : '';
-      const opponentNote = getOpponentStatusDescription(awayOpponentPosition, awayOpponentForm);
-      
+
+      const formNote =
+        awayFormImpact !== 1.0
+          ? ` (Recent form: ${awayFormImpact > 1.0 ? "+" : ""}${((awayFormImpact - 1) * 100).toFixed(0)}%)`
+          : "";
+      const opponentNote = getOpponentStatusDescription(
+        awayOpponentPosition,
+        awayOpponentForm,
+      );
+
       return {
         bet: awayTeam,
         confidence: confidence,
         winRate: awayWinRate,
         wilsonWinRate: awayWilsonRate,
         totalBets: awayTotal,
-        reasoning: `${awayTeam} has ${awayWinRate.toFixed(1)}% win rate (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? ' away' : ''}. ${homeTeam} has ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? ' at home' : ''}.${formNote}${opponentNote}`,
+        reasoning: `${awayTeam} has ${awayWinRate.toFixed(1)}% win rate (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? " away" : ""}. ${homeTeam} has ${homeWinRate.toFixed(1)}% (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? " at home" : ""}.${formNote}${opponentNote}`,
       };
     } else {
       // Teams have similar Wilson Scores - compare recent form and opponent strength
       const avgWilsonRate = (homeWilsonRate + awayWilsonRate) / 2;
       // Wilson rate is already a percentage (0-100%), use it directly
       let confidence = Math.min(avgWilsonRate, 100);
-      
+
       // Apply form impact to the stronger team based on recent form
-      const homeFormImpact = calculateRecentFormImpact(recentFormData, true, false);
-      const awayFormImpact = calculateRecentFormImpact(recentFormData, false, true);
-      
+      const homeFormImpact = calculateRecentFormImpact(
+        recentFormData,
+        true,
+        false,
+      );
+      const awayFormImpact = calculateRecentFormImpact(
+        recentFormData,
+        false,
+        true,
+      );
+
       // If one team has significantly better form, use that
       if (Math.abs(homeFormImpact - awayFormImpact) > 0.1) {
-        const betterFormImpact = homeFormImpact > awayFormImpact ? homeFormImpact : awayFormImpact;
+        const betterFormImpact =
+          homeFormImpact > awayFormImpact ? homeFormImpact : awayFormImpact;
         confidence = Math.min(confidence * betterFormImpact, 100);
       }
-      
+
       // Consider opponent strength - if one team has a significantly weaker opponent, boost confidence slightly
-      const homeOpponentStrength = calculateOpponentStrengthImpact(homeOpponentPosition, homeOpponentForm);
-      const awayOpponentStrength = calculateOpponentStrengthImpact(awayOpponentPosition, awayOpponentForm);
-      
+      const homeOpponentStrength = calculateOpponentStrengthImpact(
+        homeOpponentPosition,
+        homeOpponentForm,
+      );
+      const awayOpponentStrength = calculateOpponentStrengthImpact(
+        awayOpponentPosition,
+        awayOpponentForm,
+      );
+
       // If there's a clear opponent strength difference, adjust confidence
       if (Math.abs(homeOpponentStrength - awayOpponentStrength) > 0.05) {
         // Home team has weaker opponent (higher multiplier) - boost home confidence
@@ -2566,9 +2820,9 @@ function App() {
           confidence = Math.min(confidence * 1.02, 100);
         }
       }
-      
-      const opponentNote = ` Opponent analysis: ${homeTeam} faces ${getOpponentStatusDescription(homeOpponentPosition, homeOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}; ${awayTeam} faces ${getOpponentStatusDescription(awayOpponentPosition, awayOpponentForm).replace(' (Opponent: ', '').replace(')', '') || 'moderate opposition'}.`;
-      
+
+      const opponentNote = ` Opponent analysis: ${homeTeam} faces ${getOpponentStatusDescription(homeOpponentPosition, homeOpponentForm).replace(" (Opponent: ", "").replace(")", "") || "moderate opposition"}; ${awayTeam} faces ${getOpponentStatusDescription(awayOpponentPosition, awayOpponentForm).replace(" (Opponent: ", "").replace(")", "") || "moderate opposition"}.`;
+
       return {
         bet: "No clear winner",
         confidence: Math.max(confidence, 30), // At least 30% if we have some data
@@ -2599,7 +2853,7 @@ function App() {
     country,
     league,
     betData,
-    recentFormData
+    recentFormData,
   ) => {
     // Check if this is an "Avoid" bet
     if (betData.recommendation && betData.recommendation.includes("Avoid")) {
@@ -2621,7 +2875,7 @@ function App() {
       country,
       league,
       betData,
-      recentFormData
+      recentFormData,
     );
 
     // Get all games involving these teams (not just head-to-head)
@@ -2633,7 +2887,7 @@ function App() {
         b.HOME_SCORE &&
         b.AWAY_SCORE &&
         !isNaN(parseInt(b.HOME_SCORE)) &&
-        !isNaN(parseInt(b.AWAY_SCORE))
+        !isNaN(parseInt(b.AWAY_SCORE)),
     );
 
     const awayTeamGames = (bets || []).filter(
@@ -2644,7 +2898,7 @@ function App() {
         b.HOME_SCORE &&
         b.AWAY_SCORE &&
         !isNaN(parseInt(b.HOME_SCORE)) &&
-        !isNaN(parseInt(b.AWAY_SCORE))
+        !isNaN(parseInt(b.AWAY_SCORE)),
     );
 
     // Create a deduplicated set of all games (to avoid double-counting head-to-head matches)
@@ -2670,7 +2924,7 @@ function App() {
         b.HOME_SCORE &&
         b.AWAY_SCORE &&
         !isNaN(parseInt(b.HOME_SCORE)) &&
-        !isNaN(parseInt(b.AWAY_SCORE))
+        !isNaN(parseInt(b.AWAY_SCORE)),
     );
 
     // Deduplicate league games
@@ -2702,7 +2956,7 @@ function App() {
         b.BET_TYPE &&
         b.BET_TYPE.toLowerCase().includes("double chance") &&
         b.RESULT &&
-        b.RESULT.trim() !== ""
+        b.RESULT.trim() !== "",
     );
 
     const awayTeamDoubleChanceBets = (bets || []).filter(
@@ -2713,12 +2967,12 @@ function App() {
         b.BET_TYPE &&
         b.BET_TYPE.toLowerCase().includes("double chance") &&
         b.RESULT &&
-        b.RESULT.trim() !== ""
+        b.RESULT.trim() !== "",
     );
 
     // Calculate Double Chance win rates from actual bet history
     const homeDoubleChanceWins = homeTeamDoubleChanceBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
+      b.RESULT.toLowerCase().includes("win"),
     ).length;
     const homeDoubleChanceTotal = homeTeamDoubleChanceBets.length;
     const homeDoubleChanceWinRate =
@@ -2732,7 +2986,7 @@ function App() {
     const homeDoubleChanceWilsonRate = homeDoubleChanceWilsonScore * 100;
 
     const awayDoubleChanceWins = awayTeamDoubleChanceBets.filter((b) =>
-      b.RESULT.toLowerCase().includes("win")
+      b.RESULT.toLowerCase().includes("win"),
     ).length;
     const awayDoubleChanceTotal = awayTeamDoubleChanceBets.length;
     const awayDoubleChanceWinRate =
@@ -2778,14 +3032,18 @@ function App() {
           b.LEAGUE === league &&
           (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
           b.RESULT &&
-          b.RESULT.trim() !== ""
+          b.RESULT.trim() !== "",
       );
       const homeTeamWins = homeTeamWinBets.filter((b) =>
-        b.RESULT.toLowerCase().includes("win")
+        b.RESULT.toLowerCase().includes("win"),
       ).length;
       const homeTeamTotal = homeTeamWinBets.length;
-      const homeTeamWinRate = homeTeamTotal > 0 ? (homeTeamWins / homeTeamTotal) * 100 : 0;
-      const homeTeamWilsonScore = homeTeamTotal > 0 ? calculateWilsonScore(homeTeamWins, homeTeamTotal) : 0;
+      const homeTeamWinRate =
+        homeTeamTotal > 0 ? (homeTeamWins / homeTeamTotal) * 100 : 0;
+      const homeTeamWilsonScore =
+        homeTeamTotal > 0
+          ? calculateWilsonScore(homeTeamWins, homeTeamTotal)
+          : 0;
       const homeTeamWilsonRate = homeTeamWilsonScore * 100;
 
       // Get away team win bets
@@ -2796,16 +3054,20 @@ function App() {
           b.LEAGUE === league &&
           (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
           b.RESULT &&
-          b.RESULT.trim() !== ""
+          b.RESULT.trim() !== "",
       );
       const awayTeamWins = awayTeamWinBets.filter((b) =>
-        b.RESULT.toLowerCase().includes("win")
+        b.RESULT.toLowerCase().includes("win"),
       ).length;
       const awayTeamTotal = awayTeamWinBets.length;
-      const awayTeamWinRate = awayTeamTotal > 0 ? (awayTeamWins / awayTeamTotal) * 100 : 0;
-      const awayTeamWilsonScore = awayTeamTotal > 0 ? calculateWilsonScore(awayTeamWins, awayTeamTotal) : 0;
+      const awayTeamWinRate =
+        awayTeamTotal > 0 ? (awayTeamWins / awayTeamTotal) * 100 : 0;
+      const awayTeamWilsonScore =
+        awayTeamTotal > 0
+          ? calculateWilsonScore(awayTeamWins, awayTeamTotal)
+          : 0;
       const awayTeamWilsonRate = awayTeamWilsonScore * 100;
-      
+
       // If we have actual Double Chance data, prefer that
       if (homeDoubleChanceTotal >= 3 && awayDoubleChanceTotal >= 3) {
         if (homeDoubleChanceWilsonRate >= awayDoubleChanceWilsonRate) {
@@ -2863,13 +3125,17 @@ function App() {
       // Double Chance = Win OR Draw, so we add draw rate to win rate
       // This is mathematically correct: P(Win) + P(Draw) = P(Win OR Draw)
       // Note: This can exceed 100% if team has high win rate + high draw rate, but cap at 100%
-      const doubleChanceRate = Math.min(teamWilsonRate + effectiveDrawRate, 100);
+      const doubleChanceRate = Math.min(
+        teamWilsonRate + effectiveDrawRate,
+        100,
+      );
       doubleChanceConfidence = Math.min(doubleChanceRate, 100);
-      
-      const drawRateSource = totalGames >= minSampleSize 
-        ? `team-specific (${drawRate.toFixed(1)}% from ${totalGames} games)` 
-        : `league-wide (${leagueDrawRate.toFixed(1)}% from ${uniqueLeagueGames.length} league games)`;
-      
+
+      const drawRateSource =
+        totalGames >= minSampleSize
+          ? `team-specific (${drawRate.toFixed(1)}% from ${totalGames} games)`
+          : `league-wide (${leagueDrawRate.toFixed(1)}% from ${uniqueLeagueGames.length} league games)`;
+
       reasoning = `${recommendedTeam} has ${teamWinRate.toFixed(1)}% win rate (${teamWilsonRate.toFixed(1)}% Wilson) + ${effectiveDrawRate.toFixed(1)}% draw rate (${drawRateSource}). Total: ${doubleChanceRate.toFixed(1)}%`;
     }
 
@@ -2877,41 +3143,58 @@ function App() {
     // Double Chance should always be safer than Straight Win
     doubleChanceConfidence = Math.max(
       doubleChanceConfidence,
-      straightWinAnalysis.confidence
+      straightWinAnalysis.confidence,
     );
 
     // Apply recent form impact
     const isHomeTeam = recommendedTeam === homeTeam;
     const isAwayTeam = recommendedTeam === awayTeam;
-    const formImpact = calculateRecentFormImpact(recentFormData, isHomeTeam, isAwayTeam);
+    const formImpact = calculateRecentFormImpact(
+      recentFormData,
+      isHomeTeam,
+      isAwayTeam,
+    );
     doubleChanceConfidence = Math.min(doubleChanceConfidence * formImpact, 100);
-    
+
     // Apply opponent strength impact
-    const opponentPosition = isHomeTeam 
-      ? (betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION)
-      : (betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION);
-    const opponentForm = isHomeTeam 
-      ? (recentFormData ? {
-          wins: recentFormData.awayWins || 0,
-          draws: recentFormData.awayDraws || 0,
-          losses: recentFormData.awayLosses || 0
-        } : null)
-      : (recentFormData ? {
-          wins: recentFormData.homeWins || 0,
-          draws: recentFormData.homeDraws || 0,
-          losses: recentFormData.homeLosses || 0
-        } : null);
-    const opponentStrengthImpact = calculateOpponentStrengthImpact(opponentPosition, opponentForm);
-    doubleChanceConfidence = Math.min(doubleChanceConfidence * opponentStrengthImpact, 100);
-    
+    const opponentPosition = isHomeTeam
+      ? betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION
+      : betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION;
+    const opponentForm = isHomeTeam
+      ? recentFormData
+        ? {
+            wins: recentFormData.awayWins || 0,
+            draws: recentFormData.awayDraws || 0,
+            losses: recentFormData.awayLosses || 0,
+          }
+        : null
+      : recentFormData
+        ? {
+            wins: recentFormData.homeWins || 0,
+            draws: recentFormData.homeDraws || 0,
+            losses: recentFormData.homeLosses || 0,
+          }
+        : null;
+    const opponentStrengthImpact = calculateOpponentStrengthImpact(
+      opponentPosition,
+      opponentForm,
+    );
+    doubleChanceConfidence = Math.min(
+      doubleChanceConfidence * opponentStrengthImpact,
+      100,
+    );
+
     // Add form note to reasoning if applicable
     if (formImpact !== 1.0) {
-      const formNote = ` Recent form: ${formImpact > 1.0 ? '+' : ''}${((formImpact - 1) * 100).toFixed(0)}%`;
+      const formNote = ` Recent form: ${formImpact > 1.0 ? "+" : ""}${((formImpact - 1) * 100).toFixed(0)}%`;
       reasoning += formNote;
     }
-    
+
     // Add opponent status note
-    const opponentNote = getOpponentStatusDescription(opponentPosition, opponentForm);
+    const opponentNote = getOpponentStatusDescription(
+      opponentPosition,
+      opponentForm,
+    );
     if (opponentNote) {
       reasoning += opponentNote;
     }
@@ -2923,13 +3206,21 @@ function App() {
       totalBets: totalGames || teamDoubleChanceTotal || 0,
       reasoning: reasoning,
       // Add Wilson rate for ranking when confidence is capped
-      wilsonWinRate: teamDoubleChanceTotal >= 3 
-        ? teamDoubleChanceWilsonRate 
-        : teamWilsonRate, // Use Straight Win Wilson rate for fallback case
+      wilsonWinRate:
+        teamDoubleChanceTotal >= 3
+          ? teamDoubleChanceWilsonRate
+          : teamWilsonRate, // Use Straight Win Wilson rate for fallback case
     };
   };
 
-  const analyzeOverUnder = (homeTeam, awayTeam, country, league, betData, recentFormData) => {
+  const analyzeOverUnder = (
+    homeTeam,
+    awayTeam,
+    country,
+    league,
+    betData,
+    recentFormData,
+  ) => {
     // Check if this is an "Avoid" bet
     if (betData.recommendation && betData.recommendation.includes("Avoid")) {
       return {
@@ -2952,7 +3243,7 @@ function App() {
         b.HOME_SCORE &&
         b.AWAY_SCORE &&
         b.RESULT &&
-        b.RESULT.trim() !== ""
+        b.RESULT.trim() !== "",
     );
 
     const awayTeamGames = (bets || []).filter(
@@ -2963,27 +3254,27 @@ function App() {
         b.HOME_SCORE &&
         b.AWAY_SCORE &&
         b.RESULT &&
-        b.RESULT.trim() !== ""
+        b.RESULT.trim() !== "",
     );
 
     // Calculate average goals
     const homeTotalGoals = homeTeamGames.reduce(
       (sum, b) => sum + parseInt(b.HOME_SCORE) + parseInt(b.AWAY_SCORE),
-      0
+      0,
     );
     const homeAvgGoals =
       homeTeamGames.length > 0 ? homeTotalGoals / homeTeamGames.length : 0;
 
     const awayTotalGoals = awayTeamGames.reduce(
       (sum, b) => sum + parseInt(b.HOME_SCORE) + parseInt(b.AWAY_SCORE),
-      0
+      0,
     );
     const awayAvgGoals =
       awayTeamGames.length > 0 ? awayTotalGoals / awayTeamGames.length : 0;
 
     // Calculate combined average
     const combinedAvgGoals = (homeAvgGoals + awayAvgGoals) / 2;
-    
+
     // Create a deduplicated set of all games (to avoid double-counting head-to-head matches)
     const allGamesMap = new Map();
     [...homeTeamGames, ...awayTeamGames].forEach((game) => {
@@ -3047,10 +3338,12 @@ function App() {
       const underRate = totalGames > 0 ? (underGames / totalGames) * 100 : 0;
 
       // Use Wilson Score for statistical confidence
-      const overWilsonScore = overGames > 0 ? calculateWilsonScore(overGames, totalGames) : 0;
+      const overWilsonScore =
+        overGames > 0 ? calculateWilsonScore(overGames, totalGames) : 0;
       const overWilsonRate = overWilsonScore * 100;
-      
-      const underWilsonScore = underGames > 0 ? calculateWilsonScore(underGames, totalGames) : 0;
+
+      const underWilsonScore =
+        underGames > 0 ? calculateWilsonScore(underGames, totalGames) : 0;
       const underWilsonRate = underWilsonScore * 100;
 
       // Calculate confidence based on Wilson Score (similar to Straight Win)
@@ -3059,13 +3352,19 @@ function App() {
       const minDifference = 10; // Must be at least 10% above/below 50%
 
       // Check OVER recommendation
-      if (overWilsonRate >= minThreshold && (overWilsonRate - 50) >= minDifference) {
+      if (
+        overWilsonRate >= minThreshold &&
+        overWilsonRate - 50 >= minDifference
+      ) {
         // Wilson rate is already in percentage form (0-100%), use it directly
         const overConfidence = Math.min(overWilsonRate, 100);
         if (overConfidence > highestConfidence) {
           highestConfidence = overConfidence;
           const goalLabel = line === 1.5 ? "2+" : `${line}+`;
-          const cautiousNote = totalGames < 25 ? ` Cautious estimate: ${overWilsonRate.toFixed(0)}% (small sample).` : "";
+          const cautiousNote =
+            totalGames < 25
+              ? ` Cautious estimate: ${overWilsonRate.toFixed(0)}% (small sample).`
+              : "";
           bestRecommendation = {
             bet: `OVER ${line}`,
             confidence: overConfidence,
@@ -3079,12 +3378,18 @@ function App() {
       }
 
       // Check UNDER recommendation
-      if (underWilsonRate >= minThreshold && (underWilsonRate - 50) >= minDifference) {
+      if (
+        underWilsonRate >= minThreshold &&
+        underWilsonRate - 50 >= minDifference
+      ) {
         // Wilson rate is already in percentage form (0-100%), use it directly
         const underConfidence = Math.min(underWilsonRate, 100);
         if (underConfidence > highestConfidence) {
           highestConfidence = underConfidence;
-          const cautiousNote = totalGames < 25 ? ` Cautious estimate: ${underWilsonRate.toFixed(0)}% (small sample).` : "";
+          const cautiousNote =
+            totalGames < 25
+              ? ` Cautious estimate: ${underWilsonRate.toFixed(0)}% (small sample).`
+              : "";
           bestRecommendation = {
             bet: `UNDER ${line}`,
             confidence: underConfidence,
@@ -3111,15 +3416,23 @@ function App() {
 
     // Apply recent form impact for Over/Under
     // Consider both teams' form - good form tends to favor OVER, poor form favors UNDER
-    const homeFormImpact = calculateRecentFormImpact(recentFormData, true, false);
-    const awayFormImpact = calculateRecentFormImpact(recentFormData, false, true);
+    const homeFormImpact = calculateRecentFormImpact(
+      recentFormData,
+      true,
+      false,
+    );
+    const awayFormImpact = calculateRecentFormImpact(
+      recentFormData,
+      false,
+      true,
+    );
     const avgFormImpact = (homeFormImpact + awayFormImpact) / 2;
-    
+
     // For OVER bets, boost confidence if teams are in good form (scoring more)
     // For UNDER bets, boost confidence if teams are in poor form (scoring less)
     const isOverBet = bestRecommendation.bet.includes("OVER");
     let formMultiplier = 1.0;
-    
+
     if (isOverBet && avgFormImpact > 1.0) {
       // Good form favors OVER
       formMultiplier = avgFormImpact;
@@ -3133,33 +3446,49 @@ function App() {
       // Good form reduces UNDER confidence
       formMultiplier = 2.0 - avgFormImpact; // Invert the impact
     }
-    
+
     // Cap the multiplier
     formMultiplier = Math.max(0.9, Math.min(1.1, formMultiplier));
-    
-    bestRecommendation.confidence = Math.min(bestRecommendation.confidence * formMultiplier, 100);
-    
+
+    bestRecommendation.confidence = Math.min(
+      bestRecommendation.confidence * formMultiplier,
+      100,
+    );
+
     // Apply opponent strength impact for Over/Under
     // Strong teams tend to score more (favor OVER), weak teams concede more (favor OVER)
     // Weak teams score less (favor UNDER), strong teams concede less (favor UNDER)
-    const homeOpponentPosition = betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION;
-    const awayOpponentPosition = betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION;
-    const homeOpponentForm = recentFormData ? {
-      wins: recentFormData.awayWins || 0,
-      draws: recentFormData.awayDraws || 0,
-      losses: recentFormData.awayLosses || 0
-    } : null;
-    const awayOpponentForm = recentFormData ? {
-      wins: recentFormData.homeWins || 0,
-      draws: recentFormData.homeDraws || 0,
-      losses: recentFormData.homeLosses || 0
-    } : null;
-    
+    const homeOpponentPosition =
+      betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION;
+    const awayOpponentPosition =
+      betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION;
+    const homeOpponentForm = recentFormData
+      ? {
+          wins: recentFormData.awayWins || 0,
+          draws: recentFormData.awayDraws || 0,
+          losses: recentFormData.awayLosses || 0,
+        }
+      : null;
+    const awayOpponentForm = recentFormData
+      ? {
+          wins: recentFormData.homeWins || 0,
+          draws: recentFormData.homeDraws || 0,
+          losses: recentFormData.homeLosses || 0,
+        }
+      : null;
+
     // Average opponent strength (both teams' opponents)
-    const homeOpponentStrength = calculateOpponentStrengthImpact(homeOpponentPosition, homeOpponentForm);
-    const awayOpponentStrength = calculateOpponentStrengthImpact(awayOpponentPosition, awayOpponentForm);
-    const avgOpponentStrength = (homeOpponentStrength + awayOpponentStrength) / 2;
-    
+    const homeOpponentStrength = calculateOpponentStrengthImpact(
+      homeOpponentPosition,
+      homeOpponentForm,
+    );
+    const awayOpponentStrength = calculateOpponentStrengthImpact(
+      awayOpponentPosition,
+      awayOpponentForm,
+    );
+    const avgOpponentStrength =
+      (homeOpponentStrength + awayOpponentStrength) / 2;
+
     // For OVER: weak opponents (higher multiplier) favor more goals
     // For UNDER: strong opponents (lower multiplier) favor fewer goals
     let opponentMultiplier = 1.0;
@@ -3170,17 +3499,21 @@ function App() {
       // Strong opponents = lower multiplier = fewer goals expected
       opponentMultiplier = 2.0 - avgOpponentStrength; // Invert
     }
-    
+
     // Cap the multiplier
     opponentMultiplier = Math.max(0.95, Math.min(1.05, opponentMultiplier));
-    bestRecommendation.confidence = Math.min(bestRecommendation.confidence * opponentMultiplier, 100);
-    
+    bestRecommendation.confidence = Math.min(
+      bestRecommendation.confidence * opponentMultiplier,
+      100,
+    );
+
     // Add form note to reasoning if applicable (plain language)
     if (formMultiplier !== 1.0) {
       const pct = ((formMultiplier - 1) * 100).toFixed(0);
-      const formNote = formMultiplier > 1.0
-        ? ` Recent form adds +${pct}% confidence.`
-        : ` Recent form reduces confidence by ${pct.replace('-', '')}%.`;
+      const formNote =
+        formMultiplier > 1.0
+          ? ` Recent form adds +${pct}% confidence.`
+          : ` Recent form reduces confidence by ${pct.replace("-", "")}%.`;
       bestRecommendation.reasoning += formNote;
     }
 
@@ -3194,13 +3527,19 @@ function App() {
         else if (p >= 15) parts.push("bottom 3");
         else if (p >= 12) parts.push("bottom half");
       }
-      if (form && (form.wins + form.draws + form.losses) >= 3) {
+      if (form && form.wins + form.draws + form.losses >= 3) {
         parts.push(`${form.wins}W-${form.draws}D-${form.losses}L`);
       }
       return parts.length ? parts.join(", ") : "moderate opposition";
     };
-    const homeOppDesc = shortOpponentDesc(homeOpponentPosition, homeOpponentForm);
-    const awayOppDesc = shortOpponentDesc(awayOpponentPosition, awayOpponentForm);
+    const homeOppDesc = shortOpponentDesc(
+      homeOpponentPosition,
+      homeOpponentForm,
+    );
+    const awayOppDesc = shortOpponentDesc(
+      awayOpponentPosition,
+      awayOpponentForm,
+    );
     bestRecommendation.reasoning += ` Opponents: ${homeTeam} vs ${homeOppDesc}; ${awayTeam} vs ${awayOppDesc}.`;
 
     return bestRecommendation;
@@ -3219,7 +3558,7 @@ function App() {
           b.COUNTRY === bet.country &&
           b.LEAGUE === bet.league &&
           b.RESULT !== "" &&
-          b.RESULT !== "pending"
+          b.RESULT !== "pending",
       );
 
       if (teamBets.length === 0) {
@@ -3230,7 +3569,7 @@ function App() {
         reasons.push(
           `Poor team performance: ${winRate.toFixed(1)}% win rate (${wins}/${
             teamBets.length
-          } bets)`
+          } bets)`,
         );
       }
     }
@@ -3242,7 +3581,7 @@ function App() {
           b.COUNTRY === bet.country &&
           b.LEAGUE === bet.league &&
           b.RESULT !== "" &&
-          b.RESULT !== "pending"
+          b.RESULT !== "pending",
       );
 
       if (leagueBets.length === 0) {
@@ -3253,7 +3592,7 @@ function App() {
         reasons.push(
           `Poor league performance: ${winRate.toFixed(1)}% win rate (${wins}/${
             leagueBets.length
-          } bets)`
+          } bets)`,
         );
       }
     }
@@ -3266,7 +3605,7 @@ function App() {
           b.RESULT !== "" &&
           b.RESULT !== "pending" &&
           (Math.abs(b.ODDS1 - bet.odds1) <= 0.5 ||
-            Math.abs(b.ODDS2 - bet.odds1) <= 0.5)
+            Math.abs(b.ODDS2 - bet.odds1) <= 0.5),
       );
 
       if (similarBets.length === 0) {
@@ -3276,8 +3615,8 @@ function App() {
         const winRate = (wins / similarBets.length) * 100;
         reasons.push(
           `Poor performance with similar odds: ${winRate.toFixed(
-            1
-          )}% win rate (${wins}/${similarBets.length} bets)`
+            1,
+          )}% win rate (${wins}/${similarBets.length} bets)`,
         );
       }
     }
@@ -3291,7 +3630,7 @@ function App() {
           b.COUNTRY === bet.country &&
           b.LEAGUE === bet.league &&
           b.RESULT !== "" &&
-          b.RESULT !== "pending"
+          b.RESULT !== "pending",
       );
 
       if (matchups.length === 0) {
@@ -3301,8 +3640,8 @@ function App() {
         const winRate = (wins / matchups.length) * 100;
         reasons.push(
           `Poor head-to-head performance: ${winRate.toFixed(
-            1
-          )}% win rate (${wins}/${matchups.length} matchups)`
+            1,
+          )}% win rate (${wins}/${matchups.length} matchups)`,
         );
       }
     }
@@ -3330,13 +3669,13 @@ function App() {
             reasons.push(
               `Poor league position: Home team in bottom ${(
                 100 - homePercent
-              ).toFixed(0)}% of league`
+              ).toFixed(0)}% of league`,
             );
           } else if (!isBettingOnHomeTeam && awayPercent > 60) {
             reasons.push(
               `Poor league position: Away team in bottom ${(
                 100 - awayPercent
-              ).toFixed(0)}% of league`
+              ).toFixed(0)}% of league`,
             );
           }
         }
@@ -3358,7 +3697,7 @@ function App() {
           b.COUNTRY === bet.country &&
           b.LEAGUE === bet.league &&
           b.RESULT !== "" &&
-          b.RESULT !== "pending"
+          b.RESULT !== "pending",
       );
 
       if (homeAwayBets.length === 0) {
@@ -3368,8 +3707,8 @@ function App() {
         const winRate = (wins / homeAwayBets.length) * 100;
         reasons.push(
           `Poor ${gameType} performance: ${winRate.toFixed(
-            1
-          )}% win rate (${wins}/${homeAwayBets.length} ${gameType} games)`
+            1,
+          )}% win rate (${wins}/${homeAwayBets.length} ${gameType} games)`,
         );
       }
     }
@@ -3385,7 +3724,7 @@ function App() {
   // Use the analytics hook for deduplicated bets
   const { deduplicatedBets: getDeduplicatedBetsForAnalysis } = useAnalytics(
     bets,
-    analyticsSortConfig
+    analyticsSortConfig,
   );
 
   // Use the analytics hook for team analytics
@@ -3444,7 +3783,7 @@ function App() {
     storePredictionsData,
     storeRecommendationsData,
     setScoringAnalysis,
-    setScoringAnalysisLoading
+    setScoringAnalysisLoading,
   );
 
   // Use the query hook
@@ -3464,13 +3803,13 @@ function App() {
     queryFilters,
     setQueryFilters,
     setQueryResults,
-    setIsQuerying
+    setIsQuerying,
   );
 
   // Use the PDF hook
   const { generatePDFReport: generatePDFReportService } = usePDF(
     analysisResults,
-    betRecommendations
+    betRecommendations,
   );
 
   // Use the analytics functions hook
@@ -3550,16 +3889,16 @@ function App() {
 
     // Get filtered bets
     const filteredBets = getDeduplicatedFilteredBets();
-    
+
     // Get top teams from filtered bets using the service function directly
     const topTeams = getTopTeams(filteredBets);
-    
+
     // Filter teams to match the exact country and league
     const teamsInLeague = topTeams.filter(
       (team) =>
         team.country === filters.country &&
         team.league === filters.league &&
-        team.totalBets >= 3 // Minimum 3 bets for consideration
+        team.totalBets >= 3, // Minimum 3 bets for consideration
     );
 
     if (teamsInLeague.length === 0) {
@@ -3624,7 +3963,7 @@ function App() {
           const match1 = `${result.HOME_TEAM} vs ${result.AWAY_TEAM}`;
           const match2 = `${result.AWAY_TEAM} vs ${result.HOME_TEAM}`;
           const full = betRecommendations.find(
-            (rec) => rec.match === match1 || rec.match === match2
+            (rec) => rec.match === match1 || rec.match === match2,
           );
           if (!full) return null;
           return {
@@ -3641,16 +3980,32 @@ function App() {
             oddsx: result.ODDSX,
             recommendation: full.primary?.recommendation?.bet ?? null,
             confidence_score: full.primary?.recommendation?.confidence ?? null,
-            reasoning: full.primary?.recommendation?.reasoning ?? full.primary?.recommendation?.bet ?? null,
+            reasoning:
+              full.primary?.recommendation?.reasoning ??
+              full.primary?.recommendation?.bet ??
+              null,
             primary_recommendation: full.primary?.recommendation?.bet ?? null,
-            primary_confidence: full.primary?.recommendation?.confidence ?? null,
-            primary_reasoning: full.primary?.recommendation?.reasoning ?? full.primary?.recommendation?.bet ?? null,
-            secondary_recommendation: full.secondary?.recommendation?.bet ?? null,
-            secondary_confidence: full.secondary?.recommendation?.confidence ?? null,
-            secondary_reasoning: full.secondary?.recommendation?.reasoning ?? full.secondary?.recommendation?.bet ?? null,
+            primary_confidence:
+              full.primary?.recommendation?.confidence ?? null,
+            primary_reasoning:
+              full.primary?.recommendation?.reasoning ??
+              full.primary?.recommendation?.bet ??
+              null,
+            secondary_recommendation:
+              full.secondary?.recommendation?.bet ?? null,
+            secondary_confidence:
+              full.secondary?.recommendation?.confidence ?? null,
+            secondary_reasoning:
+              full.secondary?.recommendation?.reasoning ??
+              full.secondary?.recommendation?.bet ??
+              null,
             tertiary_recommendation: full.tertiary?.recommendation?.bet ?? null,
-            tertiary_confidence: full.tertiary?.recommendation?.confidence ?? null,
-            tertiary_reasoning: full.tertiary?.recommendation?.reasoning ?? full.tertiary?.recommendation?.bet ?? null,
+            tertiary_confidence:
+              full.tertiary?.recommendation?.confidence ?? null,
+            tertiary_reasoning:
+              full.tertiary?.recommendation?.reasoning ??
+              full.tertiary?.recommendation?.bet ??
+              null,
           };
         })
         .filter(Boolean);
@@ -3704,7 +4059,7 @@ function App() {
       debugLog(
         "Fetched current bets:",
         currentBets ? currentBets.length : 0,
-        "records"
+        "records",
       );
 
       // Debug: Show first few bets from Google Sheets
@@ -3714,7 +4069,7 @@ function App() {
           debugLog(
             `${index + 1}. BET_ID: "${bet.BET_ID}", Teams: "${
               bet.HOME_TEAM
-            }" vs "${bet.AWAY_TEAM}", Result: "${bet.RESULT}"`
+            }" vs "${bet.AWAY_TEAM}", Result: "${bet.RESULT}"`,
           );
         });
       }
@@ -3723,29 +4078,27 @@ function App() {
         throw new Error("Failed to fetch current bets from Google Sheets");
       }
 
-      debugLog(
-        `Found ${storedRecommendations.length} stored recommendations`
-      );
+      debugLog(`Found ${storedRecommendations.length} stored recommendations`);
       debugLog(`Found ${currentBets.length} current bets with results`);
 
       // Simple test - just log the first few items
       debugLog("=== DEBUG INFO ===");
       debugLog(
         "First stored recommendation date:",
-        storedRecommendations[0]?.date
+        storedRecommendations[0]?.date,
       );
       debugLog("First current bet date:", currentBets[0]?.DATE);
       debugLog(
         "First stored recommendation teams:",
         storedRecommendations[0]?.home_team,
         "vs",
-        storedRecommendations[0]?.away_team
+        storedRecommendations[0]?.away_team,
       );
       debugLog(
         "First current bet teams:",
         currentBets[0]?.HOME_TEAM,
         "vs",
-        currentBets[0]?.AWAY_TEAM
+        currentBets[0]?.AWAY_TEAM,
       );
 
       // Check date ranges (moved after normalizeDate function definition)
@@ -3755,7 +4108,7 @@ function App() {
         debugLog("First stored recommendation:", storedRecommendations[0]);
         debugLog(
           "BET_ID in stored recommendation:",
-          storedRecommendations[0]?.bet_id
+          storedRecommendations[0]?.bet_id,
         );
       }
 
@@ -3770,7 +4123,7 @@ function App() {
       debugLog("First 5 raw bets:", currentBets.slice(0, 5));
       debugLog(
         "All unique dates in Google Sheets:",
-        [...new Set(currentBets.map((bet) => bet.DATE))].slice(0, 10)
+        [...new Set(currentBets.map((bet) => bet.DATE))].slice(0, 10),
       );
 
       // Function to normalize dates for matching
@@ -3800,7 +4153,7 @@ function App() {
           const currentYear = new Date().getFullYear();
           return `${currentYear}-${monthMap[month] || "01"}-${day.padStart(
             2,
-            "0"
+            "0",
           )}`;
         }
         return dateStr;
@@ -3822,7 +4175,7 @@ function App() {
           // Fallback lookup: Use team names for cases where BET_ID doesn't match
           const teamKey = `${bet.HOME_TEAM}_vs_${bet.AWAY_TEAM}`.replace(
             /\s+/g,
-            "_"
+            "_",
           );
 
           if (!teamBetsLookup.has(teamKey)) {
@@ -3833,7 +4186,7 @@ function App() {
       });
 
       debugLog(
-        `Created BET_ID lookup map with ${betsLookup.size} games that have results`
+        `Created BET_ID lookup map with ${betsLookup.size} games that have results`,
       );
 
       // Debug: Show what BET_IDs are actually in the lookup
@@ -3848,12 +4201,12 @@ function App() {
         debugLog("Match found:", betsLookup.get(targetBetId));
       }
       debugLog(
-        `Created team-based fallback lookup with ${teamBetsLookup.size} team combinations`
+        `Created team-based fallback lookup with ${teamBetsLookup.size} team combinations`,
       );
 
       // Debug: Show sample results from Google Sheets
       const gamesWithResults = currentBets.filter(
-        (bet) => bet.RESULT && bet.RESULT.trim() !== ""
+        (bet) => bet.RESULT && bet.RESULT.trim() !== "",
       );
       debugLog(
         "Sample games with results:",
@@ -3862,7 +4215,7 @@ function App() {
           home: bet.HOME_TEAM,
           away: bet.AWAY_TEAM,
           result: bet.RESULT,
-        }))
+        })),
       );
 
       // Show unique result values
@@ -3874,11 +4227,11 @@ function App() {
       // Debug: Show a few examples of the Google Sheets date format
       debugLog(
         "Sample Google Sheets dates:",
-        currentBets.slice(0, 3).map((bet) => bet.DATE)
+        currentBets.slice(0, 3).map((bet) => bet.DATE),
       );
       debugLog(
         "Sample normalized Google Sheets dates:",
-        currentBets.slice(0, 3).map((bet) => normalizeDate(bet.DATE))
+        currentBets.slice(0, 3).map((bet) => normalizeDate(bet.DATE)),
       );
       debugLog(
         "Sample Google Sheets game IDs:",
@@ -3886,9 +4239,9 @@ function App() {
           const normalizedDate = normalizeDate(bet.DATE);
           return `${normalizedDate}_${bet.HOME_TEAM}_${bet.AWAY_TEAM}`.replace(
             /\s+/g,
-            "_"
+            "_",
           );
-        })
+        }),
       );
 
       // Debug: Show August games specifically
@@ -3905,18 +4258,18 @@ function App() {
           home: bet.HOME_TEAM,
           away: bet.AWAY_TEAM,
           result: bet.RESULT,
-        }))
+        })),
       );
 
       // Debug: Show all unique team combinations in Google Sheets
       const teamCombinations = [
         ...new Set(
-          currentBets.map((bet) => `${bet.HOME_TEAM}_vs_${bet.AWAY_TEAM}`)
+          currentBets.map((bet) => `${bet.HOME_TEAM}_vs_${bet.AWAY_TEAM}`),
         ),
       ];
       debugLog(
         "Sample team combinations in Google Sheets:",
-        teamCombinations.slice(0, 10)
+        teamCombinations.slice(0, 10),
       );
 
       // Debug: Show first few keys in the lookup maps
@@ -3932,13 +4285,13 @@ function App() {
         "Stored recommendations date range:",
         storedDates[0],
         "to",
-        storedDates[storedDates.length - 1]
+        storedDates[storedDates.length - 1],
       );
       debugLog(
         "Current bets date range:",
         currentDates[0],
         "to",
-        currentDates[currentDates.length - 1]
+        currentDates[currentDates.length - 1],
       );
 
       // Filter stored recommendations to only include games that have results in Google Sheets
@@ -3953,14 +4306,14 @@ function App() {
           const teamKey =
             `${recommendation.home_team}_vs_${recommendation.away_team}`.replace(
               /\s+/g,
-              "_"
+              "_",
             );
           return teamBetsLookup.has(teamKey);
-        }
+        },
       );
 
       debugLog(
-        `Found ${recommendationsWithResults.length} stored recommendations that have results in Google Sheets`
+        `Found ${recommendationsWithResults.length} stored recommendations that have results in Google Sheets`,
       );
 
       // Match recommendations with results
@@ -3982,7 +4335,7 @@ function App() {
             (bet) =>
               bet.BET_ID === recommendation.bet_id &&
               bet.RESULT &&
-              bet.RESULT.trim() !== ""
+              bet.RESULT.trim() !== "",
           );
 
           debugLog(`Looking for BET_ID: ${recommendation.bet_id}`);
@@ -3995,7 +4348,7 @@ function App() {
               debugLog(
                 `  ${index + 1}. ${bet.HOME_TEAM} vs ${
                   bet.AWAY_TEAM
-                } - Result: ${bet.RESULT}`
+                } - Result: ${bet.RESULT}`,
               );
             });
           }
@@ -4006,30 +4359,30 @@ function App() {
             const awayMatch = bet.AWAY_TEAM === recommendation.away_team;
 
             debugLog(
-              `Checking: "${bet.HOME_TEAM}" === "${recommendation.home_team}" ? ${homeMatch}`
+              `Checking: "${bet.HOME_TEAM}" === "${recommendation.home_team}" ? ${homeMatch}`,
             );
             debugLog(
-              `Checking: "${bet.AWAY_TEAM}" === "${recommendation.away_team}" ? ${awayMatch}`
+              `Checking: "${bet.AWAY_TEAM}" === "${recommendation.away_team}" ? ${awayMatch}`,
             );
 
             return homeMatch && awayMatch;
           });
 
           debugLog(
-            `Looking for teams: ${recommendation.home_team} vs ${recommendation.away_team}`
+            `Looking for teams: ${recommendation.home_team} vs ${recommendation.away_team}`,
           );
           debugLog(`Found specific game match:`, matchingBet ? "Yes" : "No");
           debugLog(
-            `Recommendation ID: ${recommendation.id}, Game: ${recommendation.home_team} vs ${recommendation.away_team}`
+            `Recommendation ID: ${recommendation.id}, Game: ${recommendation.home_team} vs ${recommendation.away_team}`,
           );
 
           if (matchingBet) {
             debugLog(
-              `✅ MATCHED: ${matchingBet.HOME_TEAM} vs ${matchingBet.AWAY_TEAM}, Result: ${matchingBet.RESULT}`
+              `✅ MATCHED: ${matchingBet.HOME_TEAM} vs ${matchingBet.AWAY_TEAM}, Result: ${matchingBet.RESULT}`,
             );
           } else {
             debugLog(
-              `❌ NO MATCH FOUND for teams: ${recommendation.home_team} vs ${recommendation.away_team}`
+              `❌ NO MATCH FOUND for teams: ${recommendation.home_team} vs ${recommendation.away_team}`,
             );
           }
         }
@@ -4039,7 +4392,7 @@ function App() {
           const teamKey =
             `${recommendation.home_team}_vs_${recommendation.away_team}`.replace(
               /\s+/g,
-              "_"
+              "_",
             );
 
           const teamBets = teamBetsLookup.get(teamKey) || [];
@@ -4049,7 +4402,7 @@ function App() {
             matchingBet = teamBets.find(
               (bet) =>
                 bet.BET_TYPE === recommendation.bet_type &&
-                bet.BET_SELECTION === recommendation.bet_selection
+                bet.BET_SELECTION === recommendation.bet_selection,
             );
           }
 
@@ -4077,7 +4430,7 @@ function App() {
           // We have a match with results
           const analysis = analyzeRecommendationFailure(
             recommendation,
-            matchingBet
+            matchingBet,
           );
           matched.push({
             ...recommendation,
@@ -4140,7 +4493,7 @@ function App() {
             if (!response.ok) {
               console.error(
                 `Failed to update record ${match.id}:`,
-                response.statusText
+                response.statusText,
               );
             } else {
               debugLog(`Successfully updated record ${match.id}`);
@@ -4184,7 +4537,7 @@ function App() {
   // Evaluate if the system's original prediction about the game outcome was accurate
   const evaluateSystemPredictionAccuracy = (
     systemRecommendation,
-    actualResult
+    actualResult,
   ) => {
     const result = actualResult.toLowerCase();
 
@@ -4198,7 +4551,7 @@ function App() {
   // Evaluate if the system's recommendation matched what you actually bet
   const evaluateSystemRecommendationAccuracy = (
     systemRecommendation,
-    yourBetSelection
+    yourBetSelection,
   ) => {
     const recommendation = systemRecommendation?.toLowerCase() || "";
     const yourBet = yourBetSelection?.toLowerCase() || "";
@@ -4209,7 +4562,7 @@ function App() {
       systemRecommendation.includes("Double Chance Away")
     ) {
       debugLog(
-        `DEBUG: System recommendation: "${systemRecommendation}" -> "${recommendation}"`
+        `DEBUG: System recommendation: "${systemRecommendation}" -> "${recommendation}"`,
       );
       debugLog(`DEBUG: Your bet: "${yourBetSelection}" -> "${yourBet}"`);
     }
@@ -4301,12 +4654,12 @@ function App() {
     const yourBetWon = evaluateYourBetOutcome(betSelection, result);
     const systemRecommendationAccurate = evaluateSystemRecommendationAccuracy(
       systemRecommendation,
-      betSelection
+      betSelection,
     );
 
     // Debug logging
     debugLog(
-      `Debug: System recommendation: "${systemRecommendation}", Your bet: "${betSelection}", Match: ${systemRecommendationAccurate}`
+      `Debug: System recommendation: "${systemRecommendation}", Your bet: "${betSelection}", Match: ${systemRecommendationAccurate}`,
     );
 
     // Determine overall analysis
@@ -4337,7 +4690,7 @@ function App() {
     const confidenceAnalysis = analyzeConfidenceFactors(
       recommendation,
       actualBet,
-      systemRecommendationAccurate // Use system accuracy for confidence analysis
+      systemRecommendationAccurate, // Use system accuracy for confidence analysis
     );
 
     return {
@@ -4345,7 +4698,7 @@ function App() {
       systemRecommendationAccurate,
       systemPredictionAccurate: evaluateSystemPredictionAccuracy(
         systemRecommendation,
-        result
+        result,
       ),
       analysisType,
       insight,
@@ -4408,13 +4761,13 @@ function App() {
 
     // Count user bet outcomes
     const userBetsWon = matchedRecommendations.filter(
-      (m) => m.analysis.yourBetWon
+      (m) => m.analysis.yourBetWon,
     ).length;
     const userBetsLost = total - userBetsWon;
 
     // Count system recommendation accuracy
     const systemCorrect = matchedRecommendations.filter(
-      (m) => m.analysis.systemRecommendationAccurate
+      (m) => m.analysis.systemRecommendationAccurate,
     ).length;
     const systemWrong = total - systemCorrect;
 
@@ -4473,14 +4826,14 @@ function App() {
     awayTeam,
     homeLeague,
     awayLeague,
-    scoringData = scoringAnalysis // Use passed data or fallback to state
+    scoringData = scoringAnalysis, // Use passed data or fallback to state
   ) => {
     return getScoringRecommendationService(
       homeTeam,
       awayTeam,
       homeLeague,
       awayLeague,
-      scoringData
+      scoringData,
     );
   };
 
@@ -4578,7 +4931,7 @@ function App() {
     const bestSlip =
       completedSlips.length > 0
         ? completedSlips.reduce((best, slip) =>
-            slip.winRate > best.winRate ? slip : best
+            slip.winRate > best.winRate ? slip : best,
           )
         : null;
 
@@ -4602,14 +4955,7 @@ function App() {
         note.TEAM_NAME === teamName &&
         note.COUNTRY === country &&
         note.LEAGUE === league;
-      debugLog(
-        "Checking note:",
-        note.TEAM_NAME,
-        "vs",
-        teamName,
-        "=",
-        matches
-      );
+      debugLog("Checking note:", note.TEAM_NAME, "vs", teamName, "=", matches);
       return matches;
     });
 
@@ -4620,14 +4966,14 @@ function App() {
   const isTeamInTop40 = (teamName) => {
     const topTeams = getTopTeams();
     return topTeams.some(
-      (team) => team.teamName.toLowerCase() === teamName?.toLowerCase()
+      (team) => team.teamName.toLowerCase() === teamName?.toLowerCase(),
     );
   };
 
   const getTop40Ranking = (teamName) => {
     const topTeams = getTopTeams();
     const team = topTeams.find(
-      (team) => team.teamName.toLowerCase() === teamName?.toLowerCase()
+      (team) => team.teamName.toLowerCase() === teamName?.toLowerCase(),
     );
     return team ? topTeams.indexOf(team) + 1 : null;
   };
@@ -4662,7 +5008,7 @@ function App() {
       (bet) =>
         bet.TEAM_INCLUDED === teamName &&
         bet.COUNTRY === country &&
-        bet.LEAGUE === league
+        bet.LEAGUE === league,
     );
 
     if (teamBets.length === 0) return null;
@@ -4739,7 +5085,7 @@ function App() {
     // Check for specific teams we know should match
     debugLog(
       "FK Tukums 2000/TSS in history:",
-      allTeams.has("FK Tukums 2000/TSS")
+      allTeams.has("FK Tukums 2000/TSS"),
     );
     debugLog("Riga FC in history:", allTeams.has("Riga FC"));
 
@@ -4755,12 +5101,12 @@ function App() {
       debugLog(
         `Home team match: ${
           homeTeamInHistory ? "YES" : "NO"
-        } (${matchedHomeTeam})`
+        } (${matchedHomeTeam})`,
       );
       debugLog(
         `Away team match: ${
           awayTeamInHistory ? "YES" : "NO"
-        } (${matchedAwayTeam})`
+        } (${matchedAwayTeam})`,
       );
 
       // Get team analytics if team exists in history
@@ -4774,7 +5120,7 @@ function App() {
       // Get country and league data from original betting data
       const getTeamCountryLeague = (teamName) => {
         const teamBets = deduplicatedBets.filter(
-          (bet) => bet.HOME_TEAM === teamName || bet.AWAY_TEAM === teamName
+          (bet) => bet.HOME_TEAM === teamName || bet.AWAY_TEAM === teamName,
         );
         if (teamBets.length > 0) {
           const bet = teamBets[0]; // Get first bet for this team
@@ -4828,10 +5174,10 @@ function App() {
     });
 
     const filteredGames = processedGames.filter(
-      (game) => game.hasHistoricalData
+      (game) => game.hasHistoricalData,
     );
     debugLog(
-      `Total games processed: ${processedGames.length}, Games with historical data: ${filteredGames.length}`
+      `Total games processed: ${processedGames.length}, Games with historical data: ${filteredGames.length}`,
     );
 
     return filteredGames;
@@ -4972,10 +5318,10 @@ function App() {
 
         // Calculate recent performance
         const recentWins = group.recentBets.filter(
-          (bet) => bet.result === "W"
+          (bet) => bet.result === "W",
         ).length;
         const recentLosses = group.recentBets.filter(
-          (bet) => bet.result === "L"
+          (bet) => bet.result === "L",
         ).length;
         const recentTotal = recentWins + recentLosses;
         const recentWinRate =
@@ -5001,10 +5347,14 @@ function App() {
 
       // Sample size bonus: More bets = higher reliability score
       let sampleSizeScore = 0;
-      if (team.total >= 20) sampleSizeScore = 40; // 20+ bets = max score
-      else if (team.total >= 15) sampleSizeScore = 35; // 15-19 bets
-      else if (team.total >= 10) sampleSizeScore = 30; // 10-14 bets
-      else if (team.total >= 8) sampleSizeScore = 25; // 8-9 bets
+      if (team.total >= 20)
+        sampleSizeScore = 40; // 20+ bets = max score
+      else if (team.total >= 15)
+        sampleSizeScore = 35; // 15-19 bets
+      else if (team.total >= 10)
+        sampleSizeScore = 30; // 10-14 bets
+      else if (team.total >= 8)
+        sampleSizeScore = 25; // 8-9 bets
       else if (team.total >= 5) sampleSizeScore = 20; // 5-7 bets (minimum threshold)
 
       const compositeScore = winRateScore + sampleSizeScore;
@@ -5018,7 +5368,7 @@ function App() {
 
     // Sort by composite score descending
     return analyticsWithScore.sort(
-      (a, b) => b.compositeScore - a.compositeScore
+      (a, b) => b.compositeScore - a.compositeScore,
     );
   };
 
@@ -5097,9 +5447,11 @@ function App() {
           const newStats = getNewStatsCards();
           const bestTeamForLeague = getBestTeamForFilteredLeague();
           const showBestTeam = bestTeamForLeague !== null;
-          
+
           return (
-            <div className={`grid grid-cols-2 md:grid-cols-2 ${showBestTeam ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 md:gap-6 mb-6`}>
+            <div
+              className={`grid grid-cols-2 md:grid-cols-2 ${showBestTeam ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-3 md:gap-6 mb-6`}
+            >
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 md:p-6 border border-white/20">
                 <div className="text-sm md:text-lg font-bold text-green-400 mb-1 md:mb-2">
                   Current Form
@@ -5118,9 +5470,7 @@ function App() {
                   Best Bet Type
                 </div>
                 <div className="text-lg md:text-2xl font-bold text-white">
-                  {newStats.bestBetType
-                    ? newStats.bestBetType.name
-                    : "—"}
+                  {newStats.bestBetType ? newStats.bestBetType.name : "—"}
                 </div>
                 <div className="text-xs md:text-sm text-gray-300">
                   {newStats.bestBetType
@@ -5432,10 +5782,10 @@ function App() {
                                 <div className="text-sm">
                                   {(() => {
                                     const homeBadge = getPositionBadge(
-                                      result.HOME_TEAM_POSITION
+                                      result.HOME_TEAM_POSITION,
                                     );
                                     const awayBadge = getPositionBadge(
-                                      result.AWAY_TEAM_POSITION
+                                      result.AWAY_TEAM_POSITION,
                                     );
                                     return (
                                       <div>
@@ -5456,9 +5806,11 @@ function App() {
                                         {result.positionGap && (
                                           <span
                                             className={`block mt-1 text-xs px-2 py-0.5 rounded-full w-fit ${
-                                              result.positionGap.gapLabel === "Large"
+                                              result.positionGap.gapLabel ===
+                                              "Large"
                                                 ? "bg-amber-500/30 text-amber-200"
-                                                : result.positionGap.gapLabel === "Moderate"
+                                                : result.positionGap
+                                                      .gapLabel === "Moderate"
                                                   ? "bg-blue-500/20 text-blue-200"
                                                   : "bg-white/10 text-gray-400"
                                             }`}
@@ -5519,7 +5871,7 @@ function App() {
                                       getBetTypeAnalyticsForTeam(
                                         result.TEAM_INCLUDED,
                                         result.COUNTRY,
-                                        result.LEAGUE
+                                        result.LEAGUE,
                                       );
 
                                     if (
@@ -5542,13 +5894,13 @@ function App() {
                                             const icon = isGood
                                               ? "✅"
                                               : isAverage
-                                              ? "⚠️"
-                                              : "❌";
+                                                ? "⚠️"
+                                                : "❌";
                                             const color = isGood
                                               ? "text-green-300"
                                               : isAverage
-                                              ? "text-yellow-300"
-                                              : "text-red-300";
+                                                ? "text-yellow-300"
+                                                : "text-red-300";
 
                                             return (
                                               <div
@@ -5572,12 +5924,12 @@ function App() {
                                     const homeTeamNotes = getTeamNotesForTeam(
                                       result.HOME_TEAM,
                                       result.COUNTRY,
-                                      result.LEAGUE
+                                      result.LEAGUE,
                                     );
                                     const awayTeamNotes = getTeamNotesForTeam(
                                       result.AWAY_TEAM,
                                       result.COUNTRY,
-                                      result.LEAGUE
+                                      result.LEAGUE,
                                     );
 
                                     if (
@@ -5708,7 +6060,7 @@ function App() {
                                             >
                                               • {comp}
                                             </div>
-                                          )
+                                          ),
                                         )}
                                       </div>
                                     )}
@@ -5725,7 +6077,7 @@ function App() {
                                             >
                                               • {detail}
                                             </div>
-                                          )
+                                          ),
                                         )}
                                       </div>
                                     )}
@@ -5742,7 +6094,7 @@ function App() {
                                             >
                                               • {detail}
                                             </div>
-                                          )
+                                          ),
                                         )}
                                       </div>
                                     )}
@@ -5768,13 +6120,13 @@ function App() {
                                         result.previousMatchups.filter((m) =>
                                           m.result
                                             ?.toLowerCase()
-                                            .includes("win")
+                                            .includes("win"),
                                         ).length;
                                       const losses =
                                         result.previousMatchups.filter((m) =>
                                           m.result
                                             ?.toLowerCase()
-                                            .includes("loss")
+                                            .includes("loss"),
                                         ).length;
                                       const total = wins + losses;
                                       const winRate =
@@ -5792,8 +6144,8 @@ function App() {
                                               parseFloat(winRate) >= 70
                                                 ? "bg-green-100 text-green-800"
                                                 : parseFloat(winRate) >= 50
-                                                ? "bg-yellow-100 text-yellow-800"
-                                                : "bg-red-100 text-red-800"
+                                                  ? "bg-yellow-100 text-yellow-800"
+                                                  : "bg-red-100 text-red-800"
                                             }`}
                                           >
                                             {winRate}% win rate
@@ -5824,16 +6176,16 @@ function App() {
                                           .confidence === "high"
                                           ? "bg-green-100 text-green-800"
                                           : result.scoringRecommendation
-                                              .confidence === "medium"
-                                          ? "bg-yellow-100 text-yellow-800"
-                                          : "bg-gray-100 text-gray-800"
+                                                .confidence === "medium"
+                                            ? "bg-yellow-100 text-yellow-800"
+                                            : "bg-gray-100 text-gray-800"
                                       }`}
                                     >
                                       {result.scoringRecommendation.type}
                                     </div>
                                     <div className="text-xs text-gray-400 mt-1">
                                       {result.scoringRecommendation.rate.toFixed(
-                                        1
+                                        1,
                                       )}
                                       % rate
                                     </div>
@@ -5845,7 +6197,7 @@ function App() {
                                 )}
                               </td>
                             </tr>
-                          )
+                          ),
                         )}
                       </tbody>
                     </table>
@@ -5881,7 +6233,7 @@ function App() {
                               (r) =>
                                 r.recommendation.includes("Win") ||
                                 r.recommendation === "Home Win" ||
-                                r.recommendation === "Away Win"
+                                r.recommendation === "Away Win",
                             ).length
                           }
                         </div>
@@ -5891,7 +6243,7 @@ function App() {
                         <div className="text-yellow-400 font-medium">
                           {
                             analysisResults.filter((r) =>
-                              r.recommendation.includes("Double Chance")
+                              r.recommendation.includes("Double Chance"),
                             ).length
                           }
                         </div>
@@ -5901,7 +6253,7 @@ function App() {
                         <div className="text-red-400 font-medium">
                           {
                             analysisResults.filter((r) =>
-                              r.recommendation.includes("Avoid")
+                              r.recommendation.includes("Avoid"),
                             ).length
                           }
                         </div>
