@@ -47,6 +47,7 @@ const RecommendationsTab = ({
   const [top22ConfidenceSortOrder, setTop22ConfidenceSortOrder] = useState("desc");
   const [top22ScoringSortKey, setTop22ScoringSortKey] = useState("combinedScoring");
   const [top22ScoringSortOrder, setTop22ScoringSortOrder] = useState("desc");
+  const [top22PinnedAtTop, setTop22PinnedAtTop] = useState(true); // Keep top 22 at top when sorting
 
   const handleListSort = (key) => {
     if (listSortKey === key) {
@@ -158,16 +159,19 @@ const RecommendationsTab = ({
     return map;
   }, [scoringAnalysis]);
 
-  // Top 22 by confidence (from overall recommendation data)
-  const top22ByConfidence = useMemo(() => {
+  // All games by Best Bet confidence (sorted desc); top 22 highlighted
+  const allByConfidence = useMemo(() => {
     if (!betRecommendations || betRecommendations.length === 0) return [];
-    return [...betRecommendations]
-      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-      .slice(0, 22);
+    const conf = (r) => (r.bestBet || r.primary)?.recommendation?.confidence ?? r.confidence ?? 0;
+    return [...betRecommendations].sort((a, b) => conf(b) - conf(a));
   }, [betRecommendations]);
 
-  // Top 22 by scoring (combined home + away avg goals from scoring patterns)
-  const top22ByScoring = useMemo(() => {
+  const top22ConfidenceSet = useMemo(() => {
+    return new Set(allByConfidence.slice(0, 22).map((r) => r.match || ""));
+  }, [allByConfidence]);
+
+  // All games by scoring (combined home + away avg goals); top 22 highlighted
+  const allByScoring = useMemo(() => {
     if (!betRecommendations || betRecommendations.length === 0) return [];
     const country = (c) => (c || "").toLowerCase().trim();
     const league = (l) => (l || "").toLowerCase().trim();
@@ -184,39 +188,42 @@ const RecommendationsTab = ({
         const combinedScoring = homeAvg + awayAvg;
         return { ...rec, combinedScoring, homeAvg, awayAvg };
       })
-      .sort((a, b) => (b.combinedScoring || 0) - (a.combinedScoring || 0))
-      .slice(0, 22);
+      .sort((a, b) => (b.combinedScoring || 0) - (a.combinedScoring || 0));
   }, [betRecommendations, scoringLookup]);
 
-  // Sorted Top 22 Confidence (for column sorting)
-  const sortedTop22ByConfidence = useMemo(() => {
-    const list = [...top22ByConfidence];
-    const dir = top22ConfidenceSortOrder === "asc" ? 1 : -1;
+  const top22ScoringSet = useMemo(() => {
+    return new Set(allByScoring.slice(0, 22).map((r) => r.match || ""));
+  }, [allByScoring]);
+
+  // Sort helper for confidence list
+  const sortConfidenceList = (arr, key, order) => {
+    const list = [...arr];
+    const dir = order === "asc" ? 1 : -1;
     list.sort((a, b) => {
       let aVal, bVal;
-      if (top22ConfidenceSortKey === "match") {
+      if (key === "match") {
         aVal = (a.match || "").toLowerCase();
         bVal = (b.match || "").toLowerCase();
         return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
       }
-      if (top22ConfidenceSortKey === "league") {
+      if (key === "league") {
         aVal = `${a.country || ""} ${a.league || ""}`.toLowerCase();
         bVal = `${b.country || ""} ${b.league || ""}`.toLowerCase();
         return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
       }
-      if (top22ConfidenceSortKey === "topPick") {
+      if (key === "topPick") {
         const topA = a.bestBet || a.primary;
         const topB = b.bestBet || b.primary;
         aVal = (topA?.recommendation?.bet ?? "").toLowerCase();
         bVal = (topB?.recommendation?.bet ?? "").toLowerCase();
         return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
       }
-      if (top22ConfidenceSortKey === "confidence") {
+      if (key === "confidence") {
         const confA = (a.bestBet || a.primary)?.recommendation?.confidence ?? a.confidence ?? 0;
         const confB = (b.bestBet || b.primary)?.recommendation?.confidence ?? b.confidence ?? 0;
         return dir * ((confA || 0) - (confB || 0));
       }
-      if (top22ConfidenceSortKey === "odds") {
+      if (key === "odds") {
         aVal = parseFloat(a.odds) || 0;
         bVal = parseFloat(b.odds) || 0;
         return dir * (aVal - bVal);
@@ -224,35 +231,35 @@ const RecommendationsTab = ({
       return 0;
     });
     return list;
-  }, [top22ByConfidence, top22ConfidenceSortKey, top22ConfidenceSortOrder]);
+  };
 
-  // Sorted Top 22 Scoring (for column sorting)
-  const sortedTop22ByScoring = useMemo(() => {
-    const list = [...top22ByScoring];
-    const dir = top22ScoringSortOrder === "asc" ? 1 : -1;
+  // Sort helper for scoring list
+  const sortScoringList = (arr, key, order) => {
+    const list = [...arr];
+    const dir = order === "asc" ? 1 : -1;
     list.sort((a, b) => {
       let aVal, bVal;
-      if (top22ScoringSortKey === "match") {
+      if (key === "match") {
         aVal = (a.match || "").toLowerCase();
         bVal = (b.match || "").toLowerCase();
         return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
       }
-      if (top22ScoringSortKey === "league") {
+      if (key === "league") {
         aVal = `${a.country || ""} ${a.league || ""}`.toLowerCase();
         bVal = `${b.country || ""} ${b.league || ""}`.toLowerCase();
         return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
       }
-      if (top22ScoringSortKey === "combinedScoring") {
+      if (key === "combinedScoring") {
         return dir * ((a.combinedScoring || 0) - (b.combinedScoring || 0));
       }
-      if (top22ScoringSortKey === "topPick") {
+      if (key === "topPick") {
         const topA = a.bestBet || a.primary;
         const topB = b.bestBet || b.primary;
         aVal = (topA?.recommendation?.bet ?? "").toLowerCase();
         bVal = (topB?.recommendation?.bet ?? "").toLowerCase();
         return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
       }
-      if (top22ScoringSortKey === "confidence") {
+      if (key === "confidence") {
         const confA = (a.bestBet || a.primary)?.recommendation?.confidence ?? a.confidence ?? 0;
         const confB = (b.bestBet || b.primary)?.recommendation?.confidence ?? b.confidence ?? 0;
         return dir * ((confA || 0) - (confB || 0));
@@ -260,7 +267,31 @@ const RecommendationsTab = ({
       return 0;
     });
     return list;
-  }, [top22ByScoring, top22ScoringSortKey, top22ScoringSortOrder]);
+  };
+
+  // Sorted all-by-confidence (for column sorting); when pinned, top 22 stay at top
+  const sortedTop22ByConfidence = useMemo(() => {
+    if (top22PinnedAtTop) {
+      const top22 = allByConfidence.filter((r) => top22ConfidenceSet.has(r.match));
+      const rest = allByConfidence.filter((r) => !top22ConfidenceSet.has(r.match));
+      const sortedTop = sortConfidenceList(top22, top22ConfidenceSortKey, top22ConfidenceSortOrder);
+      const sortedRest = sortConfidenceList(rest, top22ConfidenceSortKey, top22ConfidenceSortOrder);
+      return [...sortedTop, ...sortedRest];
+    }
+    return sortConfidenceList(allByConfidence, top22ConfidenceSortKey, top22ConfidenceSortOrder);
+  }, [allByConfidence, top22ConfidenceSet, top22ConfidenceSortKey, top22ConfidenceSortOrder, top22PinnedAtTop]);
+
+  // Sorted all-by-scoring (for column sorting); when pinned, top 22 stay at top
+  const sortedTop22ByScoring = useMemo(() => {
+    if (top22PinnedAtTop) {
+      const top22 = allByScoring.filter((r) => top22ScoringSet.has(r.match));
+      const rest = allByScoring.filter((r) => !top22ScoringSet.has(r.match));
+      const sortedTop = sortScoringList(top22, top22ScoringSortKey, top22ScoringSortOrder);
+      const sortedRest = sortScoringList(rest, top22ScoringSortKey, top22ScoringSortOrder);
+      return [...sortedTop, ...sortedRest];
+    }
+    return sortScoringList(allByScoring, top22ScoringSortKey, top22ScoringSortOrder);
+  }, [allByScoring, top22ScoringSet, top22ScoringSortKey, top22ScoringSortOrder, top22PinnedAtTop]);
 
   // Filter and sort recommendations
   const filteredAndSortedRecommendations = useMemo(() => {
@@ -485,10 +516,21 @@ const RecommendationsTab = ({
 
       {subTab === "top22Confidence" ? (
         <div className="space-y-4">
-          <p className="text-gray-400 text-sm">
-            Top 22 games ranked by <strong className="text-white">confidence</strong> from overall recommendation data.
-          </p>
-          {top22ByConfidence.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-4">
+            <p className="text-gray-400 text-sm">
+              All games sorted by <strong className="text-white">Best Bet confidence</strong>. Top 22 are <span className="bg-green-500/20 text-green-300 px-1 rounded">highlighted</span>.
+            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={top22PinnedAtTop}
+                onChange={(e) => setTop22PinnedAtTop(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-white/30 bg-white/10 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+              />
+              <span className="text-sm text-gray-400">Keep top 22 at top</span>
+            </label>
+          </div>
+          {allByConfidence.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-white/20">
@@ -547,8 +589,9 @@ const RecommendationsTab = ({
                     const pick = top?.recommendation?.bet ?? "—";
                     const conf = top?.recommendation?.confidence ?? rec.confidence ?? 0;
                     const isAvoid = pick === "AVOID" || pick === "No clear winner" || pick === "No clear trend";
+                    const isTop22 = top22ConfidenceSet.has(rec.match);
                     return (
-                      <tr key={idx} className="hover:bg-white/5">
+                      <tr key={idx} className={`hover:bg-white/5 ${isTop22 ? "bg-green-500/10" : ""}`}>
                         <td className="px-4 py-2 text-gray-400">{idx + 1}</td>
                         <td className="px-4 py-2 text-white font-medium">{rec.match}</td>
                         <td className="px-4 py-2 text-gray-300">{rec.country} · {rec.league}</td>
@@ -569,10 +612,21 @@ const RecommendationsTab = ({
         </div>
       ) : subTab === "top22Scoring" ? (
         <div className="space-y-4">
-          <p className="text-gray-400 text-sm">
-            Top 22 games ranked by <strong className="text-white">scoring pattern</strong> (combined home + away avg goals). Run &quot;Analyze Scoring Patterns&quot; in Scoring Analysis for data.
-          </p>
-          {top22ByScoring.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-4">
+            <p className="text-gray-400 text-sm">
+              All games sorted by <strong className="text-white">scoring pattern</strong> (combined home + away avg goals). Top 22 by scoring are <span className="bg-green-500/20 text-green-300 px-1 rounded">highlighted</span>. Run &quot;Analyze Scoring Patterns&quot; in Scoring Analysis for data.
+            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={top22PinnedAtTop}
+                onChange={(e) => setTop22PinnedAtTop(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-white/30 bg-white/10 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+              />
+              <span className="text-sm text-gray-400">Keep top 22 at top</span>
+            </label>
+          </div>
+          {allByScoring.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-white/20">
@@ -631,8 +685,9 @@ const RecommendationsTab = ({
                     const pick = top?.recommendation?.bet ?? "—";
                     const conf = top?.recommendation?.confidence ?? rec.confidence ?? 0;
                     const isAvoid = pick === "AVOID" || pick === "No clear winner" || pick === "No clear trend";
+                    const isTop22 = top22ScoringSet.has(rec.match);
                     return (
-                      <tr key={idx} className="hover:bg-white/5">
+                      <tr key={idx} className={`hover:bg-white/5 ${isTop22 ? "bg-green-500/10" : ""}`}>
                         <td className="px-4 py-2 text-gray-400">{idx + 1}</td>
                         <td className="px-4 py-2 text-white font-medium">{rec.match}</td>
                         <td className="px-4 py-2 text-gray-300">{rec.country} · {rec.league}</td>
