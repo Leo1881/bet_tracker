@@ -1263,6 +1263,35 @@ function App() {
     };
   };
 
+  // Calculate your overall country performance (all bets in that country regardless of league)
+  // Fallback when league performance has insufficient data
+  const getCountryPerformance = (country) => {
+    if (!bets || bets.length === 0 || !country) return null;
+
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis;
+    const countryLower = (country || "").toLowerCase();
+    const countryBets = deduplicatedBets.filter(
+      (b) =>
+        (b.COUNTRY || "").toLowerCase() === countryLower &&
+        b.RESULT &&
+        (b.RESULT.toLowerCase().includes("win") ||
+          b.RESULT.toLowerCase().includes("loss")),
+    );
+
+    if (countryBets.length === 0) return null;
+
+    const wins = countryBets.filter((b) =>
+      b.RESULT.toLowerCase().includes("win"),
+    ).length;
+    const winRate = wins / countryBets.length;
+
+    return {
+      winRate: winRate,
+      totalBets: countryBets.length,
+      wins: wins,
+    };
+  };
+
   // Calculate data-driven multipliers based on historical bet type performance
   const calculateBetTypeMultipliers = () => {
     if (!bets || bets.length === 0) {
@@ -2239,6 +2268,32 @@ function App() {
         "";
 
       const leaguePerformance = getLeaguePerformance(country, league);
+      const countryPerformance = getCountryPerformance(country);
+
+      // Low performance warning: league first (if 5+ bets), else country fallback. Warn if win rate < 80%
+      const LOW_PERFORMANCE_THRESHOLD = 0.8;
+      let performanceWarning = null;
+      if (leaguePerformance && leaguePerformance.totalBets >= 5) {
+        if (leaguePerformance.winRate < LOW_PERFORMANCE_THRESHOLD) {
+          performanceWarning = {
+            type: "league",
+            winRate: leaguePerformance.winRate,
+            totalBets: leaguePerformance.totalBets,
+            wins: leaguePerformance.wins,
+            label: league,
+          };
+        }
+      } else if (countryPerformance && countryPerformance.totalBets >= 5) {
+        if (countryPerformance.winRate < LOW_PERFORMANCE_THRESHOLD) {
+          performanceWarning = {
+            type: "country",
+            winRate: countryPerformance.winRate,
+            totalBets: countryPerformance.totalBets,
+            wins: countryPerformance.wins,
+            label: country,
+          };
+        }
+      }
 
       // Odds based on recommended team: ODDS1 = home, ODDS2 = away, fallback for Over/Under/AVOID
       const displayOdds = (() => {
@@ -2271,6 +2326,8 @@ function App() {
         proposedBetVerdict: proposedBetVerdict,
         proposedBetLabel: proposedBetLabel,
         leaguePerformance: leaguePerformance,
+        countryPerformance: countryPerformance,
+        performanceWarning: performanceWarning,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
         doubleChance: doubleChanceRecommendation,

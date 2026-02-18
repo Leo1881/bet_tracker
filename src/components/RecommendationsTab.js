@@ -1037,6 +1037,11 @@ const RecommendationsTab = ({
                       Your {rec.league} record: {(rec.leaguePerformance.winRate * 100).toFixed(0)}% ({rec.leaguePerformance.wins}W-{rec.leaguePerformance.totalBets - rec.leaguePerformance.wins}L)
                     </p>
                   )}
+                  {rec.performanceWarning && (
+                    <div className="mt-1.5 px-2 py-1 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs">
+                      ⚠️ Low {rec.performanceWarning.type} performance: {(rec.performanceWarning.winRate * 100).toFixed(0)}% in {rec.performanceWarning.label} ({rec.performanceWarning.wins}W-{rec.performanceWarning.totalBets - rec.performanceWarning.wins}L). Your bets here have been risky.
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-baseline gap-4 text-sm">
                   <span className="text-blue-400 font-medium">{rec.confidence.toFixed(1)}%</span>
