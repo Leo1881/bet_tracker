@@ -44,6 +44,8 @@ import BetslipAnalysisTab from "./components/BetslipAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
 import QuickLookupTab from "./components/QuickLookupTab";
 import PatternAnalysisTab from "./components/PatternAnalysisTab";
+import { AppLoadingSkeleton } from "./components/SkeletonLoader";
+import ErrorDisplay from "./components/ErrorDisplay";
 
 function App() {
   // Use custom hook for state management
@@ -71,6 +73,7 @@ function App() {
     setDataViewLoaded,
     loading,
     error,
+    retryLoadData,
     showFilters,
     setShowFilters,
     activeTab,
@@ -5430,23 +5433,17 @@ function App() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#121212] via-[#1E1E1E] to-[#121212] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading your bets...</p>
-        </div>
-      </div>
-    );
+    return <AppLoadingSkeleton />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#121212] via-[#1E1E1E] to-[#121212] flex items-center justify-center">
-        <div className="bg-red-500 text-white px-6 py-4 rounded-lg">
-          <p className="text-lg">{error}</p>
-        </div>
-      </div>
+      <ErrorDisplay
+        message={error}
+        onRetry={retryLoadData}
+        title="Failed to load data"
+        variant="full"
+      />
     );
   }
 

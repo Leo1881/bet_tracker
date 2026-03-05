@@ -1,4 +1,5 @@
 import React from "react";
+import { TabContentSkeleton } from "./SkeletonLoader";
 
 const DailyGamesTab = ({ dailyGamesLoading, getProcessedDailyGames }) => {
   return (
@@ -6,11 +7,7 @@ const DailyGamesTab = ({ dailyGamesLoading, getProcessedDailyGames }) => {
       <h3 className="text-lg font-bold text-white mb-4">Daily Games</h3>
 
       {dailyGamesLoading ? (
-        <div className="text-center py-8">
-          <div className="text-gray-400 text-lg mb-4">
-            Loading daily games...
-          </div>
-        </div>
+        <TabContentSkeleton lines={4} />
       ) : getProcessedDailyGames().length === 0 ? (
         <div className="text-center py-8">
           <div className="text-gray-400 text-lg mb-4">

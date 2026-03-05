@@ -786,8 +786,14 @@ const TeamUploadTab = ({
           )}
         </div>
         {error && (
-          <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
-            <p className="text-red-300 text-sm">{error}</p>
+          <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+            <p className="text-red-300 text-sm mb-3">{error}</p>
+            <button
+              onClick={handleUpload}
+              className="px-3 py-1.5 bg-red-500/30 hover:bg-red-500/50 text-white rounded text-sm font-medium transition-colors"
+            >
+              Try again
+            </button>
           </div>
         )}
       </div>

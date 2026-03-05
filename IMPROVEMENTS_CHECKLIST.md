@@ -25,9 +25,9 @@ Work through these items one by one. Check off as you complete each.
 ## Medium Impact
 
 - [ ] **Restructure server.js** – Split routes into separate files (e.g. `routes/bets.js`, `routes/predictions.js`)
-- [ ] **Add React Error Boundary** – Wrap app/sections so one tab crash doesn't break the whole app
-- [ ] **Improve loading states** – Add skeleton loaders instead of blank screens
-- [ ] **Improve error handling** – Add retry actions and clearer error messages
+- [x] **Add React Error Boundary** – Wrap app/sections so one tab crash doesn't break the whole app
+- [x] **Improve loading states** – Add skeleton loaders instead of blank screens
+- [x] **Improve error handling** – Add retry actions and clearer error messages
 
 ---
 

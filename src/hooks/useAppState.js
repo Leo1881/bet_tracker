@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   fetchSheetData,
   fetchBlacklistedTeams,
@@ -102,59 +102,60 @@ export const useAppState = () => {
   // Analysis state
   const [scoringAnalysis, setScoringAnalysis] = useState(null);
 
-  // Load initial data
-  useEffect(() => {
-    const getData = async () => {
-      try {
-        setLoading(true);
-        const [data, blacklist, notes] = await Promise.all([
-          fetchSheetData(),
-          fetchBlacklistedTeams(),
-          fetchTeamNotes(),
-        ]);
+  const loadInitialData = useCallback(async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      const [data, blacklist, notes] = await Promise.all([
+        fetchSheetData(),
+        fetchBlacklistedTeams(),
+        fetchTeamNotes(),
+      ]);
 
-        // Load attached predictions if available
-        let attachedPredictionsData = [];
-        if (process.env.NODE_ENV === "development") {
-          try {
-            const response = await fetch(
-              "http://localhost:3001/api/attached-predictions",
-              {
-                headers: {
-                  "Cache-Control": "no-cache",
-                  Pragma: "no-cache",
-                },
-              }
-            );
-            attachedPredictionsData = await response.json();
-          } catch (error) {
-            console.log("API not available in production, using empty data");
-            attachedPredictionsData = [];
-          }
+      // Load attached predictions if available
+      let attachedPredictionsData = [];
+      if (process.env.NODE_ENV === "development") {
+        try {
+          const response = await fetch(
+            "http://localhost:3001/api/attached-predictions",
+            {
+              headers: {
+                "Cache-Control": "no-cache",
+                Pragma: "no-cache",
+              },
+            }
+          );
+          attachedPredictionsData = await response.json();
+        } catch (error) {
+          console.log("API not available in production, using empty data");
+          attachedPredictionsData = [];
         }
-
-        console.log("Fetched data:", data);
-        console.log("Fetched blacklist:", blacklist);
-        console.log("Fetched team notes:", notes.length);
-        setBets(data);
-        setFilteredBets(data);
-        setBlacklistedTeams(blacklist);
-        setTeamNotes(notes);
-
-        // Load attached predictions
-        const predictionsMap = {};
-        attachedPredictionsData.forEach((item) => {
-          predictionsMap[item.betslipId] = item.predictions;
-        });
-        setAttachedPredictions(predictionsMap);
-      } catch (err) {
-        setError("Failed to load bet data");
-      } finally {
-        setLoading(false);
       }
-    };
-    getData();
+
+      console.log("Fetched data:", data);
+      console.log("Fetched blacklist:", blacklist);
+      console.log("Fetched team notes:", notes.length);
+      setBets(data);
+      setFilteredBets(data);
+      setBlacklistedTeams(blacklist);
+      setTeamNotes(notes);
+
+      // Load attached predictions
+      const predictionsMap = {};
+      attachedPredictionsData.forEach((item) => {
+        predictionsMap[item.betslipId] = item.predictions;
+      });
+      setAttachedPredictions(predictionsMap);
+    } catch (err) {
+      setError("Failed to load bet data. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
   // Fetch daily games when Daily Games tab is active
   useEffect(() => {
@@ -244,6 +245,7 @@ export const useAppState = () => {
     setLoading,
     error,
     setError,
+    retryLoadData: loadInitialData,
     showFilters,
     setShowFilters,
     activeTab,

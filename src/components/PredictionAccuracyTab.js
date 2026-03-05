@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { TabContentSkeleton } from "./SkeletonLoader";
+import ErrorDisplay from "./ErrorDisplay";
 
 const PredictionAccuracyTab = () => {
   const [tierAccuracy, setTierAccuracy] = useState(null);
@@ -31,10 +33,7 @@ const PredictionAccuracyTab = () => {
         <h3 className="text-lg font-bold text-white mb-4">
           System Recommendation Accuracy
         </h3>
-        <div className="text-center py-8">
-          <div className="text-4xl mb-4">⏳</div>
-          <p className="text-gray-300">Loading accuracy data...</p>
-        </div>
+        <TabContentSkeleton lines={3} />
       </div>
     );
   }
@@ -45,10 +44,12 @@ const PredictionAccuracyTab = () => {
         <h3 className="text-lg font-bold text-white mb-4">
           System Recommendation Accuracy
         </h3>
-        <div className="text-center py-8">
-          <div className="text-4xl mb-4">❌</div>
-          <p className="text-red-400">{error}</p>
-        </div>
+        <ErrorDisplay
+          message={error}
+          onRetry={fetchTierAccuracy}
+          title="Failed to load accuracy data"
+          variant="inline"
+        />
       </div>
     );
   }

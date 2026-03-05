@@ -153,8 +153,18 @@ const BetslipAnalysisTab = () => {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-200 text-sm">
-          {error}
+        <div className="mb-4 p-4 rounded-lg bg-red-500/20 border border-red-500/30">
+          <p className="text-red-200 text-sm mb-3">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              loadBetIds();
+              if (selectedBetId) loadGames();
+            }}
+            className="px-3 py-1.5 bg-red-500/30 hover:bg-red-500/50 text-white rounded text-sm font-medium transition-colors"
+          >
+            Try again
+          </button>
         </div>
       )}
 
