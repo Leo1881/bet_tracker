@@ -7,8 +7,8 @@ Work through these items one by one. Check off as you complete each.
 ## Quick Wins
 
 - [x] **Remove dead code** – Delete the `{false && activeTab === "betAnalysis" && ...}` block (~650 lines) in App.js
-- [ ] **Run npm audit fix** – Address security vulnerabilities
-- [ ] **Update browserslist** – Run `npx update-browserslist-db@latest`
+- [x] **Run npm audit fix** – Address security vulnerabilities
+- [x] **Update browserslist** – Run `npx update-browserslist-db@latest`
 
 ---
 
