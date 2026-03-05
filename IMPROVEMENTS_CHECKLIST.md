@@ -34,8 +34,8 @@ Work through these items one by one. Check off as you complete each.
 ## Nice to Have
 
 - [ ] **Add TypeScript** – Migrate to TypeScript for type safety on bets, filters, API responses
-- [ ] **Add list virtualization** – Use react-window or @tanstack/react-virtual for large data tables
-- [ ] **Validate environment variables** – Fail fast with clear errors if DB credentials are missing
+- [ ] **Add list virtualization** – Use react-window or @tanstack/react-virtual for large data tables (reverted: caused scroll/Node error)
+- [x] **Validate environment variables** – Fail fast with clear errors if DB credentials are missing
 
 ---
 

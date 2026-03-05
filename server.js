@@ -20,6 +20,16 @@ const POSTGRES_CONFIG = {
   ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false,
 };
 
+// Validate env: when connecting to remote DB, password is required
+const host = POSTGRES_CONFIG.host;
+const isRemoteDb = host && host !== "localhost" && !host.startsWith("127.");
+if (isRemoteDb && !POSTGRES_CONFIG.password) {
+  console.error("\n❌ Database configuration error:");
+  console.error("   DB_HOST is set to a remote server but DB_PASSWORD is missing.");
+  console.error("   Set DB_PASSWORD in your .env file or environment.\n");
+  process.exit(1);
+}
+
 const pool = new Pool(POSTGRES_CONFIG);
 
 // Test database connection
@@ -1195,22 +1205,38 @@ app.post("/api/betslip-recommendations/compare", async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API endpoints:`);
-  console.log(`  GET /api/test - Test database connection`);
-  console.log(`  GET /api/bets - Get all bets`);
-  console.log(`  GET /api/blacklisted-teams - Get blacklisted teams`);
-  console.log(`  GET /api/new-bets - Get new bets`);
-  console.log(`  GET /api/team-notes - Get team notes`);
-  console.log(`  POST /api/recommendations - Store recommendations`);
-  console.log(`  GET /api/recommendations - Get stored recommendations`);
-  console.log(`  POST /api/recommendation-analysis - Store analysis results`);
-  console.log(`  GET /api/recommendation-analysis - Get analysis results`);
-  console.log(`  POST /api/betslip-recommendations - Save betslip (new flow)`);
-  console.log(`  GET /api/betslip-recommendations - List games (?bet_id=)`);
-  console.log(`  GET /api/betslip-recommendations/tier-accuracy - Primary/Secondary/Tertiary accuracy`);
-  console.log(`  GET /api/betslip-recommendations/bet-ids - List bet IDs`);
-  console.log(`  POST /api/betslip-recommendations/compare - Compare with Sheet1 results`);
-});
+// Start server (fail fast: verify DB connection before listening)
+async function startServer() {
+  try {
+    const client = await pool.connect();
+    client.release();
+    console.log("Database connection verified.");
+  } catch (err) {
+    console.error("\n❌ Database connection failed:");
+    console.error("   ", err.message);
+    console.error("\n   Check your .env: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD");
+    console.error("   For local Postgres, ensure it's running: brew services start postgresql\n");
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`API endpoints:`);
+    console.log(`  GET /api/test - Test database connection`);
+    console.log(`  GET /api/bets - Get all bets`);
+    console.log(`  GET /api/blacklisted-teams - Get blacklisted teams`);
+    console.log(`  GET /api/new-bets - Get new bets`);
+    console.log(`  GET /api/team-notes - Get team notes`);
+    console.log(`  POST /api/recommendations - Store recommendations`);
+    console.log(`  GET /api/recommendations - Get stored recommendations`);
+    console.log(`  POST /api/recommendation-analysis - Store analysis results`);
+    console.log(`  GET /api/recommendation-analysis - Get analysis results`);
+    console.log(`  POST /api/betslip-recommendations - Save betslip (new flow)`);
+    console.log(`  GET /api/betslip-recommendations - List games (?bet_id=)`);
+    console.log(`  GET /api/betslip-recommendations/tier-accuracy - Primary/Secondary/Tertiary accuracy`);
+    console.log(`  GET /api/betslip-recommendations/bet-ids - List bet IDs`);
+    console.log(`  POST /api/betslip-recommendations/compare - Compare with Sheet1 results`);
+  });
+}
+
+startServer();

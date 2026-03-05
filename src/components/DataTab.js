@@ -78,7 +78,7 @@ const DataTab = ({
       >
         ← Previous
       </button>
-      
+
       <div className="flex items-center space-x-4">
         <span className="text-gray-300">
           Page {currentPage} of {totalPages}
@@ -87,7 +87,7 @@ const DataTab = ({
           ({getSortedData().length} total bets)
         </span>
       </div>
-      
+
       <button
         onClick={() => setCurrentPage(currentPage + 1)}
         disabled={currentPage === totalPages}
@@ -97,6 +97,7 @@ const DataTab = ({
       </button>
     </div>
   );
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden max-w-full">
       {!dataViewLoaded ? (
@@ -204,11 +205,11 @@ const DataTab = ({
                   </tr>
                 ))}
               </tbody>
-          </table>
-          <PaginationControls />
-        </div>
+            </table>
+            <PaginationControls />
+          </div>
 
-        {/* Mobile Grid View */}
+          {/* Mobile Grid View */}
           <div className="block md:hidden overflow-x-auto w-full">
             <table className="w-full border-collapse">
               <thead className="bg-white/20 w-full">
@@ -301,10 +302,10 @@ const DataTab = ({
                       ))}
                   </tr>
                 ))}
-            </tbody>
-          </table>
-          <PaginationControls />
-        </div>
+              </tbody>
+            </table>
+            <PaginationControls />
+          </div>
         </>
       )}
     </div>
