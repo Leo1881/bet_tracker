@@ -2143,6 +2143,46 @@ function App() {
           adjustedScore = adjustedScore * leagueMultiplier;
         }
 
+        // Straight Win preference: form-based override + confidence gap rule (affects Primary ranking)
+        if (
+          betOption.type === "Straight Win" &&
+          betOption.recommendation.bet !== "AVOID" &&
+          betOption.recommendation.bet !== "No clear winner" &&
+          teamForBet
+        ) {
+          const straightWinConf =
+            betOption.recommendation.confidence ??
+            betOption.recommendation.wilsonWinRate ??
+            0;
+          const doubleChanceRec = allBets.find(
+            (r) => r.type === "Double Chance",
+          );
+          const doubleChanceConf =
+            doubleChanceRec?.recommendation?.confidence ??
+            doubleChanceRec?.recommendation?.wilsonWinRate ??
+            0;
+
+          // Form-based override: favored team 3+ wins in last 5, opponent 0-2 wins
+          const favoredWins =
+            teamForBet === homeTeam
+              ? recentFormData.homeWins || 0
+              : recentFormData.awayWins || 0;
+          const opponentWins =
+            teamForBet === homeTeam
+              ? recentFormData.awayWins || 0
+              : recentFormData.homeWins || 0;
+          if (favoredWins >= 3 && opponentWins <= 2) {
+            adjustedScore *= 1.25; // 25% boost so Straight Win can become Primary
+          }
+
+          // Confidence gap rule: Straight Win within 15% of Double Chance (prefer Straight Win for value)
+          const gap = doubleChanceConf - straightWinConf;
+          if (straightWinConf >= 65 && gap >= 0 && gap <= 15) {
+            const gapBoost = 1.1 + (15 - gap) * 0.01; // 10-25% boost
+            adjustedScore *= gapBoost;
+          }
+        }
+
         return {
           ...betOption,
           adjustedScore: adjustedScore,
@@ -2234,6 +2274,46 @@ function App() {
         // Strong opponent (low multiplier) = reduce score, Weak opponent (high multiplier) = boost score
         bestBetScore =
           bestBetScore * Math.max(0.9, Math.min(1.1, opponentStrengthImpact));
+
+        // Straight Win preference rules: favor Straight Win when form/confidence support it
+        if (
+          betOption.type === "Straight Win" &&
+          betOption.recommendation.bet !== "AVOID" &&
+          betOption.recommendation.bet !== "No clear winner" &&
+          teamForBet
+        ) {
+          const straightWinConf =
+            betOption.recommendation.confidence ??
+            betOption.recommendation.wilsonWinRate ??
+            0;
+          const doubleChanceRec = rankedBets.find(
+            (r) => r.type === "Double Chance",
+          );
+          const doubleChanceConf =
+            doubleChanceRec?.recommendation?.confidence ??
+            doubleChanceRec?.recommendation?.wilsonWinRate ??
+            0;
+
+          // Form-based override: favored team 3+ wins, opponent 0-2 wins
+          const favoredWins =
+            teamForBet === homeTeam
+              ? recentFormData.homeWins || 0
+              : recentFormData.awayWins || 0;
+          const opponentWins =
+            teamForBet === homeTeam
+              ? recentFormData.awayWins || 0
+              : recentFormData.homeWins || 0;
+          if (favoredWins >= 3 && opponentWins <= 2) {
+            bestBetScore *= 1.2; // 20% boost for Best Bet selection
+          }
+
+          // Confidence gap rule: Straight Win within 15% of Double Chance
+          const gap = doubleChanceConf - straightWinConf;
+          if (straightWinConf >= 65 && gap >= 0 && gap <= 15) {
+            const gapBoost = 1.08 + (15 - gap) * 0.008; // 8-20% boost
+            bestBetScore *= gapBoost;
+          }
+        }
 
         return {
           ...betOption,

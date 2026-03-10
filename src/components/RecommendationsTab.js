@@ -369,8 +369,9 @@ const RecommendationsTab = ({
     const list = [...filteredAndSortedRecommendations];
     const dir = listSortOrder === "asc" ? 1 : -1;
     list.sort((a, b) => {
-      const topA = a.bestBet || a.primary;
-      const topB = b.bestBet || b.primary;
+      // Use primary for List view (top pick = primary recommendation)
+      const topA = a.primary || a.bestBet;
+      const topB = b.primary || b.bestBet;
       let aVal, bVal;
       if (listSortKey === "match") {
         aVal = (a.match || "").toLowerCase();
@@ -825,7 +826,8 @@ const RecommendationsTab = ({
                 </thead>
                 <tbody className="divide-y divide-white/10">
                   {sortedListRecommendations.map((rec, idx) => {
-                    const top = rec.bestBet || rec.primary;
+                    // Top Pick = primary recommendation (not best bet)
+                    const top = rec.primary || rec.bestBet;
                     const pick = top?.recommendation?.bet ?? "—";
                     const conf = top?.recommendation?.confidence ?? rec.confidence ?? 0;
                     const betType = top?.type ?? "—";
