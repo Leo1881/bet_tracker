@@ -2175,10 +2175,10 @@ function App() {
             adjustedScore *= 1.25; // 25% boost so Straight Win can become Primary
           }
 
-          // Confidence gap rule: Straight Win within 15% of Double Chance (prefer Straight Win for value)
+          // Confidence gap rule: Straight Win within 20% of Double Chance (prefer Straight Win for value)
           const gap = doubleChanceConf - straightWinConf;
-          if (straightWinConf >= 65 && gap >= 0 && gap <= 15) {
-            const gapBoost = 1.1 + (15 - gap) * 0.01; // 10-25% boost
+          if (straightWinConf >= 60 && gap >= 0 && gap <= 20) {
+            const gapBoost = 1.1 + (20 - gap) * 0.01; // 10-30% boost
             adjustedScore *= gapBoost;
           }
         }
@@ -2307,10 +2307,10 @@ function App() {
             bestBetScore *= 1.2; // 20% boost for Best Bet selection
           }
 
-          // Confidence gap rule: Straight Win within 15% of Double Chance
+          // Confidence gap rule: Straight Win within 20% of Double Chance
           const gap = doubleChanceConf - straightWinConf;
-          if (straightWinConf >= 65 && gap >= 0 && gap <= 15) {
-            const gapBoost = 1.08 + (15 - gap) * 0.008; // 8-20% boost
+          if (straightWinConf >= 60 && gap >= 0 && gap <= 20) {
+            const gapBoost = 1.08 + (20 - gap) * 0.008; // 8-24% boost
             bestBetScore *= gapBoost;
           }
         }
