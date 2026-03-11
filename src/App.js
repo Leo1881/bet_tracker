@@ -2802,8 +2802,24 @@ function App() {
     const hasHomeData = homeTotal >= minSampleSize;
     const hasAwayData = awayTotal >= minSampleSize;
 
-    // If insufficient data for both teams, return low confidence
+    // If insufficient data for both teams, use league position as fallback when table strongly favors one team
     if (!hasHomeData && !hasAwayData) {
+      const homePosFallback = parseInt(betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION) || 99;
+      const awayPosFallback = parseInt(betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION) || 99;
+      const posDiff = Math.abs(homePosFallback - awayPosFallback);
+      if (posDiff >= 5 && homePosFallback < 99 && awayPosFallback < 99) {
+        const favoredTeam = homePosFallback < awayPosFallback ? homeTeam : awayTeam;
+        const favoredPos = Math.min(homePosFallback, awayPosFallback);
+        const underdogPos = Math.max(homePosFallback, awayPosFallback);
+        return {
+          bet: favoredTeam,
+          confidence: 45, // Low confidence - based on table only
+          winRate: 0,
+          wilsonWinRate: 45,
+          totalBets: homeTotal + awayTotal,
+          reasoning: `No historical data. League table favors ${favoredTeam} (pos ${favoredPos}) over opponent (pos ${underdogPos}).`,
+        };
+      }
       return {
         bet: "No clear winner",
         confidence: 30, // Low confidence due to insufficient data (30% = old 3/10)
@@ -2817,6 +2833,15 @@ function App() {
     // Compare Wilson rates instead of raw win rates
     const wilsonDifference = Math.abs(homeWilsonRate - awayWilsonRate);
     const minDifference = 5; // Minimum 5% difference in Wilson Score
+
+    // League position sanity check: when recommending weaker team, require stronger historical evidence
+    // Lower position number = better (1st is best). homePos - awayPos >= 5 means home is 5+ spots worse
+    const homePos = parseInt(betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION) || 99;
+    const awayPos = parseInt(betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION) || 99;
+    const homeMuchWorse = homePos - awayPos >= 5; // Home 5+ positions worse than away
+    const awayMuchWorse = awayPos - homePos >= 5; // Away 5+ positions worse than home
+    const minDifferenceWhenWeaker = 15; // Require 15% Wilson gap when recommending the weaker team by table
+    const minGamesToOverrideTable = 8; // Need 8+ historical wins to override strong league position signal
 
     // Get opponent data for strength analysis
     const homeOpponentPosition =
@@ -2839,10 +2864,17 @@ function App() {
       : null;
 
     // Determine recommendation based on Wilson Score
-    if (
+    // League position override: don't recommend bottom team over top team unless we have strong evidence
+    const wouldRecommendHome =
       hasHomeData &&
-      (!hasAwayData || homeWilsonRate > awayWilsonRate + minDifference)
-    ) {
+      (!hasAwayData || homeWilsonRate > awayWilsonRate + minDifference);
+    const homeBlockedByPosition =
+      wouldRecommendHome &&
+      homeMuchWorse &&
+      homeTotal < minGamesToOverrideTable &&
+      (hasAwayData ? homeWilsonRate <= awayWilsonRate + minDifferenceWhenWeaker : true);
+
+    if (wouldRecommendHome && !homeBlockedByPosition) {
       // Wilson rate is already a percentage (0-100%), use it directly
       let confidence = Math.min(homeWilsonRate, 100);
       // Apply recent form impact for home team
@@ -2877,10 +2909,60 @@ function App() {
         totalBets: homeTotal,
         reasoning: `${homeTeam} has ${homeWinRate.toFixed(1)}% win rate (${homeWilsonRate.toFixed(1)}% Wilson) based on ${homeTotal} games${homeTeamHomeBets.length > 0 ? " at home" : ""}. ${awayTeam} has ${awayWinRate.toFixed(1)}% (${awayWilsonRate.toFixed(1)}% Wilson) based on ${awayTotal} games${awayTeamAwayBets.length > 0 ? " away" : ""}.${formNote}${opponentNote}`,
       };
-    } else if (
+    }
+    // When home blocked by league position, prefer away if we have data (table favors them)
+    const wouldRecommendAway =
       hasAwayData &&
-      (!hasHomeData || awayWilsonRate > homeWilsonRate + minDifference)
-    ) {
+      (!hasHomeData || awayWilsonRate > homeWilsonRate + minDifference);
+    const awayBlockedByPosition =
+      wouldRecommendAway &&
+      awayMuchWorse &&
+      awayTotal < minGamesToOverrideTable &&
+      (hasHomeData ? awayWilsonRate <= homeWilsonRate + minDifferenceWhenWeaker : true);
+
+    if (homeBlockedByPosition && hasAwayData) {
+      // League table strongly favors away; recommend away despite possibly lower historical Wilson
+      let confidence = Math.min(awayWilsonRate, 100);
+      const awayFormImpact = calculateRecentFormImpact(
+        recentFormData,
+        false,
+        true,
+      );
+      confidence = Math.min(confidence * awayFormImpact, 100);
+      const opponentStrengthImpact = calculateOpponentStrengthImpact(
+        awayOpponentPosition,
+        awayOpponentForm,
+      );
+      confidence = Math.min(confidence * opponentStrengthImpact, 100);
+      const formNote =
+        awayFormImpact !== 1.0
+          ? ` (Recent form: ${awayFormImpact > 1.0 ? "+" : ""}${((awayFormImpact - 1) * 100).toFixed(0)}%)`
+          : "";
+      const opponentNote = getOpponentStatusDescription(
+        awayOpponentPosition,
+        awayOpponentForm,
+      );
+      return {
+        bet: awayTeam,
+        confidence: Math.max(confidence, 45), // At least 45% when table strongly favors
+        winRate: awayWinRate,
+        wilsonWinRate: awayWilsonRate,
+        totalBets: awayTotal,
+        reasoning: `${awayTeam} favored by league table (${awayPos} vs ${homePos}) despite limited historical data. ${awayTeam} ${awayWinRate.toFixed(1)}% (${awayTotal} games) vs ${homeTeam} ${homeWinRate.toFixed(1)}% (${homeTotal} games).${formNote}${opponentNote}`,
+      };
+    }
+    if (homeBlockedByPosition && !hasAwayData) {
+      return {
+        bet: "No clear winner",
+        confidence: 35,
+        winRate: Math.max(homeWinRate, awayWinRate),
+        wilsonWinRate: (homeWilsonRate + awayWilsonRate) / 2,
+        totalBets: homeTotal + awayTotal,
+        reasoning: `Insufficient data to override league table: ${awayTeam} (pos ${awayPos}) favored over ${homeTeam} (pos ${homePos}) but no historical data for ${awayTeam}.`,
+      };
+    }
+
+    if (wouldRecommendAway && !awayBlockedByPosition) {
       // Wilson rate is already a percentage (0-100%), use it directly
       let confidence = Math.min(awayWilsonRate, 100);
       // Apply recent form impact for away team
