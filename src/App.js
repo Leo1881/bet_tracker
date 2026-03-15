@@ -20,6 +20,10 @@ import {
   getTeamOddsAnalytics as getTeamOddsAnalyticsService,
 } from "./services/oddsAnalyticsService";
 import { debugLog, debugVerdictLog } from "./utils/debug";
+import {
+  getOddsTrapResult,
+  ODDS_TRAP_CONFIDENCE_PENALTY,
+} from "./utils/oddsTrapUtils";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -2198,25 +2202,44 @@ function App() {
       const secondary = rankedBets[1];
       const tertiary = rankedBets[2];
 
-      // Add odds performance notifications to each recommendation
+      // Add odds performance notifications and odds trap detection to each recommendation
+      const addOddsTrapToCard = (card, applyConfidencePenalty = true) => {
+        const trap = getOddsTrapResult(bet, card, homeTeam, awayTeam);
+        if (trap) {
+          card.oddsTrapWarning = trap;
+          if (applyConfidencePenalty) {
+            const baseConf = card.recommendation?.confidence ?? 0;
+            card.recommendation = {
+              ...card.recommendation,
+              confidence: Math.max(10, baseConf - ODDS_TRAP_CONFIDENCE_PENALTY),
+            };
+          }
+        }
+      };
+
       primary.oddsPerformance = getOddsPerformanceNotification(
         primary.recommendation,
         primary.type,
         bet,
         teamOddsAnalytics,
       );
+      addOddsTrapToCard(primary);
+
       secondary.oddsPerformance = getOddsPerformanceNotification(
         secondary.recommendation,
         secondary.type,
         bet,
         teamOddsAnalytics,
       );
+      addOddsTrapToCard(secondary);
+
       tertiary.oddsPerformance = getOddsPerformanceNotification(
         tertiary.recommendation,
         tertiary.type,
         bet,
         teamOddsAnalytics,
       );
+      addOddsTrapToCard(tertiary);
 
       // Calculate Best Bet - uses adjusted scores that already include team-specific bet type performance
       // Additional factors for Best Bet selection: odds value, risk level, and opponent strength
@@ -2331,7 +2354,8 @@ function App() {
       });
       const bestBet = bestBetScores[0];
 
-      // Add odds performance notification to best bet
+      // Add odds performance notification and odds trap display to best bet (confidence already reduced if bestBet shares ref with primary)
+      addOddsTrapToCard(bestBet, false);
       bestBet.oddsPerformance = getOddsPerformanceNotification(
         bestBet.recommendation,
         bestBet.type,
@@ -2411,6 +2435,7 @@ function App() {
         leaguePerformance: leaguePerformance,
         countryPerformance: countryPerformance,
         performanceWarning: performanceWarning,
+        oddsTrapOnBestBet: bestBet?.oddsTrapWarning?.isTrap ?? false,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
         doubleChance: doubleChanceRecommendation,

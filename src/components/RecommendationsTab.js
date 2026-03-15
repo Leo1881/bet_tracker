@@ -7,6 +7,7 @@ const isCardTicketReady = (card) => {
   if (isNaN(conf)) return false;
   if (card.recommendation.bet === "AVOID") return false;
   if (card.oddsPerformance?.type === "warning") return false;
+  if (card.oddsTrapWarning?.isTrap) return false;
 
   // Exception: Straight Win with very high confidence (≥85%) and no red odds counts as ticket-ready even if risk is High
   if (card.type === "Straight Win" && conf >= 85) return true;
@@ -786,6 +787,9 @@ const RecommendationsTab = ({
                         {listSortKey === "league" && (listSortOrder === "asc" ? " ↑" : " ↓")}
                       </span>
                     </th>
+                    <th className="px-2 py-2 text-center text-gray-400 font-semibold text-xs w-10" title="Odds trap – strong team vs weak opponent but odds longer than usual">
+                      ⚠️
+                    </th>
                     <th
                       className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
                       onClick={() => handleListSort("topPick")}
@@ -832,10 +836,14 @@ const RecommendationsTab = ({
                     const conf = top?.recommendation?.confidence ?? rec.confidence ?? 0;
                     const betType = top?.type ?? "—";
                     const isAvoid = pick === "AVOID" || pick === "No clear winner" || pick === "No clear trend";
+                    const hasTrap = rec.oddsTrapOnBestBet ?? false;
                     return (
-                      <tr key={idx} className="hover:bg-white/5">
+                      <tr key={idx} className={`hover:bg-white/5 ${hasTrap ? "bg-amber-500/5" : ""}`}>
                         <td className="px-4 py-2 text-white font-medium">{rec.match}</td>
                         <td className="px-4 py-2 text-gray-300">{rec.country} · {rec.league}</td>
+                        <td className="px-2 py-2 text-center" title={hasTrap ? (rec.bestBet?.oddsTrapWarning?.message ?? "Odds trap") : ""}>
+                          {hasTrap ? <span className="text-amber-400">⚠️</span> : <span className="text-gray-600">—</span>}
+                        </td>
                         <td className={`px-4 py-2 font-medium ${isAvoid ? "text-red-400" : "text-green-400"}`}>
                           {pick}
                         </td>
@@ -1044,6 +1052,11 @@ const RecommendationsTab = ({
                       ⚠️ Low {rec.performanceWarning.type} performance: {(rec.performanceWarning.winRate * 100).toFixed(0)}% in {rec.performanceWarning.label} ({rec.performanceWarning.wins}W-{rec.performanceWarning.totalBets - rec.performanceWarning.wins}L). Your bets here have been risky.
                     </div>
                   )}
+                  {rec.oddsTrapOnBestBet && rec.bestBet?.oddsTrapWarning?.message && (
+                    <div className="mt-1.5 px-2 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs">
+                      ⚠️ {rec.bestBet.oddsTrapWarning.message}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-baseline gap-4 text-sm">
                   <span className="text-blue-400 font-medium">{rec.confidence.toFixed(1)}%</span>
@@ -1130,6 +1143,11 @@ const RecommendationsTab = ({
                         {rec.bestBet.oddsPerformance.message}
                       </div>
                     )}
+                    {rec.bestBet.oddsTrapWarning?.isTrap && (
+                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                        ⚠️ {rec.bestBet.oddsTrapWarning.message}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1149,6 +1167,11 @@ const RecommendationsTab = ({
                     {rec.primary.oddsPerformance && (
                       <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.primary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.primary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.primary.oddsPerformance.message}
+                      </div>
+                    )}
+                    {rec.primary.oddsTrapWarning?.isTrap && (
+                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                        ⚠️ {rec.primary.oddsTrapWarning.message}
                       </div>
                     )}
                   </div>
@@ -1172,6 +1195,11 @@ const RecommendationsTab = ({
                         {rec.secondary.oddsPerformance.message}
                       </div>
                     )}
+                    {rec.secondary.oddsTrapWarning?.isTrap && (
+                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                        ⚠️ {rec.secondary.oddsTrapWarning.message}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1191,6 +1219,11 @@ const RecommendationsTab = ({
                     {rec.tertiary.oddsPerformance && (
                       <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.tertiary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.tertiary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.tertiary.oddsPerformance.message}
+                      </div>
+                    )}
+                    {rec.tertiary.oddsTrapWarning?.isTrap && (
+                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                        ⚠️ {rec.tertiary.oddsTrapWarning.message}
                       </div>
                     )}
                   </div>

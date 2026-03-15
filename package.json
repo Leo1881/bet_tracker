@@ -29,7 +29,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "analyze-odds-traps": "node scripts/analyze-odds-trap-losses.js"
   },
   "eslintConfig": {
     "extends": [
