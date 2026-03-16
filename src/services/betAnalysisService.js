@@ -228,7 +228,10 @@ export const analyzeNewBets = async (
         // Set color based on recommendation
         if (recommendation.includes("Win")) {
           recommendationColor = "text-green-400";
-        } else if (recommendation.includes("Double Chance")) {
+        } else if (
+          recommendation.includes("Double Chance") ||
+          recommendation.includes("Home or Away")
+        ) {
           recommendationColor = "text-yellow-400";
         } else if (recommendation.includes("Avoid")) {
           recommendationColor = "text-red-400";

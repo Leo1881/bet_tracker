@@ -736,6 +736,21 @@ function App() {
           return true;
         }
 
+        // System recommended Double Chance 12 (Home/Away) - correct when either team wins (not draw)
+        if (
+          rec.includes("double chance 12") ||
+          rec.includes("home or away")
+        ) {
+          if (result.includes("win")) {
+            debugLog("✅ Double Chance 12 correct");
+            return true;
+          }
+          if (result.includes("draw")) {
+            debugLog("❌ Double Chance 12 incorrect (draw)");
+            return false;
+          }
+        }
+
         // System recommended Avoid and team lost
         if (rec.includes("avoid") && result.includes("loss")) {
           debugLog("✅ Avoid correct");
@@ -823,7 +838,14 @@ function App() {
           return "Win";
         }
 
-        // Double Chance recommendations
+        // Double Chance 12 (Home/Away - no draw)
+        if (
+          rec.includes("double chance 12") ||
+          rec.includes("home or away")
+        ) {
+          return "Double Chance 12";
+        }
+        // Double Chance (1X / X2 - with draw)
         if (rec.includes("double chance") || rec.includes(" or draw")) {
           return "Double Chance";
         }
@@ -1211,6 +1233,8 @@ function App() {
           b.BET_TYPE &&
           b.BET_TYPE.toLowerCase().includes("double chance"),
       );
+    } else if (betType === "Double Chance 12") {
+      teamBets = []; // DC 12 has no single team
     } else if (betType === "Over/Under") {
       teamBets = betsWithResults.filter(
         (b) =>
@@ -1306,6 +1330,7 @@ function App() {
       return {
         straightWin: 1.0,
         doubleChance: 0.9,
+        doubleChance12: 0.9,
         overUnder: 0.95,
       };
     }
@@ -1400,6 +1425,17 @@ function App() {
               ),
             )
           : 1.0, // Default to 1.0 if insufficient data (no bias)
+      // DC 12 uses same multiplier as DC (no separate 12 bet history)
+      doubleChance12:
+        doubleChanceBets.length >= 10
+          ? Math.max(
+              1.0 - maxMultiplierPenalty,
+              Math.min(
+                1.0 + maxMultiplierBoost,
+                1.0 + doubleChanceDiff * adjustmentScale,
+              ),
+            )
+          : 1.0,
       overUnder:
         overUnderBets.length >= 10
           ? Math.max(
@@ -1448,6 +1484,8 @@ function App() {
       mappedBetType = "Win";
     } else if (betType === "Double Chance") {
       mappedBetType = "Double Chance";
+    } else if (betType === "Double Chance 12") {
+      mappedBetType = "Double Chance"; // 12 uses same analytics as DC
     } else if (betType === "Over/Under") {
       mappedBetType = "Over/Under";
     }
@@ -1686,6 +1724,10 @@ function App() {
       (s || "") === "x2" ||
       (s || "") === "12" ||
       (s || "").includes(" or draw");
+    const isDoubleChance12 = (t, s) =>
+      (t || "").toLowerCase().includes("12") ||
+      (s || "").trim() === "12" ||
+      /^1\s*2$/.test((s || "").replace(/\s/g, ""));
     const isOverUnder = (t, s) =>
       t.includes("over") ||
       t.includes("under") ||
@@ -1695,6 +1737,7 @@ function App() {
     const ourIsAvoid = ourBet === "AVOID";
     const ourIsStraightWin = ourType === "Straight Win";
     const ourIsDoubleChance = ourType === "Double Chance";
+    const ourIsDoubleChance12 = ourType === "Double Chance 12";
     const ourIsOverUnder = ourType === "Over/Under";
 
     if (ourIsAvoid) {
@@ -1770,6 +1813,24 @@ function App() {
         reason: agrees
           ? undefined
           : ourReasoning || `We recommend Double Chance: ${ourBet}.`,
+      };
+    }
+
+    if (ourIsDoubleChance12) {
+      const agrees = isDoubleChance12(proposedType, proposedSelection);
+      if (!agrees) {
+        debugVerdictLog("Verdict: DISAGREE (Double Chance 12)", {
+          ourBet,
+          proposedType,
+          proposedSelection,
+        });
+      }
+      return {
+        agrees: !!agrees,
+        reason: agrees
+          ? undefined
+          : ourReasoning ||
+            "We recommend Double Chance 12 (Home or Away – no draw).",
       };
     }
 
@@ -2005,6 +2066,15 @@ function App() {
         recentFormData,
       );
 
+      // Analyze Double Chance 12 (Home/Away - no draw) - only when draw rate is low
+      const doubleChance12Recommendation = analyzeDoubleChance12(
+        homeTeam,
+        awayTeam,
+        country,
+        league,
+        bet,
+      );
+
       // Create array of all bet recommendations with their types
       const allBets = [
         {
@@ -2015,6 +2085,11 @@ function App() {
         {
           type: "Double Chance",
           recommendation: doubleChanceRecommendation,
+          riskLevel: "Medium",
+        },
+        {
+          type: "Double Chance 12",
+          recommendation: doubleChance12Recommendation,
           riskLevel: "Medium",
         },
         {
@@ -2051,6 +2126,10 @@ function App() {
           ) {
             return awayTeam;
           }
+        }
+        // Double Chance 12 has no single team (either team wins)
+        if (rec.type === "Double Chance 12") {
+          return null;
         }
         // For Over/Under, we can't determine a specific team, so use the team from the original bet
         if (rec.type === "Over/Under") {
@@ -2090,6 +2169,8 @@ function App() {
           adjustedScore *= betTypeMultipliers.straightWin;
         } else if (betOption.type === "Double Chance") {
           adjustedScore *= betTypeMultipliers.doubleChance;
+        } else if (betOption.type === "Double Chance 12") {
+          adjustedScore *= betTypeMultipliers.doubleChance12;
         } else if (betOption.type === "Over/Under") {
           adjustedScore *= betTypeMultipliers.overUnder;
         }
@@ -2345,8 +2426,13 @@ function App() {
         };
       });
 
-      // Sort by best bet score (with stable tie-breaker: Straight Win > Double Chance > Over/Under)
-      const typeOrder = { "Straight Win": 0, "Double Chance": 1, "Over/Under": 2 };
+      // Sort by best bet score (with stable tie-breaker: Straight Win > Double Chance > Double Chance 12 > Over/Under)
+      const typeOrder = {
+        "Straight Win": 0,
+        "Double Chance": 1,
+        "Double Chance 12": 2,
+        "Over/Under": 3,
+      };
       bestBetScores.sort((a, b) => {
         const scoreDiff = b.bestBetScore - a.bestBetScore;
         if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
@@ -2439,6 +2525,7 @@ function App() {
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
         doubleChance: doubleChanceRecommendation,
+        doubleChance12: doubleChance12Recommendation,
         overUnder: overUnderRecommendation,
       };
     });
@@ -3457,6 +3544,132 @@ function App() {
         teamDoubleChanceTotal >= 3
           ? teamDoubleChanceWilsonRate
           : teamWilsonRate, // Use Straight Win Wilson rate for fallback case
+    };
+  };
+
+  // Double Chance 12 (Home/Away - no draw): wins when either team wins, loses on draw.
+  // Only recommended when draw rate is low (score-based detection via HOME_SCORE === AWAY_SCORE).
+  const analyzeDoubleChance12 = (
+    homeTeam,
+    awayTeam,
+    country,
+    league,
+    betData,
+  ) => {
+    if (betData.recommendation && betData.recommendation.includes("Avoid")) {
+      return {
+        bet: "AVOID",
+        confidence: betData.confidenceScore || 30,
+        successRate: 0,
+        totalBets: 0,
+        reasoning: betData.recommendation
+          .replace("Avoid (", "")
+          .replace(")", ""),
+      };
+    }
+
+    // Get all games involving these teams (same logic as analyzeDoubleChance)
+    const homeTeamGames = (bets || []).filter(
+      (b) =>
+        (b.HOME_TEAM === homeTeam || b.AWAY_TEAM === homeTeam) &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        !isNaN(parseInt(b.HOME_SCORE)) &&
+        !isNaN(parseInt(b.AWAY_SCORE)),
+    );
+    const awayTeamGames = (bets || []).filter(
+      (b) =>
+        (b.HOME_TEAM === awayTeam || b.AWAY_TEAM === awayTeam) &&
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        !isNaN(parseInt(b.HOME_SCORE)) &&
+        !isNaN(parseInt(b.AWAY_SCORE)),
+    );
+
+    const allGamesMap = new Map();
+    [...homeTeamGames, ...awayTeamGames].forEach((game) => {
+      const key = `${game.DATE}_${game.HOME_TEAM}_${game.AWAY_TEAM}`;
+      if (!allGamesMap.has(key)) allGamesMap.set(key, game);
+    });
+    const allGames = Array.from(allGamesMap.values());
+
+    const draws = allGames.filter((b) => isDraw(b)).length;
+    const totalGames = allGames.length;
+    const drawRate = totalGames > 0 ? (draws / totalGames) * 100 : 0;
+
+    // League-wide fallback
+    const leagueGames = (bets || []).filter(
+      (b) =>
+        b.COUNTRY === country &&
+        b.LEAGUE === league &&
+        b.HOME_SCORE &&
+        b.AWAY_SCORE &&
+        !isNaN(parseInt(b.HOME_SCORE)) &&
+        !isNaN(parseInt(b.AWAY_SCORE)),
+    );
+    const leagueGamesMap = new Map();
+    leagueGames.forEach((game) => {
+      const key = `${game.DATE}_${game.HOME_TEAM}_${game.AWAY_TEAM}`;
+      if (!leagueGamesMap.has(key)) leagueGamesMap.set(key, game);
+    });
+    const uniqueLeagueGames = Array.from(leagueGamesMap.values());
+    const leagueDraws = uniqueLeagueGames.filter((b) => isDraw(b)).length;
+    const leagueDrawRate =
+      uniqueLeagueGames.length > 0
+        ? (leagueDraws / uniqueLeagueGames.length) * 100
+        : 0;
+
+    const minSampleSize = 7;
+    const effectiveDrawRate =
+      totalGames >= minSampleSize ? drawRate : leagueDrawRate;
+
+    // Need sufficient data (scores) to estimate draw rate
+    if (totalGames < minSampleSize && uniqueLeagueGames.length < minSampleSize) {
+      return {
+        bet: "AVOID",
+        confidence: 30,
+        successRate: 0,
+        totalBets: 0,
+        reasoning: "Insufficient score data to estimate draw rate for Double Chance 12.",
+      };
+    }
+
+    // DC 12 wins when either team wins; loses on draw. Recommend when draw rate is low.
+    const DRAW_RATE_THRESHOLD = 20; // Recommend 12 when draw rate < 20%
+    const winWinProbability = 100 - effectiveDrawRate;
+
+    if (effectiveDrawRate >= DRAW_RATE_THRESHOLD) {
+      return {
+        bet: "AVOID",
+        confidence: 30,
+        successRate: 0,
+        totalBets: totalGames || uniqueLeagueGames.length,
+        reasoning: `Draw rate ${effectiveDrawRate.toFixed(1)}% is too high for Double Chance 12 (Home/Away). 12 loses on draws.`,
+        wilsonWinRate: winWinProbability,
+      };
+    }
+
+    const drawRateSource =
+      totalGames >= minSampleSize
+        ? `team-specific (${drawRate.toFixed(1)}% from ${totalGames} games)`
+        : `league-wide (${leagueDrawRate.toFixed(1)}% from ${uniqueLeagueGames.length} league games)`;
+
+    const confidence = Math.min(
+      Math.max(winWinProbability * 0.9, 50),
+      95,
+    );
+
+    return {
+      bet: "Home or Away",
+      confidence,
+      successRate: confidence,
+      totalBets: totalGames || uniqueLeagueGames.length,
+      reasoning: `Low draw rate (${effectiveDrawRate.toFixed(1)}% ${drawRateSource}). Double Chance 12 (Home/Away) wins when either team wins – ${winWinProbability.toFixed(1)}% of games.`,
+      wilsonWinRate: winWinProbability,
     };
   };
 

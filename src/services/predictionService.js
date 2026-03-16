@@ -27,6 +27,11 @@ export const getPredictionAccuracyMetrics = (bets) => {
         isCorrect = result.includes("win");
       } else if (recommendation.includes("Avoid")) {
         isCorrect = result.includes("loss");
+      } else if (
+        recommendation.includes("Double Chance 12") ||
+        recommendation.includes("Home or Away")
+      ) {
+        isCorrect = result.includes("win"); // DC 12 loses on draw
       } else if (recommendation.includes("Double Chance")) {
         isCorrect = result.includes("win") || result.includes("draw");
       } else if (recommendation.includes("Over")) {
@@ -124,6 +129,11 @@ export const calculatePredictionAccuracy = (bet) => {
     return result.includes("win") ? "Correct" : "Incorrect";
   } else if (recommendation.includes("Avoid")) {
     return result.includes("loss") ? "Correct" : "Incorrect";
+  } else if (
+    recommendation.includes("Double Chance 12") ||
+    recommendation.includes("Home or Away")
+  ) {
+    return result.includes("win") ? "Correct" : "Incorrect"; // DC 12 loses on draw
   } else if (recommendation.includes("Double Chance")) {
     return result.includes("win") || result.includes("draw")
       ? "Correct"
