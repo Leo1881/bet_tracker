@@ -1042,14 +1042,23 @@ const RecommendationsTab = ({
                 <div>
                   <h4 className="text-lg font-bold text-white">{rec.match}</h4>
                   <p className="text-gray-400 text-sm mt-0.5">{rec.country} · {rec.league}</p>
-                  {rec.leaguePerformance && rec.leaguePerformance.totalBets >= 5 && (
-                    <p className={`text-xs mt-1 ${rec.leaguePerformance.winRate >= 0.5 ? "text-green-400" : rec.leaguePerformance.winRate >= 0.4 ? "text-amber-400" : "text-red-400"}`}>
-                      Your {rec.league} record: {(rec.leaguePerformance.winRate * 100).toFixed(0)}% ({rec.leaguePerformance.wins}W-{rec.leaguePerformance.totalBets - rec.leaguePerformance.wins}L)
-                    </p>
-                  )}
-                  {rec.performanceWarning && (
-                    <div className="mt-1.5 px-2 py-1 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs">
-                      ⚠️ Low {rec.performanceWarning.type} performance: {(rec.performanceWarning.winRate * 100).toFixed(0)}% in {rec.performanceWarning.label} ({rec.performanceWarning.wins}W-{rec.performanceWarning.totalBets - rec.performanceWarning.wins}L). Your bets here have been risky.
+                  {rec.performanceNote && (
+                    <div
+                      className={`mt-1.5 px-2 py-1 rounded text-xs ${
+                        rec.performanceNote.tier === "caution"
+                          ? "bg-red-500/20 border border-red-500/30 text-red-300"
+                          : rec.performanceNote.tier === "risky"
+                            ? "bg-amber-500/20 border border-amber-500/30 text-amber-300"
+                            : rec.performanceNote.tier === "strong"
+                              ? "bg-green-500/20 border border-green-500/30 text-green-300"
+                              : "bg-white/10 border border-white/20 text-gray-300"
+                      }`}
+                    >
+                      {rec.performanceNote.tier === "caution" && "⚠️ Caution: "}
+                      {rec.performanceNote.tier === "risky" && "⚠️ "}
+                      {rec.performanceNote.tier === "strong" && "✓ Strong area: "}
+                      Your record in {rec.performanceNote.label}: {(rec.performanceNote.winRate * 100).toFixed(0)}% ({rec.performanceNote.wins}W-{rec.performanceNote.totalBets - rec.performanceNote.wins}L)
+                      {rec.performanceNote.tier === "risky" && " — your bets here have been risky."}
                     </div>
                   )}
                   {rec.oddsTrapOnBestBet && rec.bestBet?.oddsTrapWarning?.message && (

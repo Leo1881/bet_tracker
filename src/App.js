@@ -1294,6 +1294,27 @@ function App() {
     };
   };
 
+  // Day-of-week performance: DATE = game date. Use conservatively (30+ bets, ±2% max)
+  // because sample sizes vary and day can be confounded with league.
+  const getDayOfWeekPerformance = () => {
+    if (!bets || bets.length === 0) return null;
+    const deduplicatedBets = getDeduplicatedBetsForAnalysis;
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const byDay = {};
+    deduplicatedBets.forEach((b) => {
+      if (!b.RESULT || (!b.RESULT.toLowerCase().includes("win") && !b.RESULT.toLowerCase().includes("loss"))) return;
+      const d = b.DATE ? new Date(b.DATE).getDay() : 0;
+      const name = dayNames[d];
+      if (!byDay[name]) byDay[name] = { wins: 0, total: 0 };
+      byDay[name].total++;
+      if (b.RESULT.toLowerCase().includes("win")) byDay[name].wins++;
+    });
+    return Object.entries(byDay).reduce((acc, [day, s]) => {
+      acc[day] = { winRate: s.total > 0 ? s.wins / s.total : 0.5, total: s.total };
+      return acc;
+    }, {});
+  };
+
   // Calculate your overall country performance (all bets in that country regardless of league)
   // Fallback when league performance has insufficient data
   const getCountryPerformance = (country) => {
@@ -2218,14 +2239,31 @@ function App() {
 
         // Factor in your overall league performance (do you tend to win/lose when betting on this league?)
         const leaguePerformance = getLeaguePerformance(country, league);
-        if (leaguePerformance && leaguePerformance.totalBets >= 5) {
-          const leagueWinRate = leaguePerformance.winRate;
-          // Penalize poor league performance, slight boost for strong league performance
-          const leagueMultiplier =
-            leagueWinRate >= 0.5
-              ? Math.min(1.08, 1.0 + (leagueWinRate - 0.5) * 0.4) // Up to 8% boost for 70%+ league win rate
-              : Math.max(0.8, 1.0 - (0.5 - leagueWinRate) * 0.6); // Up to 20% penalty for poor league performance
-          adjustedScore = adjustedScore * leagueMultiplier;
+        const countryPerformance = getCountryPerformance(country);
+        const perfToUse = leaguePerformance?.totalBets >= 5
+          ? leaguePerformance
+          : countryPerformance?.totalBets >= 5
+            ? countryPerformance
+            : null;
+        if (perfToUse) {
+          const winRate = perfToUse.winRate;
+          const perfMultiplier =
+            winRate >= 0.5
+              ? Math.min(1.08, 1.0 + (winRate - 0.5) * 0.4) // Up to 8% boost for 70%+ win rate
+              : Math.max(0.8, 1.0 - (0.5 - winRate) * 0.6); // Up to 20% penalty for poor performance
+          adjustedScore = adjustedScore * perfMultiplier;
+        }
+
+        // Day-of-week: conservative (±2% max, require 30+ bets) – less reliable than country/league
+        const dayOfWeekPerf = getDayOfWeekPerformance();
+        const gameDay = bet.DATE
+          ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(bet.DATE).getDay()]
+          : null;
+        if (dayOfWeekPerf && gameDay && dayOfWeekPerf[gameDay]?.total >= 30) {
+          const dayWinRate = dayOfWeekPerf[gameDay].winRate;
+          const dayMultiplier =
+            dayWinRate >= 0.6 ? 1.02 : dayWinRate <= 0.4 ? 0.98 : 1.0; // ±2% max
+          adjustedScore = adjustedScore * dayMultiplier;
         }
 
         // Straight Win preference: form-based override + confidence gap rule (affects Primary ranking)
@@ -2463,29 +2501,30 @@ function App() {
       const leaguePerformance = getLeaguePerformance(country, league);
       const countryPerformance = getCountryPerformance(country);
 
-      // Low performance warning: league first (if 5+ bets), else country fallback. Warn if win rate < 80%
-      const LOW_PERFORMANCE_THRESHOLD = 0.8;
-      let performanceWarning = null;
-      if (leaguePerformance && leaguePerformance.totalBets >= 5) {
-        if (leaguePerformance.winRate < LOW_PERFORMANCE_THRESHOLD) {
-          performanceWarning = {
-            type: "league",
-            winRate: leaguePerformance.winRate,
-            totalBets: leaguePerformance.totalBets,
-            wins: leaguePerformance.wins,
-            label: league,
-          };
-        }
-      } else if (countryPerformance && countryPerformance.totalBets >= 5) {
-        if (countryPerformance.winRate < LOW_PERFORMANCE_THRESHOLD) {
-          performanceWarning = {
-            type: "country",
-            winRate: countryPerformance.winRate,
-            totalBets: countryPerformance.totalBets,
-            wins: countryPerformance.wins,
-            label: country,
-          };
-        }
+      // Unified performance note: one block for league/country record with tier-based styling
+      const perf = leaguePerformance?.totalBets >= 5
+        ? leaguePerformance
+        : countryPerformance?.totalBets >= 5
+          ? countryPerformance
+          : null;
+      const perfLabel = leaguePerformance?.totalBets >= 5
+        ? `${league} (${country})`
+        : countryPerformance?.totalBets >= 5
+          ? country
+          : null;
+      let performanceNote = null;
+      if (perf && perfLabel) {
+        const tier =
+          perf.winRate < 0.5 ? "caution" :
+          perf.winRate < 0.8 ? "risky" :
+          perf.winRate >= 0.9 && perf.totalBets >= 10 ? "strong" : "neutral";
+        performanceNote = {
+          tier,
+          label: perfLabel,
+          winRate: perf.winRate,
+          totalBets: perf.totalBets,
+          wins: perf.wins,
+        };
       }
 
       // Odds based on recommended team: ODDS1 = home, ODDS2 = away, fallback for Over/Under/AVOID
@@ -2520,7 +2559,7 @@ function App() {
         proposedBetLabel: proposedBetLabel,
         leaguePerformance: leaguePerformance,
         countryPerformance: countryPerformance,
-        performanceWarning: performanceWarning,
+        performanceNote: performanceNote,
         oddsTrapOnBestBet: bestBet?.oddsTrapWarning?.isTrap ?? false,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
