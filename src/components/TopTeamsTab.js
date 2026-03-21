@@ -57,28 +57,44 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
     return winRateScore + totalWinsScore + recentPerformanceScore + betTypeBonus + volumeBonus;
   };
 
-  // Calculate recent performance for a specific bet type (last 10 settled bets only)
+  // Calculate recent performance for a specific bet type (last 10 GAMES, not bets)
   const calculateRecentPerformance = useCallback((individualBets, betType) => {
     if (!individualBets || individualBets.length === 0) return { recentWinRate: 0, recentBets: 0 };
 
     const filteredByType = individualBets.filter(bet => matchesBetType(bet, betType));
     const settledOnly = filteredByType.filter(
       (bet) => {
-        const result = (bet.RESULT || bet.result || "").toLowerCase();
+        const result = (bet.RESULT ?? bet.result ?? "").toLowerCase();
         return result.includes("win") || result.includes("loss");
       }
     );
-    const last10Settled = settledOnly
-      .sort((a, b) => new Date(b.DATE || b.date) - new Date(a.DATE || a.date))
+
+    // Group by game (date + home + away) - each game counts once
+    const gamesMap = new Map();
+    settledOnly.forEach((bet) => {
+      const dateVal = bet.DATE ?? bet.date ?? bet.Date ?? "";
+      const home = bet.HOME_TEAM ?? bet.home_team ?? "";
+      const away = bet.AWAY_TEAM ?? bet.away_team ?? "";
+      const gameKey = `${dateVal}_${home}_${away}`;
+      if (!gamesMap.has(gameKey)) {
+        gamesMap.set(gameKey, { date: new Date(dateVal || 0), bets: [] });
+      }
+      gamesMap.get(gameKey).bets.push(bet);
+    });
+
+    const last10Games = Array.from(gamesMap.values())
+      .sort((a, b) => b.date - a.date)
       .slice(0, 10);
 
     let recentWins = 0;
-    last10Settled.forEach((bet) => {
-      const result = (bet.RESULT || bet.result || "").toLowerCase();
-      if (result.includes("win")) recentWins++;
+    last10Games.forEach((game) => {
+      const hasWin = game.bets.some((b) =>
+        (b.RESULT ?? b.result ?? "").toLowerCase().includes("win")
+      );
+      if (hasWin) recentWins++;
     });
 
-    const recentBets = last10Settled.length;
+    const recentBets = last10Games.length;
     const recentWinRate = recentBets > 0 ? (recentWins / recentBets) * 100 : 0;
 
     return { recentWinRate, recentBets };
@@ -396,7 +412,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
                         }`}
                       >
                         {team.recentWinRate.toFixed(1)}% ({team.recentBets}{" "}
-                        bets)
+                        games)
                       </span>
                     </div>
                   </td>

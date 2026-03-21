@@ -282,7 +282,13 @@ export const getDeduplicatedBets = (bets) => {
   const uniqueBets = new Map();
 
   bets.forEach((bet) => {
-    const key = `${bet.DATE}-${bet.HOME_TEAM}-${bet.AWAY_TEAM}-${bet.BET_TYPE}-${bet.BET_SELECTION}`;
+    // Support DATE/date/Date and HOME_TEAM/home_team etc (Google Sheets vs DB)
+    const dateVal = bet.DATE ?? bet.date ?? bet.Date ?? "";
+    const homeTeam = bet.HOME_TEAM ?? bet.home_team ?? "";
+    const awayTeam = bet.AWAY_TEAM ?? bet.away_team ?? "";
+    const betType = bet.BET_TYPE ?? bet.bet_type ?? "";
+    const betSelection = bet.BET_SELECTION ?? bet.bet_selection ?? "";
+    const key = `${dateVal}-${homeTeam}-${awayTeam}-${betType}-${betSelection}`;
 
     if (!uniqueBets.has(key)) {
       uniqueBets.set(key, bet);
@@ -300,18 +306,20 @@ export const getDeduplicatedBets = (bets) => {
  */
 export const getDeduplicatedFilteredBets = (deduplicatedBets, filters) => {
   return deduplicatedBets.filter((bet) => {
+    const dateVal = bet.DATE ?? bet.date ?? bet.Date ?? "";
+    const teamIncluded = bet.TEAM_INCLUDED ?? bet.team_included ?? "";
     // Apply filters
-    if (filters.country && bet.COUNTRY !== filters.country) return false;
-    if (filters.league && bet.LEAGUE !== filters.league) return false;
-    if (filters.betType && bet.BET_TYPE !== filters.betType) return false;
-    if (filters.result && bet.RESULT !== filters.result) return false;
+    if (filters.country && (bet.COUNTRY ?? bet.country) !== filters.country) return false;
+    if (filters.league && (bet.LEAGUE ?? bet.league) !== filters.league) return false;
+    if (filters.betType && (bet.BET_TYPE ?? bet.bet_type) !== filters.betType) return false;
+    if (filters.result && (bet.RESULT ?? bet.result) !== filters.result) return false;
     if (
       filters.team &&
-      bet.TEAM_INCLUDED?.toLowerCase() !== filters.team.toLowerCase()
+      teamIncluded?.toLowerCase() !== filters.team.toLowerCase()
     )
       return false;
-    if (filters.dateFrom && bet.DATE < filters.dateFrom) return false;
-    if (filters.dateTo && bet.DATE > filters.dateTo) return false;
+    if (filters.dateFrom && dateVal < filters.dateFrom) return false;
+    if (filters.dateTo && dateVal > filters.dateTo) return false;
 
     return true;
   });

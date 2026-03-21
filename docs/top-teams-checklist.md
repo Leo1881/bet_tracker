@@ -11,7 +11,7 @@ Use this to go through each item one by one and decide if you want to change any
   Any bet missing **COUNTRY** or **LEAGUE** is **skipped** when building the list. If some imports or sources don’t set these fields, those bets never affect Top Teams.
 
 - [x] **3. Pending bets in the numbers**  
-  **Done:** Total Bets and ranking now use only settled bets (win/loss). Recent Performance uses the last 10 settled bets. Pending bets are excluded everywhere.
+  **Done:** Total Bets and ranking now use only settled bets (win/loss). Recent Performance uses the last 10 **games** (not bets; one game = one result). Pending bets are excluded everywhere.
 
 - [ ] **4. Dedup key doesn’t use TEAM_INCLUDED**  
   Deduplication is by date + home + away + bet type + bet selection. So “Team A vs Team B – Win – Team A” and “Team A vs Team B – Win – Team B” are two separate rows (different selection). Both can count toward each team. If you expected one row per game per team, that’s not how it works.

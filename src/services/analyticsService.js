@@ -434,13 +434,14 @@ export const getTopTeams = (deduplicatedBets) => {
   const teamBets = new Map(); // Store all bets for each team to sort by date
 
   // First pass: collect all bets for each team
+  // Support both uppercase (app convention) and lowercase (DB/some sheets)
   deduplicatedBets.forEach((bet) => {
-    const teamIncluded = bet.TEAM_INCLUDED;
-    const homeTeam = bet.HOME_TEAM;
-    const awayTeam = bet.AWAY_TEAM;
-    const country = bet.COUNTRY;
-    const league = bet.LEAGUE;
-    const betType = bet.BET_TYPE || "Unknown";
+    const teamIncluded = bet.TEAM_INCLUDED ?? bet.team_included;
+    const homeTeam = bet.HOME_TEAM ?? bet.home_team;
+    const awayTeam = bet.AWAY_TEAM ?? bet.away_team;
+    const country = bet.COUNTRY ?? bet.country;
+    const league = bet.LEAGUE ?? bet.league;
+    const betType = bet.BET_TYPE ?? bet.bet_type ?? "Unknown";
 
     // Use TEAM_INCLUDED if available, otherwise use HOME_TEAM or AWAY_TEAM
     let teamToAnalyze = teamIncluded || homeTeam || awayTeam;
@@ -491,11 +492,12 @@ export const getTopTeams = (deduplicatedBets) => {
     teamBets.get(teamKey).push(bet);
 
     const team = teamStats.get(teamKey);
+    const result = (bet.RESULT ?? bet.result ?? "").toLowerCase();
     // Only count settled bets (win/loss) in totalBets so ranking and stats are accurate
-    if (bet.RESULT?.toLowerCase().includes("win")) {
+    if (result.includes("win")) {
       team.totalBets++;
       team.wins++;
-    } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+    } else if (result.includes("loss")) {
       team.totalBets++;
       team.losses++;
     }
@@ -510,42 +512,65 @@ export const getTopTeams = (deduplicatedBets) => {
       };
     }
     team.betTypes[betType].total++;
-    if (bet.RESULT?.toLowerCase().includes("win")) {
+    if (result.includes("win")) {
       team.betTypes[betType].wins++;
       team.betTypes[betType].totalWithResult++;
-    } else if (bet.RESULT?.toLowerCase().includes("loss")) {
+    } else if (result.includes("loss")) {
       team.betTypes[betType].losses++;
       team.betTypes[betType].totalWithResult++;
     }
 
-    // Track last bet date
-    const betDate = new Date(bet.DATE);
-    if (!team.lastBetDate || betDate > team.lastBetDate) {
+    // Track last bet date (support DATE/date/Date - Google Sheets vs DB)
+    const dateVal = bet.DATE ?? bet.date ?? bet.Date;
+    const betDate = dateVal ? new Date(dateVal) : null;
+    if (betDate && !isNaN(betDate.getTime()) && (!team.lastBetDate || betDate > team.lastBetDate)) {
       team.lastBetDate = betDate;
     }
   });
 
-  // Second pass: calculate recent performance from last 10 settled bets by date
+  // Second pass: calculate recent performance from last 10 GAMES (not bets)
+  // Using games avoids skew: 1 loss with 3 bets shouldn't count 3x vs 1 win with 1 bet
   teamBets.forEach((bets, teamKey) => {
     const team = teamStats.get(teamKey);
     if (!team) return;
 
-    // Only settled bets, sort by date (newest first), take last 10
-    const last10Settled = bets
-      .filter(
-        (b) =>
-          b.RESULT?.toLowerCase().includes("win") ||
-          b.RESULT?.toLowerCase().includes("loss")
-      )
-      .sort((a, b) => new Date(b.DATE) - new Date(a.DATE))
+    const getDate = (b) => {
+      const val = b.DATE ?? b.date ?? b.Date;
+      return val ? new Date(val) : new Date(0);
+    };
+
+    // Group settled bets by game (date + home + away)
+    const gamesMap = new Map();
+    bets
+      .filter((b) => {
+        const result = (b.RESULT ?? b.result ?? "").toLowerCase();
+        return result.includes("win") || result.includes("loss");
+      })
+      .forEach((bet) => {
+        const home = bet.HOME_TEAM ?? bet.home_team ?? "";
+        const away = bet.AWAY_TEAM ?? bet.away_team ?? "";
+        const gameKey = `${bet.DATE ?? bet.date ?? bet.Date ?? ""}_${home}_${away}`;
+        if (!gamesMap.has(gameKey)) {
+          gamesMap.set(gameKey, { date: getDate(bet), bets: [] });
+        }
+        gamesMap.get(gameKey).bets.push(bet);
+      });
+
+    // Sort games by date (newest first), take last 10 games
+    const last10Games = Array.from(gamesMap.values())
+      .sort((a, b) => b.date - a.date)
       .slice(0, 10);
 
     let recentWins = 0;
-    last10Settled.forEach((bet) => {
-      if (bet.RESULT?.toLowerCase().includes("win")) recentWins++;
+    last10Games.forEach((game) => {
+      // Game = win if any bet won, loss if all lost
+      const hasWin = game.bets.some((b) =>
+        (b.RESULT ?? b.result ?? "").toLowerCase().includes("win")
+      );
+      if (hasWin) recentWins++;
     });
 
-    team.recentBets = last10Settled.length;
+    team.recentBets = last10Games.length;
     team.recentWins = recentWins;
 
     // Calculate win rates
