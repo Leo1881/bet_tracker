@@ -633,7 +633,7 @@ export const getTopTeams = (deduplicatedBets) => {
         betTypeBonus +
         volumeBonus;
 
-      // Generate bet type breakdown
+      // Generate bet type breakdown - sort by Wilson score (win rate + volume)
       const betTypeBreakdown = Object.entries(team.betTypes || {})
         .map(([betType, stats]) => ({
           betType,
@@ -645,9 +645,13 @@ export const getTopTeams = (deduplicatedBets) => {
             stats.totalWithResult > 0
               ? ((stats.wins / stats.totalWithResult) * 100).toFixed(1)
               : "0.0",
+          wilsonScore:
+            stats.totalWithResult > 0
+              ? calculateWilsonScore(stats.wins, stats.totalWithResult) * 100
+              : 0,
         }))
         .filter((bt) => bt.totalWithResult > 0) // Only show bet types with results
-        .sort((a, b) => b.totalWithResult - a.totalWithResult);
+        .sort((a, b) => b.wilsonScore - a.wilsonScore); // Best by Wilson (win rate + volume)
 
       return {
         ...team,
@@ -659,8 +663,7 @@ export const getTopTeams = (deduplicatedBets) => {
         individualBets: teamBets.get(team.teamKey) || [], // Add individual bet data for charts
       };
     })
-    .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0))
-    .slice(0, 100); // Top 100 teams
+    .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0));
 
   return teamsArray || [];
 };

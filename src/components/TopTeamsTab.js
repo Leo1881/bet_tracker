@@ -5,7 +5,7 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
     key: null, // null means default composite score sort
     direction: 'desc'
   });
-  const [selectedBetType, setSelectedBetType] = useState('All');
+  const [selectedBetType, setSelectedBetType] = useState('Win');
 
   // Helper function to check if a bet matches a bet type
   const matchesBetType = (bet, betType) => {
@@ -101,10 +101,10 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
   }, []);
 
   const teams = useMemo(() => {
-    // Helper function to sort teams (defined inside useMemo to access sortConfig)
-    const sortTeams = (teamsToSort) => {
+    // Sort by column when set, else by composite; then slice to top 100
+    const sortByColumn = (teamsToSort) => {
       if (!sortConfig.key) {
-        return teamsToSort;
+        return [...teamsToSort].sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0));
       }
 
       return [...teamsToSort].sort((a, b) => {
@@ -142,24 +142,21 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
     };
 
     const allTeams = getTopTeams();
-    // Exclude blacklisted teams from the list entirely
     const teamsExcludingBlacklist = allTeams.filter(
       (team) => !isTeamBlacklisted(team.teamName)
     );
 
-    // If "All" is selected, use teams as-is (minus blacklisted)
     if (selectedBetType === 'All') {
-      return sortTeams(teamsExcludingBlacklist);
+      const sorted = sortByColumn(teamsExcludingBlacklist);
+      return sorted.slice(0, 100);
     }
 
     // Filter teams that have the selected bet type with at least 3 bets
     const filteredTeams = teamsExcludingBlacklist
       .map(team => {
-        // Find the bet type in breakdown
         const betTypeData = team.betTypeBreakdown?.find(bt => {
           const btLower = bt.betType.toLowerCase();
           const selectedLower = selectedBetType.toLowerCase();
-          
           if (selectedLower === "win") {
             return btLower.includes("win") && !btLower.includes("double chance");
           } else if (selectedLower === "double chance") {
@@ -172,22 +169,17 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
           return false;
         });
 
-        // Must have at least 3 bets for this bet type
         if (!betTypeData || betTypeData.totalWithResult < 3) {
           return null;
         }
 
-        // Calculate recent performance for this bet type
         const recent = calculateRecentPerformance(team.individualBets || [], selectedBetType);
-
-        // Calculate composite score for this bet type
         const compositeScore = calculateBetTypeCompositeScore(
           betTypeData,
           recent.recentWinRate,
           recent.recentBets
         );
 
-        // Return team with bet type-specific stats
         return {
           ...team,
           winRate: parseFloat(betTypeData.winRate) || 0,
@@ -199,11 +191,10 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
           compositeScore: compositeScore
         };
       })
-      .filter(team => team !== null)
-      .sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0))
-      .slice(0, 100); // Top 100
+      .filter(team => team !== null);
 
-    return sortTeams(filteredTeams);
+    const sorted = sortByColumn(filteredTeams);
+    return sorted.slice(0, 100);
   }, [getTopTeams, sortConfig, selectedBetType, calculateRecentPerformance, isTeamBlacklisted]);
 
   const handleSort = (key) => {
@@ -266,7 +257,6 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
           }}
           className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="All" className="bg-gray-800">All Bet Types</option>
           <option value="Win" className="bg-gray-800">Win</option>
           <option value="Double Chance" className="bg-gray-800">Double Chance</option>
           <option value="Over" className="bg-gray-800">Over</option>
@@ -342,10 +332,10 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
                 Best Bet Type
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
-                Countries
+                Country
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
-                Leagues
+                League
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
                 Score
