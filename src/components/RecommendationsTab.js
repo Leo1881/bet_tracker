@@ -1061,6 +1061,11 @@ const RecommendationsTab = ({
                       {rec.performanceNote.tier === "risky" && " — your bets here have been risky."}
                     </div>
                   )}
+                  {rec.lossWarning?.isRisky && (
+                    <div className="mt-1.5 px-2 py-1 rounded bg-red-500/20 border border-red-500/30 text-red-300 text-xs">
+                      🛑 {rec.lossWarning.message}
+                    </div>
+                  )}
                   {rec.oddsTrapOnBestBet && rec.bestBet?.oddsTrapWarning?.message && (
                     <div className="mt-1.5 px-2 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs">
                       ⚠️ {rec.bestBet.oddsTrapWarning.message}

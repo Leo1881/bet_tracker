@@ -24,6 +24,7 @@ import {
   getOddsTrapResult,
   ODDS_TRAP_CONFIDENCE_PENALTY,
 } from "./utils/oddsTrapUtils";
+import { getLossWarning } from "./services/lossPatternService";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -2542,6 +2543,22 @@ function App() {
         return odds; // Fallback for Over/Under, AVOID, etc: use ODDS1
       })();
 
+      // Loss pattern warning: check if past bets on this team/league match poor performance
+      let lossWarning = null;
+      if (
+        bestBet &&
+        bestBet.bet !== "AVOID" &&
+        bestBet.bet !== "No clear winner" &&
+        bestBet.teamForBet
+      ) {
+        lossWarning = getLossWarning(deduplicatedBets, {
+          team: bestBet.teamForBet,
+          country,
+          league,
+          betType: bestBet.type,
+        });
+      }
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
@@ -2560,6 +2577,7 @@ function App() {
         leaguePerformance: leaguePerformance,
         countryPerformance: countryPerformance,
         performanceNote: performanceNote,
+        lossWarning: lossWarning,
         oddsTrapOnBestBet: bestBet?.oddsTrapWarning?.isTrap ?? false,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,

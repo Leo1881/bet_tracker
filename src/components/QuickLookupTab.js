@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+import { getDeduplicatedBets } from "../services/dataProcessingService";
+import { getLossInfo } from "../services/lossPatternService";
 
 const normalizeTeamName = (name = "") => {
   if (!name) return "";
@@ -50,6 +52,7 @@ const buildTeamKey = (teamName = "", country = "", league = "") => {
 const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const deduplicatedBets = useMemo(() => getDeduplicatedBets(bets || []), [bets]);
 
   /**
    * Calculate Wilson Score for confidence interval
@@ -1063,6 +1066,24 @@ const QuickLookupTab = ({ teamAnalytics, scoringAnalysis, bets }) => {
                     {result.country} - {result.league}
                   </p>
                 )}
+                {!result.isTotalView && result.country && result.league && (() => {
+                  const lossInfo = getLossInfo(deduplicatedBets, {
+                    team: result.teamName,
+                    country: result.country,
+                    league: result.league,
+                    betType: null,
+                  });
+                  if (!lossInfo) return null;
+                  return (
+                    <div className={`mt-1.5 px-2 py-1 rounded text-xs ${
+                      lossInfo.isRisky
+                        ? "bg-red-500/20 border border-red-500/30 text-red-300"
+                        : "bg-green-500/20 border border-green-500/30 text-green-300"
+                    }`}>
+                      {lossInfo.isRisky ? "🛑 " : "✓ "}{lossInfo.message}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Performance Overview */}
