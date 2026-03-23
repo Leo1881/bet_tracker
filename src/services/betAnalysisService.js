@@ -482,6 +482,8 @@ export const analyzeScoringPatterns = async (
       const hasOver1_5 = totalGoals > 1;
       const hasOver2_5 = totalGoals > 2;
       const hasOver3_5 = totalGoals > 3;
+      const hasOver4_5 = totalGoals > 4;
+      const hasOver5_5 = totalGoals > 5;
 
       // Analyze home team
       const homeKey = `${homeTeam}-${country}-${league}`;
@@ -500,15 +502,29 @@ export const analyzeScoringPatterns = async (
           over1_5Count: 0,
           over2_5Count: 0,
           over3_5Count: 0,
+          over4_5Count: 0,
+          over5_5Count: 0,
           over1_5Rate: 0,
           over2_5Rate: 0,
           over3_5Rate: 0,
+          over4_5Rate: 0,
+          over5_5Rate: 0,
           homeGames: 0,
           awayGames: 0,
           homeGoalsScored: 0,
           awayGoalsScored: 0,
           homeGoalsConceded: 0,
           awayGoalsConceded: 0,
+          homeOver1_5Count: 0,
+          homeOver2_5Count: 0,
+          homeOver3_5Count: 0,
+          homeOver4_5Count: 0,
+          homeOver5_5Count: 0,
+          awayOver1_5Count: 0,
+          awayOver2_5Count: 0,
+          awayOver3_5Count: 0,
+          awayOver4_5Count: 0,
+          awayOver5_5Count: 0,
         });
       }
       const homeStats = teamLeagueMap.get(homeKey);
@@ -521,6 +537,13 @@ export const analyzeScoringPatterns = async (
       homeStats.over1_5Count += hasOver1_5 ? 1 : 0;
       homeStats.over2_5Count += hasOver2_5 ? 1 : 0;
       homeStats.over3_5Count += hasOver3_5 ? 1 : 0;
+      homeStats.over4_5Count += hasOver4_5 ? 1 : 0;
+      homeStats.over5_5Count += hasOver5_5 ? 1 : 0;
+      homeStats.homeOver1_5Count += hasOver1_5 ? 1 : 0;
+      homeStats.homeOver2_5Count += hasOver2_5 ? 1 : 0;
+      homeStats.homeOver3_5Count += hasOver3_5 ? 1 : 0;
+      homeStats.homeOver4_5Count += hasOver4_5 ? 1 : 0;
+      homeStats.homeOver5_5Count += hasOver5_5 ? 1 : 0;
       homeStats.homeGames++;
 
       // Analyze away team
@@ -540,15 +563,29 @@ export const analyzeScoringPatterns = async (
           over1_5Count: 0,
           over2_5Count: 0,
           over3_5Count: 0,
+          over4_5Count: 0,
+          over5_5Count: 0,
           over1_5Rate: 0,
           over2_5Rate: 0,
           over3_5Rate: 0,
+          over4_5Rate: 0,
+          over5_5Rate: 0,
           homeGames: 0,
           awayGames: 0,
           homeGoalsScored: 0,
           awayGoalsScored: 0,
           homeGoalsConceded: 0,
           awayGoalsConceded: 0,
+          homeOver1_5Count: 0,
+          homeOver2_5Count: 0,
+          homeOver3_5Count: 0,
+          homeOver4_5Count: 0,
+          homeOver5_5Count: 0,
+          awayOver1_5Count: 0,
+          awayOver2_5Count: 0,
+          awayOver3_5Count: 0,
+          awayOver4_5Count: 0,
+          awayOver5_5Count: 0,
         });
       }
       const awayStats = teamLeagueMap.get(awayKey);
@@ -561,6 +598,13 @@ export const analyzeScoringPatterns = async (
       awayStats.over1_5Count += hasOver1_5 ? 1 : 0;
       awayStats.over2_5Count += hasOver2_5 ? 1 : 0;
       awayStats.over3_5Count += hasOver3_5 ? 1 : 0;
+      awayStats.over4_5Count += hasOver4_5 ? 1 : 0;
+      awayStats.over5_5Count += hasOver5_5 ? 1 : 0;
+      awayStats.awayOver1_5Count += hasOver1_5 ? 1 : 0;
+      awayStats.awayOver2_5Count += hasOver2_5 ? 1 : 0;
+      awayStats.awayOver3_5Count += hasOver3_5 ? 1 : 0;
+      awayStats.awayOver4_5Count += hasOver4_5 ? 1 : 0;
+      awayStats.awayOver5_5Count += hasOver5_5 ? 1 : 0;
       awayStats.awayGames++;
     });
 
@@ -607,6 +651,54 @@ export const analyzeScoringPatterns = async (
         over3_5Rate:
           stats.totalGames > 0
             ? ((stats.over3_5Count / stats.totalGames) * 100).toFixed(1)
+            : 0,
+        over4_5Rate:
+          stats.totalGames > 0
+            ? ((stats.over4_5Count / stats.totalGames) * 100).toFixed(1)
+            : 0,
+        over5_5Rate:
+          stats.totalGames > 0
+            ? ((stats.over5_5Count / stats.totalGames) * 100).toFixed(1)
+            : 0,
+        homeOver1_5Rate:
+          stats.homeGames > 0
+            ? ((stats.homeOver1_5Count / stats.homeGames) * 100).toFixed(1)
+            : 0,
+        homeOver2_5Rate:
+          stats.homeGames > 0
+            ? ((stats.homeOver2_5Count / stats.homeGames) * 100).toFixed(1)
+            : 0,
+        homeOver3_5Rate:
+          stats.homeGames > 0
+            ? ((stats.homeOver3_5Count / stats.homeGames) * 100).toFixed(1)
+            : 0,
+        homeOver4_5Rate:
+          stats.homeGames > 0
+            ? ((stats.homeOver4_5Count / stats.homeGames) * 100).toFixed(1)
+            : 0,
+        homeOver5_5Rate:
+          stats.homeGames > 0
+            ? ((stats.homeOver5_5Count / stats.homeGames) * 100).toFixed(1)
+            : 0,
+        awayOver1_5Rate:
+          stats.awayGames > 0
+            ? ((stats.awayOver1_5Count / stats.awayGames) * 100).toFixed(1)
+            : 0,
+        awayOver2_5Rate:
+          stats.awayGames > 0
+            ? ((stats.awayOver2_5Count / stats.awayGames) * 100).toFixed(1)
+            : 0,
+        awayOver3_5Rate:
+          stats.awayGames > 0
+            ? ((stats.awayOver3_5Count / stats.awayGames) * 100).toFixed(1)
+            : 0,
+        awayOver4_5Rate:
+          stats.awayGames > 0
+            ? ((stats.awayOver4_5Count / stats.awayGames) * 100).toFixed(1)
+            : 0,
+        awayOver5_5Rate:
+          stats.awayGames > 0
+            ? ((stats.awayOver5_5Count / stats.awayGames) * 100).toFixed(1)
             : 0,
       }))
       .sort((a, b) => parseFloat(b.avgGoals) - parseFloat(a.avgGoals)); // Sort by average goals descending

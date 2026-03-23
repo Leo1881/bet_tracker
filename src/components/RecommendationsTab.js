@@ -39,7 +39,9 @@ const RecommendationsTab = ({
   const [filterRisk, setFilterRisk] = useState("all"); // all, high, medium, low
   const [filterHasAvoid, setFilterHasAvoid] = useState("all"); // all, yes, no
   const [filterTicketReady, setFilterTicketReady] = useState(false);
-  const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "list" | "scoring" | "top22Confidence" | "top22Scoring"
+  const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "list" | "goals" | "scoring" | "top22Confidence" | "top22Scoring"
+  const [goalsSortKey, setGoalsSortKey] = useState("combined");
+  const [goalsSortOrder, setGoalsSortOrder] = useState("desc");
   const [scoringSortKey, setScoringSortKey] = useState("avgGoalsScored");
   const [scoringSortOrder, setScoringSortOrder] = useState("desc");
   const [listSortKey, setListSortKey] = useState("confidence"); // match, league, topPick, type, confidence, odds
@@ -83,6 +85,15 @@ const RecommendationsTab = ({
     } else {
       setTop22ScoringSortKey(key);
       setTop22ScoringSortOrder(["match", "league", "topPick"].includes(key) ? "asc" : "desc");
+    }
+  };
+
+  const handleGoalsSort = (key) => {
+    if (goalsSortKey === key) {
+      setGoalsSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setGoalsSortKey(key);
+      setGoalsSortOrder(["match", "league"].includes(key) ? "asc" : "desc");
     }
   };
 
@@ -159,6 +170,117 @@ const RecommendationsTab = ({
     });
     return map;
   }, [scoringAnalysis]);
+
+  // Full scoring stats lookup: team|country|league -> full stat object (for Goals tab)
+  // Includes home/away context for O/U: home team uses homeOverX, away team uses awayOverX
+  const scoringStatsLookup = useMemo(() => {
+    const map = new Map();
+    (scoringAnalysis || []).forEach((stat) => {
+      const key = `${(stat.team || "").toLowerCase().trim()}|${(stat.country || "").toLowerCase().trim()}|${(stat.league || "").toLowerCase().trim()}`;
+      map.set(key, {
+        avgGoalsScored: parseFloat(stat.avgGoalsScored || 0),
+        avgGoals: parseFloat(stat.avgGoals || 0),
+        over1_5Rate: parseFloat(stat.over1_5Rate || 0),
+        over2_5Rate: parseFloat(stat.over2_5Rate || 0),
+        over3_5Rate: parseFloat(stat.over3_5Rate || 0),
+        over4_5Rate: parseFloat(stat.over4_5Rate || 0),
+        over5_5Rate: parseFloat(stat.over5_5Rate || 0),
+        homeOver1_5Rate: parseFloat(stat.homeOver1_5Rate || stat.over1_5Rate || 0),
+        homeOver2_5Rate: parseFloat(stat.homeOver2_5Rate || stat.over2_5Rate || 0),
+        homeOver3_5Rate: parseFloat(stat.homeOver3_5Rate || stat.over3_5Rate || 0),
+        homeOver4_5Rate: parseFloat(stat.homeOver4_5Rate || stat.over4_5Rate || 0),
+        homeOver5_5Rate: parseFloat(stat.homeOver5_5Rate || stat.over5_5Rate || 0),
+        awayOver1_5Rate: parseFloat(stat.awayOver1_5Rate || stat.over1_5Rate || 0),
+        awayOver2_5Rate: parseFloat(stat.awayOver2_5Rate || stat.over2_5Rate || 0),
+        awayOver3_5Rate: parseFloat(stat.awayOver3_5Rate || stat.over3_5Rate || 0),
+        awayOver4_5Rate: parseFloat(stat.awayOver4_5Rate || stat.over4_5Rate || 0),
+        awayOver5_5Rate: parseFloat(stat.awayOver5_5Rate || stat.over5_5Rate || 0),
+        homeAvgGoalsScored: parseFloat(stat.homeAvgGoalsScored || stat.avgGoalsScored || 0),
+        awayAvgGoalsScored: parseFloat(stat.awayAvgGoalsScored || stat.avgGoalsScored || 0),
+        totalGames: stat.totalGames || 0,
+        homeGames: stat.homeGames || 0,
+        awayGames: stat.awayGames || 0,
+      });
+    });
+    return map;
+  }, [scoringAnalysis]);
+
+  // Goals data: each match enriched with home/away scoring stats for Over/Under analysis
+  // Uses home/away context: home team's HOME rates + away team's AWAY rates (more predictive)
+  const goalsData = useMemo(() => {
+    if (!betRecommendations || betRecommendations.length === 0) return [];
+    const country = (c) => (c || "").toLowerCase().trim();
+    const league = (l) => (l || "").toLowerCase().trim();
+    const teamKey = (t, c, l) => `${(t || "").toLowerCase().trim()}|${country(c)}|${league(l)}`;
+    const LINES = [1.5, 2.5, 3.5, 4.5, 5.5];
+    return betRecommendations.map((rec) => {
+      const parts = (rec.match || "").split(" vs ").map((s) => s.trim());
+      const homeTeam = parts[0] || "";
+      const awayTeam = parts[1] || "";
+      const c = rec.country || "";
+      const l = rec.league || "";
+      const homeStats = scoringStatsLookup.get(teamKey(homeTeam, c, l)) || null;
+      const awayStats = scoringStatsLookup.get(teamKey(awayTeam, c, l)) || null;
+      // Use home/away context: home team when at home, away team when away
+      const homeAvg = homeStats?.homeAvgGoalsScored ?? homeStats?.avgGoalsScored ?? 0;
+      const awayAvg = awayStats?.awayAvgGoalsScored ?? awayStats?.avgGoalsScored ?? 0;
+      const combined = homeAvg + awayAvg;
+
+      let ouHint = "—";
+      let ouConfidence = null;
+      if (homeStats && awayStats) {
+        let best = null;
+        const homeRateKey = (line) => (line === 1.5 ? "homeOver1_5Rate" : line === 2.5 ? "homeOver2_5Rate" : line === 3.5 ? "homeOver3_5Rate" : line === 4.5 ? "homeOver4_5Rate" : "homeOver5_5Rate");
+        const awayRateKey = (line) => (line === 1.5 ? "awayOver1_5Rate" : line === 2.5 ? "awayOver2_5Rate" : line === 3.5 ? "awayOver3_5Rate" : line === 4.5 ? "awayOver4_5Rate" : "awayOver5_5Rate");
+        const overRateKey = (line) => (line === 1.5 ? "over1_5Rate" : line === 2.5 ? "over2_5Rate" : line === 3.5 ? "over3_5Rate" : line === 4.5 ? "over4_5Rate" : "over5_5Rate");
+        for (const line of LINES) {
+          const homeRate = homeStats[homeRateKey(line)] ?? homeStats[overRateKey(line)] ?? 50;
+          const awayRate = awayStats[awayRateKey(line)] ?? awayStats[overRateKey(line)] ?? 50;
+          const avgOver = (homeRate + awayRate) / 2;
+          const overConf = avgOver;
+          const underConf = 100 - avgOver;
+          if (overConf > (best?.confidence ?? 0)) best = { line, dir: "Over", confidence: overConf };
+          if (underConf > (best?.confidence ?? 0)) best = { line, dir: "Under", confidence: underConf };
+        }
+        if (best) {
+          ouHint = `${best.dir} ${best.line}`;
+          ouConfidence = best.confidence;
+        }
+      }
+      return {
+        ...rec,
+        homeTeam,
+        awayTeam,
+        homeStats,
+        awayStats,
+        combined,
+        ouHint,
+        ouConfidence,
+      };
+    });
+  }, [betRecommendations, scoringStatsLookup]);
+
+  const sortedGoalsData = useMemo(() => {
+    const list = [...goalsData];
+    const dir = goalsSortOrder === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      if (goalsSortKey === "match") {
+        const aVal = (a.match || "").toLowerCase();
+        const bVal = (b.match || "").toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (goalsSortKey === "league") {
+        const aVal = `${a.country || ""} ${a.league || ""}`.toLowerCase();
+        const bVal = `${b.country || ""} ${b.league || ""}`.toLowerCase();
+        return dir * (aVal < bVal ? -1 : aVal > bVal ? 1 : 0);
+      }
+      if (goalsSortKey === "combined") return dir * ((a.combined || 0) - (b.combined || 0));
+      if (goalsSortKey === "home") return dir * ((a.homeStats?.avgGoalsScored ?? 0) - (b.homeStats?.avgGoalsScored ?? 0));
+      if (goalsSortKey === "away") return dir * ((a.awayStats?.avgGoalsScored ?? 0) - (b.awayStats?.avgGoalsScored ?? 0));
+      return 0;
+    });
+    return list;
+  }, [goalsData, goalsSortKey, goalsSortOrder]);
 
   // All games by Best Bet confidence (sorted desc); top 22 highlighted
   const allByConfidence = useMemo(() => {
@@ -480,6 +602,17 @@ const RecommendationsTab = ({
           }`}
         >
           List
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("goals")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            subTab === "goals"
+              ? "bg-blue-500 text-white"
+              : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
+          }`}
+        >
+          Goals
         </button>
         <button
           type="button"
@@ -862,6 +995,100 @@ const RecommendationsTab = ({
             <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
               <p className="text-gray-400">
                 No recommendations yet. Run &quot;Fetch &amp; Analyze New Bets&quot; in the Bet Analysis tab first.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : subTab === "goals" ? (
+        <div className="space-y-4">
+          <p className="text-gray-400 text-sm">
+            <strong className="text-white">Goals / Over-Under view.</strong> Uses home/away context: home team&apos;s stats when at home, away team&apos;s when away. Run &quot;Analyze Scoring Patterns&quot; in Scoring Analysis for data.
+          </p>
+          {goalsData.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-white/20">
+                  <tr>
+                    <th
+                      className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleGoalsSort("match")}
+                    >
+                      <span className="flex items-center gap-1">
+                        Match
+                        {goalsSortKey === "match" && (goalsSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-left text-gray-400 font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleGoalsSort("league")}
+                    >
+                      <span className="flex items-center gap-1">
+                        League
+                        {goalsSortKey === "league" && (goalsSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-right text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleGoalsSort("home")}
+                    >
+                      <span className="flex items-center gap-1 justify-end">
+                        Home (scored · O2.5%)
+                        {goalsSortKey === "home" && (goalsSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-right text-white font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleGoalsSort("away")}
+                    >
+                      <span className="flex items-center gap-1 justify-end">
+                        Away (scored · O2.5%)
+                        {goalsSortKey === "away" && (goalsSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th
+                      className="px-4 py-2 text-right text-green-300 font-semibold cursor-pointer hover:bg-white/10 select-none"
+                      onClick={() => handleGoalsSort("combined")}
+                    >
+                      <span className="flex items-center gap-1 justify-end">
+                        Combined
+                        {goalsSortKey === "combined" && (goalsSortOrder === "asc" ? " ↑" : " ↓")}
+                      </span>
+                    </th>
+                    <th className="px-4 py-2 text-center text-white font-semibold">
+                      O/U hint
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {sortedGoalsData.map((row, idx) => {
+                    const homeScored = row.homeStats?.homeAvgGoalsScored ?? row.homeStats?.avgGoalsScored ?? 0;
+                    const homeO25 = row.homeStats?.homeOver2_5Rate ?? row.homeStats?.over2_5Rate ?? 0;
+                    const awayScored = row.awayStats?.awayAvgGoalsScored ?? row.awayStats?.avgGoalsScored ?? 0;
+                    const awayO25 = row.awayStats?.awayOver2_5Rate ?? row.awayStats?.over2_5Rate ?? 0;
+                    const homeStr = row.homeStats ? `${homeScored.toFixed(1)} · ${homeO25.toFixed(0)}%` : "—";
+                    const awayStr = row.awayStats ? `${awayScored.toFixed(1)} · ${awayO25.toFixed(0)}%` : "—";
+                    const ouColor = row.ouHint?.startsWith("Over") ? "text-green-400" : row.ouHint?.startsWith("Under") ? "text-amber-400" : "text-gray-400";
+                    const ouDisplay = row.ouConfidence != null ? `${row.ouHint} (${row.ouConfidence.toFixed(0)}%)` : row.ouHint;
+                    return (
+                      <tr key={idx} className="hover:bg-white/5">
+                        <td className="px-4 py-2 text-white font-medium">{row.match}</td>
+                        <td className="px-4 py-2 text-gray-300">{row.country} · {row.league}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono text-sm">{homeStr}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono text-sm">{awayStr}</td>
+                        <td className="px-4 py-2 text-right text-green-300 font-mono font-medium">
+                          {row.combined > 0 ? row.combined.toFixed(1) : "—"}
+                        </td>
+                        <td className={`px-4 py-2 text-center font-medium ${ouColor}`}>{ouDisplay}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
+              <p className="text-gray-400">
+                No recommendations yet. Run &quot;Fetch &amp; Analyze New Bets&quot; in the Bet Analysis tab, then &quot;Analyze Scoring Patterns&quot; in Scoring Analysis.
               </p>
             </div>
           )}
