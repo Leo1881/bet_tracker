@@ -1157,11 +1157,6 @@ const RecommendationsTab = ({
                         {rec.bestBet.oddsPerformance.message}
                       </div>
                     )}
-                    {rec.bestBet.oddsTrapWarning?.isTrap && (
-                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
-                        ⚠️ {rec.bestBet.oddsTrapWarning.message}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1181,11 +1176,6 @@ const RecommendationsTab = ({
                     {rec.primary.oddsPerformance && (
                       <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.primary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.primary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.primary.oddsPerformance.message}
-                      </div>
-                    )}
-                    {rec.primary.oddsTrapWarning?.isTrap && (
-                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
-                        ⚠️ {rec.primary.oddsTrapWarning.message}
                       </div>
                     )}
                   </div>
@@ -1209,11 +1199,6 @@ const RecommendationsTab = ({
                         {rec.secondary.oddsPerformance.message}
                       </div>
                     )}
-                    {rec.secondary.oddsTrapWarning?.isTrap && (
-                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
-                        ⚠️ {rec.secondary.oddsTrapWarning.message}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1233,11 +1218,6 @@ const RecommendationsTab = ({
                     {rec.tertiary.oddsPerformance && (
                       <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.tertiary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.tertiary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.tertiary.oddsPerformance.message}
-                      </div>
-                    )}
-                    {rec.tertiary.oddsTrapWarning?.isTrap && (
-                      <div className="text-xs mt-1.5 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
-                        ⚠️ {rec.tertiary.oddsTrapWarning.message}
                       </div>
                     )}
                   </div>
