@@ -6158,6 +6158,7 @@ function App() {
               scoringAnalysis={scoringAnalysis}
               recommendationSortPreference={recommendationSortPreference}
               setRecommendationSortPreference={setRecommendationSortPreference}
+              deduplicatedBets={getDeduplicatedBetsForAnalysis}
             />
           )}
 

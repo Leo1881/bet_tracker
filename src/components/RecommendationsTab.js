@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { getTeamBetWinStats, TEAM_RECORD_COLUMNS } from "../services/teamBetWinStatsService";
 
 // Helper: is a single card (bestBet, primary, secondary, tertiary) ticket-ready?
 const isCardTicketReady = (card) => {
@@ -32,6 +33,7 @@ const RecommendationsTab = ({
   scoringAnalysis = [],
   recommendationSortPreference = "confidence",
   setRecommendationSortPreference,
+  deduplicatedBets = [],
 }) => {
   const [sortBy, setSortBy] = useState("confidence"); // confidence, odds, risk
   const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
@@ -42,6 +44,8 @@ const RecommendationsTab = ({
   const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "list" | "goals" | "scoring" | "top22Confidence" | "top22Scoring"
   const [goalsSortKey, setGoalsSortKey] = useState("combined");
   const [goalsSortOrder, setGoalsSortOrder] = useState("desc");
+  const [recordSortKey, setRecordSortKey] = useState("match");
+  const [recordSortOrder, setRecordSortOrder] = useState("asc");
   const [scoringSortKey, setScoringSortKey] = useState("avgGoalsScored");
   const [scoringSortOrder, setScoringSortOrder] = useState("desc");
   const [listSortKey, setListSortKey] = useState("confidence"); // match, league, topPick, type, confidence, odds
@@ -94,6 +98,15 @@ const RecommendationsTab = ({
     } else {
       setGoalsSortKey(key);
       setGoalsSortOrder(["match", "league"].includes(key) ? "asc" : "desc");
+    }
+  };
+
+  const handleRecordSort = (key) => {
+    if (recordSortKey === key) {
+      setRecordSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setRecordSortKey(key);
+      setRecordSortOrder(key === "match" ? "asc" : "desc");
     }
   };
 
@@ -531,6 +544,68 @@ const RecommendationsTab = ({
     return list;
   }, [filteredAndSortedRecommendations, listSortKey, listSortOrder]);
 
+  const teamRecordRows = useMemo(() => {
+    if (!betRecommendations?.length) return [];
+    const pickTeam = (rec) =>
+      rec.bestBet?.teamForBet ||
+      rec.primary?.teamForBet ||
+      rec.secondary?.teamForBet ||
+      null;
+    return betRecommendations.map((rec) => {
+      const team = pickTeam(rec);
+      const stats =
+        team && deduplicatedBets?.length
+          ? getTeamBetWinStats(
+              deduplicatedBets,
+              team,
+              rec.country,
+              rec.league,
+            )
+          : null;
+      return { rec, team, stats };
+    });
+  }, [betRecommendations, deduplicatedBets]);
+
+  const sortedTeamRecordRows = useMemo(() => {
+    const list = [...teamRecordRows];
+    const dir = recordSortOrder === "asc" ? 1 : -1;
+    const missingSentinel =
+      recordSortOrder === "desc"
+        ? Number.NEGATIVE_INFINITY
+        : Number.POSITIVE_INFINITY;
+    const numericSortKey = (stats, key) => {
+      if (key === "overall") {
+        const v = stats?.overall?.pct;
+        if (v == null || Number.isNaN(v)) return missingSentinel;
+        return v;
+      }
+      const row = stats?.byType?.find((r) => r.type === key);
+      const v = row?.pct;
+      if (v == null || Number.isNaN(v)) return missingSentinel;
+      return v;
+    };
+    list.sort((a, b) => {
+      if (recordSortKey === "match") {
+        const av = (a.rec.match || "").toLowerCase();
+        const bv = (b.rec.match || "").toLowerCase();
+        return dir * (av < bv ? -1 : av > bv ? 1 : 0);
+      }
+      const aVal = numericSortKey(a.stats, recordSortKey);
+      const bVal = numericSortKey(b.stats, recordSortKey);
+      return dir * (aVal - bVal);
+    });
+    return list;
+  }, [teamRecordRows, recordSortKey, recordSortOrder]);
+
+  const teamRecordColumnHeader = (label) => {
+    if (label === "Double Chance 12") return "DC 12";
+    if (label === "Straight Win") return "Str. Win";
+    if (label === "Double Chance") return "D. Ch.";
+    if (label.startsWith("Over ")) return `O ${label.slice(5)}`;
+    if (label.startsWith("Under ")) return `U ${label.slice(6)}`;
+    return label;
+  };
+
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <h3 className="text-lg font-bold text-white mb-4">
@@ -602,6 +677,17 @@ const RecommendationsTab = ({
           }`}
         >
           List
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab("teamRecord")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            subTab === "teamRecord"
+              ? "bg-blue-500 text-white"
+              : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
+          }`}
+        >
+          Team record
         </button>
         <button
           type="button"
@@ -995,6 +1081,109 @@ const RecommendationsTab = ({
             <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
               <p className="text-gray-400">
                 No recommendations yet. Run &quot;Fetch &amp; Analyze New Bets&quot; in the Bet Analysis tab first.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : subTab === "teamRecord" ? (
+        <div className="space-y-4">
+          <p className="text-gray-400 text-sm">
+            <strong className="text-white">Your record on the Best Bet team</strong> in the same country &amp; league as each game. Overall and per-type win % (resolved bets only). Over: 0.5, 1.5, 2.5, 6.5 · Under: 0.5, 3.5, 4.5, 5.5. Other lines bucket to Other. Click a column header to sort. Team matches <code className="text-gray-400">TEAM_INCLUDED</code> in your history.
+          </p>
+          {sortedTeamRecordRows.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1750px]">
+                <thead className="bg-white/20">
+                  <tr>
+                    <th
+                      className="px-5 py-2.5 text-left text-white font-semibold text-sm cursor-pointer hover:bg-white/10 select-none min-w-[240px]"
+                      onClick={() => handleRecordSort("match")}
+                    >
+                      Match
+                      {recordSortKey === "match" && (recordSortOrder === "asc" ? " ↑" : " ↓")}
+                    </th>
+                    <th
+                      className="px-4 py-2.5 text-right text-green-300 font-semibold text-sm cursor-pointer hover:bg-white/10 select-none whitespace-nowrap min-w-[104px]"
+                      onClick={() => handleRecordSort("overall")}
+                    >
+                      Overall
+                      {recordSortKey === "overall" && (recordSortOrder === "asc" ? " ↑" : " ↓")}
+                    </th>
+                    {TEAM_RECORD_COLUMNS.map((label) => (
+                      <th
+                        key={label}
+                        className="px-3 py-2.5 text-center text-gray-300 font-semibold text-sm leading-snug whitespace-nowrap cursor-pointer hover:bg-white/10 select-none min-w-[4.75rem]"
+                        onClick={() => handleRecordSort(label)}
+                        title={label}
+                      >
+                        {teamRecordColumnHeader(label)}
+                        {recordSortKey === label && (recordSortOrder === "asc" ? " ↑" : " ↓")}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {sortedTeamRecordRows.map(({ rec, team, stats }, idx) => {
+                    const byTypeMap = {};
+                    (stats?.byType || []).forEach((row) => {
+                      byTypeMap[row.type] = row;
+                    });
+                    return (
+                      <tr key={idx} className="hover:bg-white/5 align-top">
+                        <td className="px-5 py-3">
+                          <div className="text-white font-medium text-sm">{rec.match}</div>
+                          <div className="text-gray-400 text-sm mt-1">
+                            {rec.country} · {rec.league}
+                          </div>
+                          <div className="text-gray-500 text-sm mt-0.5">
+                            Pick: {team || "—"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-sm align-top">
+                          {stats ? (
+                            <div>
+                              <span className="text-green-300 text-base">{stats.overall.pct}%</span>
+                              <div className="text-gray-500 text-sm font-sans mt-0.5">
+                                {stats.overall.wins}W-{stats.overall.losses}L
+                              </div>
+                            </div>
+                          ) : team ? (
+                            <span className="text-gray-500 text-sm">No history</span>
+                          ) : (
+                            <span className="text-gray-500">—</span>
+                          )}
+                        </td>
+                        {TEAM_RECORD_COLUMNS.map((typeKey) => {
+                          const row = byTypeMap[typeKey];
+                          const hasData = row && row.total > 0 && row.pct != null;
+                          return (
+                            <td
+                              key={typeKey}
+                              className="px-3 py-3 text-center text-sm align-top min-w-[4.5rem]"
+                            >
+                              {hasData ? (
+                                <div>
+                                  <span className="text-blue-300 font-mono text-base">{row.pct}%</span>
+                                  <div className="text-gray-500 text-sm mt-0.5 leading-snug">
+                                    {row.wins}W-{row.losses}L
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-600 text-sm">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
+              <p className="text-gray-400">
+                No recommendations yet. Run analysis first.
               </p>
             </div>
           )}
