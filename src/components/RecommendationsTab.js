@@ -1,6 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { getTeamBetWinStats, TEAM_RECORD_COLUMNS } from "../services/teamBetWinStatsService";
 
+/** Team record table: match column %; remaining % split evenly across Overall + each type column. */
+const TEAM_RECORD_MATCH_COL_PCT = 24;
+const TEAM_RECORD_DATA_COL_COUNT = 1 + TEAM_RECORD_COLUMNS.length;
+const TEAM_RECORD_EACH_DATA_COL_PCT =
+  (100 - TEAM_RECORD_MATCH_COL_PCT) / TEAM_RECORD_DATA_COL_COUNT;
+
 // Helper: is a single card (bestBet, primary, secondary, tertiary) ticket-ready?
 const isCardTicketReady = (card) => {
   if (!card?.recommendation) return false;
@@ -27,6 +33,43 @@ const hasAnyTicketReady = (rec) =>
   (rec.tertiary && isCardTicketReady(rec.tertiary));
 
 const HIGH_SCORING_THRESHOLD = 2; // 2 or higher
+
+/** Highlight class for Team record cells that tie for best win % */
+const TEAM_RECORD_BEST_CELL =
+  "bg-emerald-500/25 ring-1 ring-emerald-400/60 rounded-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]";
+
+function getTeamRecordBestHighlights(stats) {
+  if (!stats) {
+    return { maxPct: null, bestTypeKeys: new Set() };
+  }
+  const items = [];
+  for (const row of stats.byType || []) {
+    if (row?.pct != null && row.total > 0) {
+      items.push({ type: row.type, pct: Number(row.pct) });
+    }
+  }
+  if (items.length === 0) {
+    return { maxPct: null, bestTypeKeys: new Set() };
+  }
+  const maxPct = Math.max(...items.map((i) => i.pct));
+  const atMax = (p) => Math.abs(p - maxPct) < 0.04;
+  const bestTypeKeys = new Set(
+    items.filter((i) => atMax(i.pct)).map((i) => i.type),
+  );
+  return { maxPct, bestTypeKeys };
+}
+
+function formatTeamRecordBestSummary(stats, headerLabel) {
+  const { maxPct, bestTypeKeys } = getTeamRecordBestHighlights(stats);
+  if (maxPct == null || bestTypeKeys.size === 0) return null;
+  const names = [];
+  for (const col of TEAM_RECORD_COLUMNS) {
+    if (bestTypeKeys.has(col)) names.push(headerLabel(col));
+  }
+  if (names.length === 0) return null;
+  const pctLabel = Number.isInteger(maxPct) ? String(maxPct) : maxPct.toFixed(1);
+  return `${pctLabel}% — ${names.join(" · ")}`;
+}
 
 const RecommendationsTab = ({
   betRecommendations,
@@ -1088,22 +1131,31 @@ const RecommendationsTab = ({
       ) : subTab === "teamRecord" ? (
         <div className="space-y-4">
           <p className="text-gray-400 text-sm">
-            <strong className="text-white">Your record on the Best Bet team</strong> in the same country &amp; league as each game. Overall and per-type win % (resolved bets only). Over: 0.5, 1.5, 2.5, 6.5 · Under: 0.5, 3.5, 4.5, 5.5. Other lines bucket to Other. Click a column header to sort. Team matches <code className="text-gray-400">TEAM_INCLUDED</code> in your history.
+            <strong className="text-white">Your record on the Best Bet team</strong> in the same country &amp; league as each game. Overall and per-type win % (resolved bets only). Over: 0.5, 1.5, 2.5 · Under: 3.5, 4.5, 5.5. Bets outside those buckets still count in Overall only. Each row shows <span className="text-emerald-300">Best:</span> among bet types only (not Overall) and highlights those column(s). Click a column header to sort. Team matches <code className="text-gray-400">TEAM_INCLUDED</code> in your history.
           </p>
           {sortedTeamRecordRows.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1750px]">
+              <table className="w-full min-w-[1350px] table-fixed border-collapse">
+                <colgroup>
+                  <col style={{ width: `${TEAM_RECORD_MATCH_COL_PCT}%` }} />
+                  {Array.from({ length: TEAM_RECORD_DATA_COL_COUNT }, (_, i) => (
+                    <col
+                      key={i}
+                      style={{ width: `${TEAM_RECORD_EACH_DATA_COL_PCT}%` }}
+                    />
+                  ))}
+                </colgroup>
                 <thead className="bg-white/20">
                   <tr>
                     <th
-                      className="px-5 py-2.5 text-left text-white font-semibold text-sm cursor-pointer hover:bg-white/10 select-none min-w-[240px]"
+                      className="px-3 py-2.5 text-left text-white font-semibold text-sm cursor-pointer hover:bg-white/10 select-none align-bottom"
                       onClick={() => handleRecordSort("match")}
                     >
                       Match
                       {recordSortKey === "match" && (recordSortOrder === "asc" ? " ↑" : " ↓")}
                     </th>
                     <th
-                      className="px-4 py-2.5 text-right text-green-300 font-semibold text-sm cursor-pointer hover:bg-white/10 select-none whitespace-nowrap min-w-[104px]"
+                      className="px-2 py-2.5 text-right text-green-300 font-semibold text-sm cursor-pointer hover:bg-white/10 select-none align-bottom"
                       onClick={() => handleRecordSort("overall")}
                     >
                       Overall
@@ -1112,7 +1164,7 @@ const RecommendationsTab = ({
                     {TEAM_RECORD_COLUMNS.map((label) => (
                       <th
                         key={label}
-                        className="px-3 py-2.5 text-center text-gray-300 font-semibold text-sm leading-snug whitespace-nowrap cursor-pointer hover:bg-white/10 select-none min-w-[4.75rem]"
+                        className="px-2 py-2.5 text-center text-gray-300 font-semibold text-sm leading-tight cursor-pointer hover:bg-white/10 select-none align-bottom break-words"
                         onClick={() => handleRecordSort(label)}
                         title={label}
                       >
@@ -1128,9 +1180,12 @@ const RecommendationsTab = ({
                     (stats?.byType || []).forEach((row) => {
                       byTypeMap[row.type] = row;
                     });
+                    const best = getTeamRecordBestHighlights(stats);
+                    const bestSummary =
+                      stats && formatTeamRecordBestSummary(stats, teamRecordColumnHeader);
                     return (
                       <tr key={idx} className="hover:bg-white/5 align-top">
-                        <td className="px-5 py-3">
+                        <td className="px-3 py-3 align-top break-words">
                           <div className="text-white font-medium text-sm">{rec.match}</div>
                           <div className="text-gray-400 text-sm mt-1">
                             {rec.country} · {rec.league}
@@ -1138,8 +1193,16 @@ const RecommendationsTab = ({
                           <div className="text-gray-500 text-sm mt-0.5">
                             Pick: {team || "—"}
                           </div>
+                          {bestSummary && (
+                            <div
+                              className="text-emerald-300 text-sm mt-1.5 font-semibold break-words"
+                              title="Highest win rate among bet type columns in this row"
+                            >
+                              Best: {bestSummary}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono text-sm align-top">
+                        <td className="px-2 py-3 text-right font-mono text-sm align-top">
                           {stats ? (
                             <div>
                               <span className="text-green-300 text-base">{stats.overall.pct}%</span>
@@ -1156,10 +1219,13 @@ const RecommendationsTab = ({
                         {TEAM_RECORD_COLUMNS.map((typeKey) => {
                           const row = byTypeMap[typeKey];
                           const hasData = row && row.total > 0 && row.pct != null;
+                          const typeHighlight = hasData && best.bestTypeKeys.has(typeKey);
                           return (
                             <td
                               key={typeKey}
-                              className="px-3 py-3 text-center text-sm align-top min-w-[4.5rem]"
+                              className={`px-2 py-3 text-center text-sm align-top ${
+                                typeHighlight ? TEAM_RECORD_BEST_CELL : ""
+                              }`}
                             >
                               {hasData ? (
                                 <div>

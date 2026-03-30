@@ -5,10 +5,10 @@
  */
 
 /** Lines you track for Over bets (Team record columns). */
-export const TEAM_RECORD_OVER_LINES = [0.5, 1.5, 2.5, 6.5];
+export const TEAM_RECORD_OVER_LINES = [0.5, 1.5, 2.5];
 
 /** Lines you track for Under bets (Team record columns). */
-export const TEAM_RECORD_UNDER_LINES = [0.5, 3.5, 4.5, 5.5];
+export const TEAM_RECORD_UNDER_LINES = [3.5, 4.5, 5.5];
 
 const OU_LINE_TOLERANCE = 0.051;
 
@@ -44,7 +44,6 @@ export function getTeamRecordColumnKeys() {
   for (const L of TEAM_RECORD_UNDER_LINES) {
     keys.push(`Under ${formatLineForKey(L)}`);
   }
-  keys.push("Other");
   return keys;
 }
 
@@ -78,6 +77,7 @@ export function extractTotalsSideAndLine(bet) {
   return null;
 }
 
+/** @returns {string|null} Type key for a column, or null if not shown in Team record breakdown */
 export function classifyBetForTeamRecord(bet) {
   const bt = (bet.BET_TYPE || "").toLowerCase();
   const sel = (bet.BET_SELECTION || "").toLowerCase();
@@ -92,7 +92,7 @@ export function classifyBetForTeamRecord(bet) {
   if (totals) {
     const key = ouLineColumnKey(totals.side, totals.line);
     if (key) return key;
-    return "Other";
+    return null;
   }
 
   const looksLikeTotals =
@@ -101,12 +101,7 @@ export function classifyBetForTeamRecord(bet) {
     sel.includes("over") ||
     sel.includes("under");
   if (looksLikeTotals) {
-    const combinedMarket =
-      bt.includes("over/under") ||
-      bt.includes("o/u") ||
-      /^over\s*\/\s*under$/i.test((bet.BET_TYPE || "").trim());
-    if (combinedMarket) return "Other";
-    return "Other";
+    return null;
   }
 
   if (bet.BET_TYPE === "Win" || !bet.BET_TYPE || bet.BET_TYPE === "") {
@@ -119,7 +114,7 @@ export function classifyBetForTeamRecord(bet) {
   ) {
     return "Straight Win";
   }
-  return "Other";
+  return null;
 }
 
 function countWinsLosses(bets) {
@@ -167,6 +162,7 @@ export function getTeamBetWinStats(deduplicatedBets, teamName, country, league) 
   const byTypeMap = {};
   for (const b of teamBets) {
     const type = classifyBetForTeamRecord(b);
+    if (type == null) continue;
     if (!byTypeMap[type]) byTypeMap[type] = [];
     byTypeMap[type].push(b);
   }
