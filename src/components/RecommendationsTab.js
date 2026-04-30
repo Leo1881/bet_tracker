@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getTeamBetWinStats, TEAM_RECORD_COLUMNS } from "../services/teamBetWinStatsService";
 
 /** Team record table: match column %; remaining % split evenly across Overall + each type column. */
@@ -6,6 +6,29 @@ const TEAM_RECORD_MATCH_COL_PCT = 24;
 const TEAM_RECORD_DATA_COL_COUNT = 1 + TEAM_RECORD_COLUMNS.length;
 const TEAM_RECORD_EACH_DATA_COL_PCT =
   (100 - TEAM_RECORD_MATCH_COL_PCT) / TEAM_RECORD_DATA_COL_COUNT;
+
+const CALIBRATION_BUCKETS = [
+  { id: "low", label: "0–69", min: 0, max: 69.999 },
+  { id: "mid", label: "70–84", min: 70, max: 84.999 },
+  { id: "high", label: "85–100", min: 85, max: 100 },
+];
+
+function getCalibrationBucketId(confidence) {
+  const c = Number(confidence);
+  if (!Number.isFinite(c)) return null;
+  const clamped = Math.max(0, Math.min(100, c));
+  const b = CALIBRATION_BUCKETS.find((x) => clamped >= x.min && clamped <= x.max);
+  return b?.id ?? null;
+}
+
+function inferPrimaryTypeFromRecommendationText(recText) {
+  const s = String(recText ?? "").toLowerCase();
+  if (!s) return null;
+  if (s.includes("over") || s.includes("under")) return "Over/Under";
+  if (s.includes(" or draw") || s.includes("draw") || s.includes("double chance")) return "Double Chance";
+  // Otherwise treat as straight win-style (team to win)
+  return "Straight Win";
+}
 
 // Helper: is a single card (bestBet, primary, secondary, tertiary) ticket-ready?
 const isCardTicketReady = (card) => {
@@ -78,6 +101,9 @@ const RecommendationsTab = ({
   setRecommendationSortPreference,
   deduplicatedBets = [],
 }) => {
+  const [calibrationByTier, setCalibrationByTier] = useState(null);
+  const [calibrationLoading, setCalibrationLoading] = useState(false);
+
   const [sortBy, setSortBy] = useState("confidence"); // confidence, odds, risk
   const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
   const [filterConfidence, setFilterConfidence] = useState("all"); // all, high, medium, low
@@ -98,6 +124,110 @@ const RecommendationsTab = ({
   const [top22ScoringSortKey, setTop22ScoringSortKey] = useState("combinedScoring");
   const [top22ScoringSortOrder, setTop22ScoringSortOrder] = useState("desc");
   const [top22PinnedAtTop, setTop22PinnedAtTop] = useState(true); // Keep top 22 at top when sorting
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCalibration() {
+      setCalibrationLoading(true);
+      try {
+        const res = await fetch("/api/betslip-recommendations");
+        if (!res.ok) throw new Error(`Calibration fetch failed: ${res.status}`);
+        const rows = await res.json();
+
+        // Build: tier -> type -> bucketId -> { n, correct }
+        const acc = {};
+        const ensure = (tier, type, bucketId) => {
+          if (!acc[tier]) acc[tier] = {};
+          if (!acc[tier][type]) acc[tier][type] = {};
+          if (!acc[tier][type][bucketId]) acc[tier][type][bucketId] = { n: 0, correct: 0 };
+          return acc[tier][type][bucketId];
+        };
+
+        (rows || []).forEach((r) => {
+          if (!r?.actual_result || String(r.actual_result).trim() === "") return;
+
+          const tiers = [
+            {
+              tier: "primary",
+              rec: r.primary_recommendation ?? r.recommendation,
+              conf: r.primary_confidence ?? r.confidence_score,
+              ok: r.system_primary_correct,
+            },
+            {
+              tier: "secondary",
+              rec: r.secondary_recommendation,
+              conf: r.secondary_confidence,
+              ok: r.system_secondary_correct,
+            },
+            {
+              tier: "tertiary",
+              rec: r.tertiary_recommendation,
+              conf: r.tertiary_confidence,
+              ok: r.system_tertiary_correct,
+            },
+          ];
+
+          tiers.forEach((t) => {
+            if (t.rec == null || String(t.rec).trim() === "") return;
+            if (typeof t.ok !== "boolean") return;
+            const rawType = inferPrimaryTypeFromRecommendationText(t.rec);
+            if (!rawType) return;
+            const bucketId = getCalibrationBucketId(Number(t.conf));
+            if (!bucketId) return;
+            const slot = ensure(t.tier, rawType, bucketId);
+            slot.n += 1;
+            if (t.ok) slot.correct += 1;
+          });
+        });
+
+        if (!cancelled) setCalibrationByTier(acc);
+      } catch (e) {
+        if (!cancelled) setCalibrationByTier(null);
+        // Keep UI silent; calibration is optional.
+        // eslint-disable-next-line no-console
+        console.warn(e);
+      } finally {
+        if (!cancelled) setCalibrationLoading(false);
+      }
+    }
+
+    loadCalibration();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const renderCalibratedLine = (tier, card) => {
+    if (!card?.recommendation || card.recommendation.bet === "AVOID") return null;
+    const rawConf = Number(card.recommendation.confidence);
+    const bucketId = getCalibrationBucketId(rawConf);
+    const type = card.type;
+    const slot = bucketId && calibrationByTier?.[tier]?.[type]?.[bucketId];
+    const bucketLabel =
+      CALIBRATION_BUCKETS.find((b) => b.id === bucketId)?.label ?? bucketId;
+
+    if (!slot || !slot.n) {
+      return (
+        <div className="text-gray-400 text-xs mt-1">
+          Calibrated: —{" "}
+          <span className="text-gray-500">
+            {calibrationLoading ? "(loading…)" : "(no data yet)"}
+          </span>
+        </div>
+      );
+    }
+
+    const pct = (slot.correct / slot.n) * 100;
+    return (
+      <div className="text-gray-400 text-xs mt-1">
+        Calibrated:{" "}
+        <span className="text-white font-medium">{pct.toFixed(0)}%</span>{" "}
+        <span className="text-gray-500">
+          (raw {bucketLabel}, N={slot.n})
+        </span>
+      </div>
+    );
+  };
 
   const handleListSort = (key) => {
     if (listSortKey === key) {
@@ -1653,6 +1783,7 @@ const RecommendationsTab = ({
                     <div className={`text-sm ${rec.primary.recommendation.bet === "AVOID" ? "text-red-400" : "text-green-400"}`}>
                       {rec.primary.recommendation.bet === "AVOID" ? `AVOID (${rec.primary.recommendation.confidence.toFixed(1)}%)` : `${rec.primary.recommendation.bet} (${rec.primary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
+                    {renderCalibratedLine("primary", rec.primary)}
                     {rec.primary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.primary.recommendation.reasoning}</div>}
                     <div className="text-gray-400 text-xs mt-1">Risk: {rec.primary.riskLevel}</div>
                     {rec.primary.oddsPerformance && (
@@ -1674,6 +1805,7 @@ const RecommendationsTab = ({
                     <div className={`text-sm ${rec.secondary.recommendation.bet === "AVOID" ? "text-red-400" : "text-blue-400"}`}>
                       {rec.secondary.recommendation.bet === "AVOID" ? `AVOID (${rec.secondary.recommendation.confidence.toFixed(1)}%)` : `${rec.secondary.recommendation.bet} (${rec.secondary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
+                    {renderCalibratedLine("secondary", rec.secondary)}
                     {rec.secondary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.secondary.recommendation.reasoning}</div>}
                     <div className="text-gray-400 text-xs mt-1">Risk: {rec.secondary.riskLevel}</div>
                     {rec.secondary.oddsPerformance && (
@@ -1695,6 +1827,7 @@ const RecommendationsTab = ({
                     <div className={`text-sm ${rec.tertiary.recommendation.bet === "AVOID" ? "text-red-400" : "text-orange-400"}`}>
                       {rec.tertiary.recommendation.bet === "AVOID" ? `AVOID (${rec.tertiary.recommendation.confidence.toFixed(1)}%)` : `${rec.tertiary.recommendation.bet} (${rec.tertiary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
+                    {renderCalibratedLine("tertiary", rec.tertiary)}
                     {rec.tertiary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.tertiary.recommendation.reasoning}</div>}
                     <div className="text-gray-400 text-xs mt-1">Risk: {rec.tertiary.riskLevel}</div>
                     {rec.tertiary.oddsPerformance && (
