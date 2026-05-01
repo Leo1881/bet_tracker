@@ -30,6 +30,95 @@ function inferPrimaryTypeFromRecommendationText(recText) {
   return "Straight Win";
 }
 
+/** Normalize for dedupe keys (fixture + recommendation text). */
+function normKeyPart(v) {
+  return String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/** Parse DB timestamps for “latest saved wins” tie-breaking. */
+function rowSavedAtMs(r) {
+  const candidates = [r?.created_at, r?.updated_at, r?.result_updated_at, r?.date];
+  for (const c of candidates) {
+    if (!c) continue;
+    const t = new Date(c).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  return 0;
+}
+
+/**
+ * When the same fixture appears on multiple slips (different BET_ID), calibration should not double-count.
+ * Tie-break: latest saved row wins (created_at / updated_at).
+ */
+function dedupeCalibrationTierEvents(rows) {
+  const bestByKey = new Map();
+
+  for (const r of rows || []) {
+    if (!r?.actual_result || String(r.actual_result).trim() === "") continue;
+
+    const fixtureKey = [
+      normKeyPart(r?.country),
+      normKeyPart(r?.league),
+      normKeyPart(r?.home_team),
+      normKeyPart(r?.away_team),
+      normKeyPart(r?.date),
+    ].join("|");
+
+    const tiers = [
+      {
+        tier: "primary",
+        rec: r.primary_recommendation ?? r.recommendation,
+        conf: r.primary_confidence ?? r.confidence_score,
+        ok: r.system_primary_correct,
+      },
+      {
+        tier: "secondary",
+        rec: r.secondary_recommendation,
+        conf: r.secondary_confidence,
+        ok: r.system_secondary_correct,
+      },
+      {
+        tier: "tertiary",
+        rec: r.tertiary_recommendation,
+        conf: r.tertiary_confidence,
+        ok: r.system_tertiary_correct,
+      },
+    ];
+
+    const ts = rowSavedAtMs(r);
+
+    for (const t of tiers) {
+      if (t.rec == null || String(t.rec).trim() === "") continue;
+      if (typeof t.ok !== "boolean") continue;
+
+      const rawType = inferPrimaryTypeFromRecommendationText(t.rec);
+      if (!rawType) continue;
+
+      const bucketId = getCalibrationBucketId(Number(t.conf));
+      if (!bucketId) continue;
+
+      const pickKey = normKeyPart(t.rec);
+      const dedupeKey = `${t.tier}|${rawType}|${bucketId}|${fixtureKey}|${pickKey}`;
+
+      const prev = bestByKey.get(dedupeKey);
+      if (!prev || ts >= prev.ts) {
+        bestByKey.set(dedupeKey, {
+          tier: t.tier,
+          rawType,
+          bucketId,
+          ok: t.ok,
+          ts,
+        });
+      }
+    }
+  }
+
+  return Array.from(bestByKey.values());
+}
+
 // Helper: is a single card (bestBet, primary, secondary, tertiary) ticket-ready?
 const isCardTicketReady = (card) => {
   if (!card?.recommendation) return false;
@@ -133,6 +222,7 @@ const RecommendationsTab = ({
         const res = await fetch("/api/betslip-recommendations");
         if (!res.ok) throw new Error(`Calibration fetch failed: ${res.status}`);
         const rows = await res.json();
+        const dedupedEvents = dedupeCalibrationTierEvents(rows);
 
         // Build: tier -> type -> bucketId -> { n, correct }
         const acc = {};
@@ -143,41 +233,10 @@ const RecommendationsTab = ({
           return acc[tier][type][bucketId];
         };
 
-        (rows || []).forEach((r) => {
-          if (!r?.actual_result || String(r.actual_result).trim() === "") return;
-
-          const tiers = [
-            {
-              tier: "primary",
-              rec: r.primary_recommendation ?? r.recommendation,
-              conf: r.primary_confidence ?? r.confidence_score,
-              ok: r.system_primary_correct,
-            },
-            {
-              tier: "secondary",
-              rec: r.secondary_recommendation,
-              conf: r.secondary_confidence,
-              ok: r.system_secondary_correct,
-            },
-            {
-              tier: "tertiary",
-              rec: r.tertiary_recommendation,
-              conf: r.tertiary_confidence,
-              ok: r.system_tertiary_correct,
-            },
-          ];
-
-          tiers.forEach((t) => {
-            if (t.rec == null || String(t.rec).trim() === "") return;
-            if (typeof t.ok !== "boolean") return;
-            const rawType = inferPrimaryTypeFromRecommendationText(t.rec);
-            if (!rawType) return;
-            const bucketId = getCalibrationBucketId(Number(t.conf));
-            if (!bucketId) return;
-            const slot = ensure(t.tier, rawType, bucketId);
-            slot.n += 1;
-            if (t.ok) slot.correct += 1;
-          });
+        dedupedEvents.forEach((ev) => {
+          const slot = ensure(ev.tier, ev.rawType, ev.bucketId);
+          slot.n += 1;
+          if (ev.ok) slot.correct += 1;
         });
 
         if (!cancelled) setCalibrationByTier(acc);
