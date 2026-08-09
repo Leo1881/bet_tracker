@@ -49,6 +49,7 @@ import BetslipAnalysisTab from "./components/BetslipAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
 import QuickLookupTab from "./components/QuickLookupTab";
 import PatternAnalysisTab from "./components/PatternAnalysisTab";
+import LossPatternsTab from "./components/LossPatternsTab";
 import { AppLoadingSkeleton } from "./components/SkeletonLoader";
 import ErrorDisplay from "./components/ErrorDisplay";
 
@@ -6263,6 +6264,8 @@ function App() {
           {activeTab === "patternAnalysis" && (
             <PatternAnalysisTab bets={bets} />
           )}
+
+          {activeTab === "lossPatterns" && <LossPatternsTab />}
         </div>
       </div>
     </div>
