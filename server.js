@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
 require("dotenv").config();
+const { getSecondOpinion } = require("./aiSecondOpinion");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1202,6 +1203,31 @@ app.post("/api/betslip-recommendations/compare", async (req, res) => {
   } catch (error) {
     console.error("Error comparing betslip recommendations:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== AI second opinion ==========
+
+// Independent AI recommendation for a single game.
+// Body: { game: { match, country, league, date, odds1, odds2, oddsX, recentFormData,
+//                 bestBet, primary, secondary, tertiary, proposedBetLabel, ... } }
+app.post("/api/ai/second-opinion", async (req, res) => {
+  try {
+    const game = req.body?.game;
+    if (!game || typeof game !== "object") {
+      return res.status(400).json({ error: "Invalid request: expected { game } object" });
+    }
+    const opinion = await getSecondOpinion(game);
+    res.json(opinion);
+  } catch (error) {
+    console.error("Error getting AI second opinion:", error.message);
+    if (error.code === "NO_API_KEY") {
+      return res.status(503).json({ error: error.message });
+    }
+    if (error.code === "RATE_LIMIT") {
+      return res.status(429).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message || "AI request failed" });
   }
 });
 

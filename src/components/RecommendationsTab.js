@@ -1,5 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { getTeamBetWinStats, TEAM_RECORD_COLUMNS } from "../services/teamBetWinStatsService";
+import { getAiSecondOpinion } from "../services/aiService";
+import AiSecondOpinion from "./AiSecondOpinion";
+
+/** Stable key for a game so its AI opinion survives re-sorts/re-filters. */
+const aiGameKey = (rec) =>
+  [rec?.match, rec?.country, rec?.league, rec?.date].map((v) => String(v ?? "")).join("|");
+
+/**
+ * Gemini free tier allows ~5 requests/minute for the flash model.
+ * The bulk "Get AI picks (all)" run paces itself to stay under this.
+ * Raise this if you enable billing (paid limits are far higher).
+ */
+const AI_MAX_RPM = 5;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Team record table: match column %; remaining % split evenly across Overall + each type column. */
 const TEAM_RECORD_MATCH_COL_PCT = 24;
@@ -213,6 +228,66 @@ const RecommendationsTab = ({
   const [top22ScoringSortKey, setTop22ScoringSortKey] = useState("combinedScoring");
   const [top22ScoringSortOrder, setTop22ScoringSortOrder] = useState("desc");
   const [top22PinnedAtTop, setTop22PinnedAtTop] = useState(true); // Keep top 22 at top when sorting
+
+  // AI second opinions, keyed by game so results persist across sort/filter.
+  const [aiOpinions, setAiOpinions] = useState({}); // key -> { data } | { error }
+  const [aiLoadingKeys, setAiLoadingKeys] = useState({}); // key -> true
+  const [aiBulkLoading, setAiBulkLoading] = useState(false);
+  const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
+
+  const fetchAiForRec = useCallback(async (rec) => {
+    const key = aiGameKey(rec);
+    setAiLoadingKeys((prev) => ({ ...prev, [key]: true }));
+    try {
+      const data = await getAiSecondOpinion(rec);
+      setAiOpinions((prev) => ({ ...prev, [key]: { data } }));
+    } catch (e) {
+      setAiOpinions((prev) => ({ ...prev, [key]: { error: e.message || "Failed to get AI opinion" } }));
+    } finally {
+      setAiLoadingKeys((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  }, []);
+
+  // Fetch AI opinions for every visible game, paced to the free-tier rate limit.
+  const fetchAllAi = useCallback(
+    async (games) => {
+      if (!games || games.length === 0) return;
+      setAiBulkLoading(true);
+      setAiProgress({ done: 0, total: games.length, waiting: false });
+
+      const starts = []; // timestamps of recent request starts (sliding 60s window)
+      const acquireSlot = async () => {
+        for (;;) {
+          const now = Date.now();
+          while (starts.length && now - starts[0] >= 60000) starts.shift();
+          if (starts.length < AI_MAX_RPM) {
+            starts.push(now);
+            setAiProgress((p) => ({ ...p, waiting: false }));
+            return;
+          }
+          const waitMs = 60000 - (now - starts[0]) + 300;
+          setAiProgress((p) => ({ ...p, waiting: true }));
+          await sleep(waitMs);
+        }
+      };
+
+      const total = games.length;
+      let done = 0;
+      for (const game of games) {
+        await acquireSlot();
+        await fetchAiForRec(game);
+        done += 1;
+        const completed = done;
+        setAiProgress((p) => ({ ...p, done: completed, total }));
+      }
+      setAiBulkLoading(false);
+    },
+    [fetchAiForRec]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1694,7 +1769,20 @@ const RecommendationsTab = ({
               />
               <span className="text-xs text-gray-400">Ticket-ready only</span>
             </label>
-            <span className="text-xs text-gray-500 ml-auto">
+            <button
+              type="button"
+              onClick={() => fetchAllAi(filteredAndSortedRecommendations)}
+              disabled={aiBulkLoading || filteredAndSortedRecommendations.length === 0}
+              className="ml-auto text-xs px-3 py-1.5 rounded-md bg-indigo-500/30 hover:bg-indigo-500/50 text-indigo-100 border border-indigo-400/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Get an AI second opinion for every game shown"
+            >
+              {aiBulkLoading
+                ? aiProgress.waiting
+                  ? `🤖 Rate limit… ${aiProgress.done}/${aiProgress.total}`
+                  : `🤖 AI picks… ${aiProgress.done}/${aiProgress.total}`
+                : "🤖 Get AI picks (all)"}
+            </button>
+            <span className="text-xs text-gray-500">
               {filteredAndSortedRecommendations.length} of {betRecommendations.length}
             </span>
           </div>
@@ -1702,7 +1790,7 @@ const RecommendationsTab = ({
       )}
 
       {betRecommendations.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {filteredAndSortedRecommendations.map((rec, index) => (
             <div
               key={index}
@@ -1749,7 +1837,7 @@ const RecommendationsTab = ({
                 </div>
               </div>
 
-              <div className="p-5 space-y-4">
+              <div className="p-4 space-y-3">
                 {/* Your pick: agree / disagree - compact */}
                 {rec.proposedBetVerdict != null && (
                   <div className={`rounded-lg px-3 py-2 border ${rec.proposedBetVerdict.agrees ? "bg-green-500/10 border-green-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
@@ -1805,14 +1893,11 @@ const RecommendationsTab = ({
 
                 {/* Recommendation cards - clear section */}
                 <div className="pt-1">
-                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${filterTicketReady ? "lg:grid-cols-2" : (rec.bestBet ? "lg:grid-cols-4" : "lg:grid-cols-3")}`}>
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 ${filterTicketReady ? "lg:grid-cols-2" : (rec.bestBet ? "lg:grid-cols-4" : "lg:grid-cols-3")}`}>
                 {/* Best Bet Card */}
                 {rec.bestBet && (!filterTicketReady || isCardTicketReady(rec.bestBet)) && (
-                  <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-400/40 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <span className="text-lg">⭐</span>
-                      <span className="text-purple-300 font-semibold text-xs uppercase tracking-wide">Best bet</span>
-                    </div>
+                  <div className="rounded-lg border border-white/10 border-l-2 border-l-purple-400/70 bg-white/[0.03] p-2.5">
+                    <div className="text-purple-300 font-semibold text-[10px] uppercase tracking-wide mb-1">⭐ Best bet</div>
                     <div className="text-white font-medium text-sm">{rec.bestBet.type}</div>
                     <div className={`text-sm font-semibold ${rec.bestBet.recommendation.bet === "AVOID" ? "text-red-400" : "text-purple-300"}`}>
                       {rec.bestBet.recommendation.bet === "AVOID"
@@ -1822,9 +1907,9 @@ const RecommendationsTab = ({
                     {rec.bestBet.recommendation.bet === "AVOID" && (
                       <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.bestBet.recommendation.reasoning}</div>
                     )}
-                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.bestBet.riskLevel}</div>
+                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.bestBet.riskLevel}</div>
                     {rec.bestBet.oddsPerformance && (
-                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.bestBet.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.bestBet.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
+                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.bestBet.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.bestBet.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.bestBet.oddsPerformance.message}
                       </div>
                     )}
@@ -1833,20 +1918,17 @@ const RecommendationsTab = ({
 
                 {/* Primary Recommendation */}
                 {rec.primary && (!filterTicketReady || isCardTicketReady(rec.primary)) && (
-                  <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-400/30 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <span className="text-lg">🥇</span>
-                      <span className="text-yellow-300 font-semibold text-xs uppercase tracking-wide">Primary</span>
-                    </div>
+                  <div className="rounded-lg border border-white/10 border-l-2 border-l-yellow-400/70 bg-white/[0.03] p-2.5">
+                    <div className="text-yellow-300 font-semibold text-[10px] uppercase tracking-wide mb-1">🥇 Primary</div>
                     <div className="text-white font-medium text-sm">{rec.primary.type}</div>
                     <div className={`text-sm ${rec.primary.recommendation.bet === "AVOID" ? "text-red-400" : "text-green-400"}`}>
                       {rec.primary.recommendation.bet === "AVOID" ? `AVOID (${rec.primary.recommendation.confidence.toFixed(1)}%)` : `${rec.primary.recommendation.bet} (${rec.primary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
                     {renderCalibratedLine("primary", rec.primary)}
                     {rec.primary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.primary.recommendation.reasoning}</div>}
-                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.primary.riskLevel}</div>
+                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.primary.riskLevel}</div>
                     {rec.primary.oddsPerformance && (
-                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.primary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.primary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
+                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.primary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.primary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.primary.oddsPerformance.message}
                       </div>
                     )}
@@ -1855,20 +1937,17 @@ const RecommendationsTab = ({
 
                 {/* Secondary Recommendation */}
                 {rec.secondary && (!filterTicketReady || isCardTicketReady(rec.secondary)) && (
-                  <div className="bg-gradient-to-br from-gray-500/20 to-gray-600/20 border border-gray-400/30 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <span className="text-lg">🥈</span>
-                      <span className="text-gray-300 font-semibold text-xs uppercase tracking-wide">Secondary</span>
-                    </div>
+                  <div className="rounded-lg border border-white/10 border-l-2 border-l-slate-400/70 bg-white/[0.03] p-2.5">
+                    <div className="text-slate-300 font-semibold text-[10px] uppercase tracking-wide mb-1">🥈 Secondary</div>
                     <div className="text-white font-medium text-sm">{rec.secondary.type}</div>
                     <div className={`text-sm ${rec.secondary.recommendation.bet === "AVOID" ? "text-red-400" : "text-blue-400"}`}>
                       {rec.secondary.recommendation.bet === "AVOID" ? `AVOID (${rec.secondary.recommendation.confidence.toFixed(1)}%)` : `${rec.secondary.recommendation.bet} (${rec.secondary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
                     {renderCalibratedLine("secondary", rec.secondary)}
                     {rec.secondary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.secondary.recommendation.reasoning}</div>}
-                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.secondary.riskLevel}</div>
+                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.secondary.riskLevel}</div>
                     {rec.secondary.oddsPerformance && (
-                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.secondary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.secondary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
+                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.secondary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.secondary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.secondary.oddsPerformance.message}
                       </div>
                     )}
@@ -1877,20 +1956,17 @@ const RecommendationsTab = ({
 
                 {/* Tertiary Recommendation */}
                 {rec.tertiary && (!filterTicketReady || isCardTicketReady(rec.tertiary)) && (
-                  <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-400/30 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <span className="text-lg">🥉</span>
-                      <span className="text-orange-300 font-semibold text-xs uppercase tracking-wide">Tertiary</span>
-                    </div>
+                  <div className="rounded-lg border border-white/10 border-l-2 border-l-orange-400/70 bg-white/[0.03] p-2.5">
+                    <div className="text-orange-300 font-semibold text-[10px] uppercase tracking-wide mb-1">🥉 Tertiary</div>
                     <div className="text-white font-medium text-sm">{rec.tertiary.type}</div>
                     <div className={`text-sm ${rec.tertiary.recommendation.bet === "AVOID" ? "text-red-400" : "text-orange-400"}`}>
                       {rec.tertiary.recommendation.bet === "AVOID" ? `AVOID (${rec.tertiary.recommendation.confidence.toFixed(1)}%)` : `${rec.tertiary.recommendation.bet} (${rec.tertiary.recommendation.confidence.toFixed(1)}%)`}
                     </div>
                     {renderCalibratedLine("tertiary", rec.tertiary)}
                     {rec.tertiary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.tertiary.recommendation.reasoning}</div>}
-                    <div className="text-gray-400 text-xs mt-1">Risk: {rec.tertiary.riskLevel}</div>
+                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.tertiary.riskLevel}</div>
                     {rec.tertiary.oddsPerformance && (
-                      <div className={`text-xs mt-1.5 px-2 py-0.5 rounded ${rec.tertiary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.tertiary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
+                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.tertiary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.tertiary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
                         {rec.tertiary.oddsPerformance.message}
                       </div>
                     )}
@@ -1898,6 +1974,12 @@ const RecommendationsTab = ({
                 )}
                   </div>
                 </div>
+                <AiSecondOpinion
+                  result={aiOpinions[aiGameKey(rec)]?.data}
+                  error={aiOpinions[aiGameKey(rec)]?.error}
+                  loading={!!aiLoadingKeys[aiGameKey(rec)]}
+                  onFetch={() => fetchAiForRec(rec)}
+                />
               </div>
             </div>
           ))}
