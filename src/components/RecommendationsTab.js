@@ -8,6 +8,11 @@ import {
   BEST_TICKET_MIN,
   BEST_TICKET_MAX,
 } from "../services/bestTicketService";
+import {
+  getSofascoreStatus,
+  enrichGamesWithSofascore,
+  attachRecommendationImpacts,
+} from "../services/sofascoreEnrichService";
 
 /** Stable key for a game so its AI opinion survives re-sorts/re-filters. */
 const aiGameKey = (rec) =>
@@ -223,6 +228,11 @@ const RecommendationsTab = ({
   /** both = Best ticket on top + All games; ticket / all = one list */
   const [listFocus, setListFocus] = useState("both");
   const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "list" | "goals" | "scoring" | "top22Confidence" | "top22Scoring"
+  // Local SofaScore experiment (opt-in server flag) — keyed by match string
+  const [sofaStatus, setSofaStatus] = useState(null);
+  const [sofaByMatch, setSofaByMatch] = useState({});
+  const [sofaLoading, setSofaLoading] = useState(false);
+  const [sofaError, setSofaError] = useState(null);
   const [goalsSortKey, setGoalsSortKey] = useState("combined");
   const [goalsSortOrder, setGoalsSortOrder] = useState("desc");
   const [recordSortKey, setRecordSortKey] = useState("match");
@@ -300,6 +310,20 @@ const RecommendationsTab = ({
     },
     [fetchAiForRec]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    getSofascoreStatus()
+      .then((s) => {
+        if (!cancelled) setSofaStatus(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSofaStatus({ ready: false, enabled: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -831,6 +855,33 @@ const RecommendationsTab = ({
     () => new Set(bestTicket.map((r) => bestTicketGameKey(r))),
     [bestTicket]
   );
+
+  const runSofascoreEnrich = useCallback(async () => {
+    const games =
+      listFocus === "all" ? filteredAndSortedRecommendations : bestTicket;
+    if (!games.length) {
+      setSofaError("No games to enrich. Run Analyze first.");
+      return;
+    }
+    setSofaLoading(true);
+    setSofaError(null);
+    try {
+      const data = await enrichGamesWithSofascore(games, 12);
+      const withImpact = attachRecommendationImpacts(
+        data.results || [],
+        games
+      );
+      const next = {};
+      for (const r of withImpact) {
+        if (r.match) next[r.match] = r;
+      }
+      setSofaByMatch((prev) => ({ ...prev, ...next }));
+    } catch (e) {
+      setSofaError(e.message || "SofaScore enrich failed");
+    } finally {
+      setSofaLoading(false);
+    }
+  }, [listFocus, bestTicket, filteredAndSortedRecommendations]);
 
   // Sorted list for List tab (clickable column headers)
   const sortedListRecommendations = useMemo(() => {
@@ -1816,6 +1867,34 @@ const RecommendationsTab = ({
             </div>
             <button
               type="button"
+              onClick={runSofascoreEnrich}
+              disabled={
+                sofaLoading ||
+                !sofaStatus?.ready ||
+                (listFocus === "all"
+                  ? filteredAndSortedRecommendations.length === 0
+                  : bestTicket.length === 0)
+              }
+              className="text-xs px-3 py-1.5 rounded-md bg-teal-500/25 hover:bg-teal-500/40 text-teal-100 border border-teal-400/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={
+                sofaStatus?.ready
+                  ? "LOCAL TEST: fetch SofaScore missing players for Best ticket (or All if selected)"
+                  : "Enable ENABLE_SOFASCORE_ENRICH=1 and set up scripts/sofascore_enrich (see README)"
+              }
+            >
+              {sofaLoading
+                ? "SofaScore…"
+                : sofaStatus?.ready
+                  ? "Test: SofaScore enrich"
+                  : "SofaScore (off)"}
+            </button>
+            {sofaError && (
+              <span className="text-[11px] text-rose-300 max-w-[220px] truncate" title={sofaError}>
+                {sofaError}
+              </span>
+            )}
+            <button
+              type="button"
               onClick={() =>
                 fetchAllAi(
                   listFocus === "ticket"
@@ -1891,6 +1970,7 @@ const RecommendationsTab = ({
                         renderCalibratedLine={renderCalibratedLine}
                         onTicket
                         borderClass="border-emerald-400/30"
+                        sofaEnrich={sofaByMatch[rec.match] || null}
                       />
                     );
                   })}
@@ -1940,6 +2020,7 @@ const RecommendationsTab = ({
                           ? "border-emerald-400/20"
                           : "border-white/10"
                       }
+                      sofaEnrich={sofaByMatch[rec.match] || null}
                     />
                   );
                 })}

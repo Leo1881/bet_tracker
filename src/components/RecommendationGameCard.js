@@ -34,6 +34,229 @@ const isCardTicketReady = (card) => {
   return true;
 };
 
+const FormLetters = ({ letters }) => {
+  const list = Array.isArray(letters) ? letters : [];
+  if (!list.length) {
+    return <span className="text-gray-500">—</span>;
+  }
+  return (
+    <span className="inline-flex gap-0.5">
+      {list.map((L, i) => {
+        const c = String(L).toUpperCase();
+        const color =
+          c === "W"
+            ? "bg-emerald-500/30 text-emerald-200"
+            : c === "D"
+              ? "bg-white/10 text-gray-300"
+              : c === "L"
+                ? "bg-rose-500/30 text-rose-200"
+                : "bg-white/10 text-gray-400";
+        return (
+          <span
+            key={`${c}-${i}`}
+            className={`w-5 h-5 inline-flex items-center justify-center rounded text-[10px] font-semibold ${color}`}
+          >
+            {c}
+          </span>
+        );
+      })}
+    </span>
+  );
+};
+
+const SofaEnrichPanel = ({ sofaEnrich }) => {
+  if (!sofaEnrich?.matched) return null;
+
+  const impact = sofaEnrich.impact;
+  const h2h = sofaEnrich.h2h;
+  const homeForm = sofaEnrich.homeForm?.form || [];
+  const awayForm = sofaEnrich.awayForm?.form || [];
+  const streaks = sofaEnrich.keyStreaks || [];
+  const homeMiss = sofaEnrich.homeMissing || [];
+  const awayMiss = sofaEnrich.awayMissing || [];
+  const impactNotes = (impact?.note || "")
+    .split(" · ")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const sideLabel = (team) => {
+    if (team === "home") return "Home";
+    if (team === "away") return "Away";
+    if (team === "both") return "Both";
+    return team || "";
+  };
+
+  const verdictStyles =
+    impact?.tier === "caution"
+      ? "border-rose-400/40 bg-rose-500/10 text-rose-100"
+      : impact?.tier === "support"
+        ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+        : "border-teal-400/30 bg-teal-500/10 text-teal-100";
+
+  return (
+    <div className="rounded-lg border border-teal-400/25 bg-black/20 px-3 py-3 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-teal-300 text-[10px] font-semibold uppercase tracking-wide">
+          SofaScore context
+        </div>
+        {impact?.confidenceDelta != null && impact.confidenceDelta !== 0 && (
+          <span
+            className={`text-[11px] px-2 py-0.5 rounded border ${verdictStyles}`}
+          >
+            Confidence {impact.confidenceDelta > 0 ? "+" : ""}
+            {impact.confidenceDelta}
+          </span>
+        )}
+      </div>
+
+      {(sofaEnrich.sofaHome || sofaEnrich.sofaAway) && (
+        <p className="text-xs text-gray-400">
+          {sofaEnrich.sofaHome || "Home"} vs {sofaEnrich.sofaAway || "Away"}
+          {sofaEnrich.sofaDate ? ` · ${sofaEnrich.sofaDate}` : ""}
+          {sofaEnrich.tournament ? ` · ${sofaEnrich.tournament}` : ""}
+        </p>
+      )}
+
+      {impactNotes.length > 0 && (
+        <div className={`rounded-md border px-2.5 py-2 ${verdictStyles}`}>
+          <div className="text-[10px] font-semibold uppercase tracking-wide opacity-80 mb-1">
+            {impact?.tier === "caution"
+              ? "Caution"
+              : impact?.tier === "support"
+                ? "Supports stake"
+                : "Note"}
+          </div>
+          <ul className="space-y-1 text-xs leading-snug">
+            {impactNotes.map((n) => (
+              <li key={n}>• {n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {h2h && (
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+            Head to head
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-md bg-white/5 border border-white/10 px-2 py-2">
+              <div className="text-[10px] text-gray-500">Home wins</div>
+              <div className="text-lg font-semibold text-white">{h2h.homeWins}</div>
+            </div>
+            <div className="rounded-md bg-white/5 border border-white/10 px-2 py-2">
+              <div className="text-[10px] text-gray-500">Draws</div>
+              <div className="text-lg font-semibold text-white">{h2h.draws}</div>
+            </div>
+            <div className="rounded-md bg-white/5 border border-white/10 px-2 py-2">
+              <div className="text-[10px] text-gray-500">Away wins</div>
+              <div className="text-lg font-semibold text-white">{h2h.awayWins}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(homeForm.length > 0 || awayForm.length > 0) && (
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+            Recent form
+            <span className="normal-case font-normal text-gray-600 ml-1">
+              (
+              {sofaEnrich.formSource === "pregame-form"
+                ? "official"
+                : "last 5"}
+              )
+            </span>
+          </div>
+          <div className="space-y-1.5 text-xs text-gray-300">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-gray-500 shrink-0 w-12">Home</span>
+              <div className="flex-1 min-w-0 truncate text-gray-400 text-[11px]">
+                {sofaEnrich.sofaHome || ""}
+              </div>
+              <FormLetters letters={homeForm} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-gray-500 shrink-0 w-12">Away</span>
+              <div className="flex-1 min-w-0 truncate text-gray-400 text-[11px]">
+                {sofaEnrich.sofaAway || ""}
+              </div>
+              <FormLetters letters={awayForm} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {streaks.length > 0 && (
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+            Key streaks
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {streaks.map((s) => (
+              <span
+                key={`${s.short}-${s.team}-${s.value}-${s.source}`}
+                className="inline-flex items-center gap-1 rounded-md border border-teal-400/25 bg-teal-500/10 px-2 py-1 text-[11px] text-teal-100"
+                title={s.name}
+              >
+                <span className="font-semibold">{s.short}</span>
+                <span className="text-teal-200/90">{s.value}</span>
+                {s.team ? (
+                  <span className="text-teal-200/60">{sideLabel(s.team)}</span>
+                ) : null}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(homeMiss.length > 0 || awayMiss.length > 0) && (
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+            Missing / doubtful
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            <div className="rounded-md bg-white/5 border border-white/10 px-2 py-1.5">
+              <div className="text-gray-500 mb-1">Home ({homeMiss.length})</div>
+              {homeMiss.length === 0 ? (
+                <div className="text-gray-600">None listed</div>
+              ) : (
+                <ul className="space-y-0.5 text-gray-300">
+                  {homeMiss.slice(0, 5).map((p) => (
+                    <li key={`h-${p.name}`}>
+                      {p.name}
+                      {p.description || p.type
+                        ? ` — ${p.description || p.type}`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-md bg-white/5 border border-white/10 px-2 py-1.5">
+              <div className="text-gray-500 mb-1">Away ({awayMiss.length})</div>
+              {awayMiss.length === 0 ? (
+                <div className="text-gray-600">None listed</div>
+              ) : (
+                <ul className="space-y-0.5 text-gray-300">
+                  {awayMiss.slice(0, 5).map((p) => (
+                    <li key={`a-${p.name}`}>
+                      {p.name}
+                      {p.description || p.type
+                        ? ` — ${p.description || p.type}`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /**
  * Single recommendation card (stake pick + details + AI).
  */
@@ -51,6 +274,7 @@ function RecommendationGameCard({
   onTicket = false,
   ticketBadge = false,
   borderClass = "border-white/10",
+  sofaEnrich = null,
 }) {
   const hero = rec.bestBet || rec.primary;
   const detailAlts = [
@@ -95,6 +319,64 @@ function RecommendationGameCard({
             {(onTicket || ticketBadge) && (
               <span className="px-1.5 py-0.5 rounded text-[11px] border bg-emerald-500/20 border-emerald-400/40 text-emerald-200 font-medium">
                 On ticket
+              </span>
+            )}
+            {sofaEnrich && (
+              <span
+                className={`px-1.5 py-0.5 rounded text-[11px] border ${
+                  sofaEnrich.error && !sofaEnrich.matched
+                    ? "bg-gray-500/15 border-gray-500/30 text-gray-400"
+                    : sofaEnrich.impact?.tier === "caution"
+                      ? "bg-rose-500/20 border-rose-400/40 text-rose-200"
+                      : sofaEnrich.impact?.tier === "support"
+                        ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
+                        : (sofaEnrich.homeMissing?.length || 0) +
+                              (sofaEnrich.awayMissing?.length || 0) >
+                            0
+                          ? "bg-rose-500/20 border-rose-400/40 text-rose-200"
+                          : "bg-teal-500/15 border-teal-400/40 text-teal-200"
+                }`}
+                title={
+                  sofaEnrich.error ||
+                  [
+                    sofaEnrich.h2hSummary || sofaEnrich.impact?.h2hLabel,
+                    sofaEnrich.formSummary
+                      ? `Form: ${sofaEnrich.formSummary}`
+                      : null,
+                    sofaEnrich.streaksSummary
+                      ? `Streaks: ${sofaEnrich.streaksSummary}`
+                      : null,
+                    sofaEnrich.impact?.note,
+                    sofaEnrich.summary,
+                    ...(sofaEnrich.homeMissing || []).map(
+                      (p) => `Home: ${p.name} (${p.description || p.type})`
+                    ),
+                    ...(sofaEnrich.awayMissing || []).map(
+                      (p) => `Away: ${p.name} (${p.description || p.type})`
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join("\n")
+                }
+              >
+                SofaScore
+                {sofaEnrich.matched
+                  ? ` · ${[
+                      sofaEnrich.h2h
+                        ? `H2H ${sofaEnrich.h2h.homeWins}-${sofaEnrich.h2h.draws}-${sofaEnrich.h2h.awayWins}`
+                        : null,
+                      sofaEnrich.homeForm?.form?.length ||
+                      sofaEnrich.awayForm?.form?.length
+                        ? "Form"
+                        : null,
+                      sofaEnrich.keyStreaks?.length
+                        ? `${sofaEnrich.keyStreaks.length} streaks`
+                        : null,
+                      `Out ${sofaEnrich.homeMissing?.length || 0}/${sofaEnrich.awayMissing?.length || 0}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}`
+                  : " · no match"}
               </span>
             )}
             {rec.earlySeason && (
@@ -178,9 +460,18 @@ function RecommendationGameCard({
         </div>
         <div className="text-right shrink-0">
           <div className="text-blue-400 font-semibold text-sm">
-            {(rec.confidence ?? 0).toFixed(1)}%
+            {(
+              Number(rec.confidence || 0) +
+              Number(sofaEnrich?.impact?.confidenceDelta || 0)
+            ).toFixed(1)}
+            %
           </div>
           <div className="text-gray-500 text-xs">Odds {rec.odds}</div>
+          {!!sofaEnrich?.impact?.confidenceDelta && (
+            <div className="text-[10px] text-teal-300/80 mt-0.5">
+              incl. Sofa adj
+            </div>
+          )}
         </div>
       </div>
 
@@ -205,6 +496,8 @@ function RecommendationGameCard({
             </div>
           </div>
         )}
+
+        {sofaEnrich?.matched && <SofaEnrichPanel sofaEnrich={sofaEnrich} />}
 
         {(aiResult || aiError || aiLoading) && (
           <AiSecondOpinion

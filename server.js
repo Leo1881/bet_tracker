@@ -1,6 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
+const path = require("path");
+const { spawn } = require("child_process");
+const fs = require("fs");
 require("dotenv").config();
 const { getSecondOpinion } = require("./aiSecondOpinion");
 
@@ -1275,6 +1278,110 @@ app.post("/api/betslip-recommendations/compare", async (req, res) => {
     });
   } catch (error) {
     console.error("Error comparing betslip recommendations:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== SofaScore enrich (LOCAL TEST — opt-in via ENABLE_SOFASCORE_ENRICH=1) ==========
+app.get("/api/sofascore/status", (req, res) => {
+  const enabled = process.env.ENABLE_SOFASCORE_ENRICH === "1";
+  const script = path.join(__dirname, "scripts", "sofascore_enrich", "enrich.py");
+  const venvPy = path.join(
+    __dirname,
+    "scripts",
+    "sofascore_enrich",
+    ".venv",
+    "bin",
+    "python"
+  );
+  res.json({
+    enabled,
+    scriptExists: fs.existsSync(script),
+    venvExists: fs.existsSync(venvPy),
+    ready: enabled && fs.existsSync(script) && fs.existsSync(venvPy),
+  });
+});
+
+app.post("/api/sofascore/enrich", async (req, res) => {
+  if (process.env.ENABLE_SOFASCORE_ENRICH !== "1") {
+    return res.status(403).json({
+      error:
+        "SofaScore enrich is disabled. Set ENABLE_SOFASCORE_ENRICH=1 in .env for local testing.",
+    });
+  }
+  const games = req.body?.games;
+  if (!Array.isArray(games) || games.length === 0) {
+    return res.status(400).json({ error: "Expected { games: [...] }" });
+  }
+  const script = path.join(__dirname, "scripts", "sofascore_enrich", "enrich.py");
+  const venvPy = path.join(
+    __dirname,
+    "scripts",
+    "sofascore_enrich",
+    ".venv",
+    "bin",
+    "python"
+  );
+  if (!fs.existsSync(script) || !fs.existsSync(venvPy)) {
+    return res.status(503).json({
+      error:
+        "SofaScore venv/script missing. See scripts/sofascore_enrich/README.md",
+    });
+  }
+
+  const payload = JSON.stringify({
+    games: games.slice(0, Number(req.body?.max_games) || 12),
+    max_games: Number(req.body?.max_games) || 12,
+  });
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(venvPy, [script], {
+        cwd: path.dirname(script),
+        env: { ...process.env },
+      });
+      let stdout = "";
+      let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill("SIGTERM");
+        reject(new Error("SofaScore enrich timed out (120s)"));
+      }, 120000);
+      child.stdout.on("data", (d) => {
+        stdout += d.toString();
+      });
+      child.stderr.on("data", (d) => {
+        stderr += d.toString();
+      });
+      child.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        if (code !== 0) {
+          reject(
+            new Error(
+              stderr.trim() || stdout.trim() || `enrich.py exited ${code}`
+            )
+          );
+          return;
+        }
+        try {
+          resolve(JSON.parse(stdout));
+        } catch (e) {
+          reject(
+            new Error(
+              `Invalid JSON from enrich.py: ${e.message}. stderr=${stderr.slice(0, 400)}`
+            )
+          );
+        }
+      });
+      child.stdin.write(payload);
+      child.stdin.end();
+    });
+    res.json(result);
+  } catch (error) {
+    console.error("SofaScore enrich error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
