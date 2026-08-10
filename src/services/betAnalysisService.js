@@ -1,6 +1,7 @@
 import { calculateProbabilities } from "../utils/mathUtils";
 import { getPositionGapIndicator } from "./teamHistoryService";
 import { debugLog } from "../utils/debug";
+import { isTeamNameBlacklisted } from "../utils/teamNameUtils";
 
 /**
  * Analyze new bets and generate recommendations
@@ -68,13 +69,11 @@ export const analyzeNewBets = async (
       const country = newBet.COUNTRY;
       const league = newBet.LEAGUE;
 
-      // Check if team is blacklisted (any country/league)
-      const isBlacklisted = (blacklistedTeams || []).some(
-        (blacklistedTeam) =>
-          (
-            blacklistedTeam.TEAM_NAME || blacklistedTeam.team_name
-          )?.toLowerCase() === (teamName || "").toLowerCase()
-      );
+      // Check if team is blacklisted (aliases: Man Utd ↔ Manchester United)
+      const isBlacklisted =
+        isTeamNameBlacklisted(teamName, blacklistedTeams) ||
+        isTeamNameBlacklisted(newBet.HOME_TEAM, blacklistedTeams) ||
+        isTeamNameBlacklisted(newBet.AWAY_TEAM, blacklistedTeams);
 
       // Get historical performance for this team (EXACT country + league match only)
       // Use deduplicated bets to avoid counting multiple tickets for the same game

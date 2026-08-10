@@ -790,8 +790,10 @@ app.post("/api/betslip-recommendations", async (req, res) => {
         recommendation, confidence_score, reasoning,
         primary_recommendation, primary_confidence, primary_reasoning,
         secondary_recommendation, secondary_confidence, secondary_reasoning,
-        tertiary_recommendation, tertiary_confidence, tertiary_reasoning
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+        tertiary_recommendation, tertiary_confidence, tertiary_reasoning,
+        best_bet_recommendation, best_bet_confidence, best_bet_type,
+        loss_rules_applied
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
       ON CONFLICT (bet_id, country, league, bet_type, bet_selection, team_included)
       DO UPDATE SET
         betslip_id = $2, game_id = $3, date = $4, home_team = $7, away_team = $8,
@@ -799,6 +801,8 @@ app.post("/api/betslip-recommendations", async (req, res) => {
         primary_recommendation = $18, primary_confidence = $19, primary_reasoning = $20,
         secondary_recommendation = $21, secondary_confidence = $22, secondary_reasoning = $23,
         tertiary_recommendation = $24, tertiary_confidence = $25, tertiary_reasoning = $26,
+        best_bet_recommendation = $27, best_bet_confidence = $28, best_bet_type = $29,
+        loss_rules_applied = $30,
         updated_at = NOW()
     `;
     for (const r of recommendations) {
@@ -830,6 +834,10 @@ app.post("/api/betslip-recommendations", async (req, res) => {
         r.tertiary_recommendation ?? null,
         parseNum(r.tertiary_confidence),
         r.tertiary_reasoning ?? null,
+        r.best_bet_recommendation ?? null,
+        parseNum(r.best_bet_confidence),
+        r.best_bet_type ?? null,
+        !!r.loss_rules_applied,
       ]);
     }
     res.json({ success: true, bet_id, stored: recommendations.length });
@@ -916,35 +924,46 @@ app.get("/api/betslip-recommendations", async (req, res) => {
   }
 });
 
-// Tier accuracy: Evaluate SYSTEM recommendations against actual match outcome (not user's bet)
+// Tier accuracy / scoreboard: evaluate system picks (P/S/T + Best Bet + AI) vs match outcome
 app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT date, home_team, away_team, primary_recommendation, secondary_recommendation, tertiary_recommendation, recommendation, actual_result, actual_home_score, actual_away_score
+      `SELECT date, home_team, away_team,
+              primary_recommendation, secondary_recommendation, tertiary_recommendation, recommendation,
+              best_bet_recommendation, ai_pick, ai_skip,
+              actual_result, actual_home_score, actual_away_score
        FROM betslip_recommendations
        WHERE actual_result IS NOT NULL AND TRIM(actual_result) != ''`
     );
     const normalize = (v) => (v == null ? "" : String(v).trim().toLowerCase());
     const normRec = (s) => normalize(s).replace(/\s+(to\s+)?win$/, "").replace(/\s+avoid$/, "").replace(/\s+fc\.?\s*$/i, "").trim();
-    const TEAM_ALIASES = { "man utd": "manchester united", "man united": "manchester united", "hearts": "heart of midlothian", "heart of midlothian": "heart of midlothian", "coleraine": "coleraine", "hibernian": "hibernian" };
-    const normTeam = (t) => TEAM_ALIASES[normRec(t)] ?? normRec(t);
-    const teamMatches = (recTeam, gameTeam) => {
-      const r = normTeam(recTeam);
-      const g = normTeam(gameTeam);
-      return r === g || g.includes(r) || r.includes(g);
-    };
 
-    // Dedupe by game (same game can appear on multiple betslips)
+    // Dedupe by game (same game can appear on multiple betslips) — keep richest AI/best_bet if present
     const gameKey = (r) => `${normRec(r.home_team)}|${normRec(r.away_team)}|${r.date}`;
-    const seen = new Set();
-    const games = result.rows.filter((r) => {
+    const byGame = new Map();
+    for (const r of result.rows) {
       const k = gameKey(r);
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+      const prev = byGame.get(k);
+      if (!prev) {
+        byGame.set(k, r);
+        continue;
+      }
+      const richer =
+        (r.best_bet_recommendation && !prev.best_bet_recommendation) ||
+        (r.ai_pick && !prev.ai_pick) ||
+        (r.ai_skip && !prev.ai_skip);
+      if (richer) byGame.set(k, { ...prev, ...r });
+    }
+    const games = [...byGame.values()];
 
-    const tiers = { primary: { correct: 0, total: 0 }, secondary: { correct: 0, total: 0 }, tertiary: { correct: 0, total: 0 } };
+    const empty = () => ({ correct: 0, total: 0 });
+    const tiers = {
+      primary: empty(),
+      secondary: empty(),
+      tertiary: empty(),
+      bestBet: empty(),
+      ai: empty(),
+    };
     const gamesWithoutScores = [];
     for (const row of games) {
       const hs = row.actual_home_score != null ? Number(row.actual_home_score) : null;
@@ -958,6 +977,9 @@ app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
       const pCorrect = evaluateRecommendation(primary, row.home_team, row.away_team, hs, as, row.actual_result);
       const sCorrect = evaluateRecommendation(row.secondary_recommendation, row.home_team, row.away_team, hs, as, row.actual_result);
       const tCorrect = evaluateRecommendation(row.tertiary_recommendation, row.home_team, row.away_team, hs, as, row.actual_result);
+      const bbCorrect = evaluateRecommendation(row.best_bet_recommendation, row.home_team, row.away_team, hs, as, row.actual_result);
+      const aiPickRaw = row.ai_skip || normalize(row.ai_pick) === "skip" ? null : row.ai_pick;
+      const aiCorrect = evaluateRecommendation(aiPickRaw, row.home_team, row.away_team, hs, as, row.actual_result);
 
       if (pCorrect !== null) {
         tiers.primary.total++;
@@ -971,21 +993,72 @@ app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
         tiers.tertiary.total++;
         if (tCorrect) tiers.tertiary.correct++;
       }
+      if (bbCorrect !== null) {
+        tiers.bestBet.total++;
+        if (bbCorrect) tiers.bestBet.correct++;
+      }
+      if (aiCorrect !== null) {
+        tiers.ai.total++;
+        if (aiCorrect) tiers.ai.correct++;
+      }
     }
 
-    const primaryAcc = tiers.primary.total > 0 ? (tiers.primary.correct / tiers.primary.total) * 100 : 0;
-    const secondaryAcc = tiers.secondary.total > 0 ? (tiers.secondary.correct / tiers.secondary.total) * 100 : 0;
-    const tertiaryAcc = tiers.tertiary.total > 0 ? (tiers.tertiary.correct / tiers.tertiary.total) * 100 : 0;
+    const acc = (t) => (t.total > 0 ? (t.correct / t.total) * 100 : 0);
+    const pack = (t) => ({ correct: t.correct, total: t.total, accuracy: acc(t) });
     const totalBets = tiers.primary.total + tiers.secondary.total + tiers.tertiary.total;
     res.json({
-      primary: { correct: tiers.primary.correct, total: tiers.primary.total, accuracy: primaryAcc },
-      secondary: { correct: tiers.secondary.correct, total: tiers.secondary.total, accuracy: secondaryAcc },
-      tertiary: { correct: tiers.tertiary.correct, total: tiers.tertiary.total, accuracy: tertiaryAcc },
+      primary: pack(tiers.primary),
+      secondary: pack(tiers.secondary),
+      tertiary: pack(tiers.tertiary),
+      bestBet: pack(tiers.bestBet),
+      ai: pack(tiers.ai),
       totalBets,
       gamesWithoutScores: gamesWithoutScores.length > 0 ? gamesWithoutScores : undefined,
     });
   } catch (error) {
     console.error("Error fetching tier accuracy:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Persist AI second opinion onto matching betslip_recommendations rows (by teams + date)
+app.post("/api/betslip-recommendations/ai-opinion", async (req, res) => {
+  try {
+    const { home_team, away_team, date, ai_pick, ai_confidence, ai_reasoning, ai_agreement, ai_skip } = req.body || {};
+    if (!home_team || !away_team) {
+      return res.status(400).json({ error: "home_team and away_team are required" });
+    }
+    const parseDate = (v) => {
+      if (v == null || v === "") return null;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    };
+    const parseNum = (v) => {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isNaN(n) ? null : n;
+    };
+    const d = parseDate(date);
+    const result = await pool.query(
+      `UPDATE betslip_recommendations
+       SET ai_pick = $1, ai_confidence = $2, ai_reasoning = $3, ai_agreement = $4, ai_skip = $5, updated_at = NOW()
+       WHERE LOWER(TRIM(home_team)) = LOWER(TRIM($6))
+         AND LOWER(TRIM(away_team)) = LOWER(TRIM($7))
+         AND ($8::date IS NULL OR date = $8::date)`,
+      [
+        ai_pick ?? null,
+        parseNum(ai_confidence),
+        ai_reasoning ?? null,
+        ai_agreement ?? null,
+        !!ai_skip,
+        home_team,
+        away_team,
+        d,
+      ]
+    );
+    res.json({ updated: result.rowCount });
+  } catch (error) {
+    console.error("Error saving AI opinion:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1245,6 +1318,24 @@ async function startServer() {
     process.exit(1);
   }
 
+  // Scoreboard columns (idempotent)
+  try {
+    await pool.query(`
+      ALTER TABLE betslip_recommendations
+        ADD COLUMN IF NOT EXISTS best_bet_recommendation VARCHAR,
+        ADD COLUMN IF NOT EXISTS best_bet_confidence NUMERIC,
+        ADD COLUMN IF NOT EXISTS best_bet_type VARCHAR,
+        ADD COLUMN IF NOT EXISTS ai_pick VARCHAR,
+        ADD COLUMN IF NOT EXISTS ai_confidence NUMERIC,
+        ADD COLUMN IF NOT EXISTS ai_reasoning TEXT,
+        ADD COLUMN IF NOT EXISTS ai_agreement VARCHAR,
+        ADD COLUMN IF NOT EXISTS ai_skip BOOLEAN,
+        ADD COLUMN IF NOT EXISTS loss_rules_applied BOOLEAN DEFAULT FALSE
+    `);
+  } catch (e) {
+    console.warn("Could not ensure scoreboard columns:", e.message);
+  }
+
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`API endpoints:`);
@@ -1259,7 +1350,8 @@ async function startServer() {
     console.log(`  GET /api/recommendation-analysis - Get analysis results`);
     console.log(`  POST /api/betslip-recommendations - Save betslip (new flow)`);
     console.log(`  GET /api/betslip-recommendations - List games (?bet_id=)`);
-    console.log(`  GET /api/betslip-recommendations/tier-accuracy - Primary/Secondary/Tertiary accuracy`);
+    console.log(`  GET /api/betslip-recommendations/tier-accuracy - Accuracy scoreboard`);
+    console.log(`  POST /api/betslip-recommendations/ai-opinion - Persist AI pick`);
     console.log(`  GET /api/betslip-recommendations/bet-ids - List bet IDs`);
     console.log(`  POST /api/betslip-recommendations/compare - Compare with Sheet1 results`);
   });

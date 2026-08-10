@@ -44,12 +44,6 @@ function AiSecondOpinion({ result, error, loading, onFetch }) {
         </button>
       </div>
 
-      {!result && !error && !loading && (
-        <div className="mt-2 text-xs text-gray-500">
-          No AI pick yet — use “Get AI picks (all)” above or the button here.
-        </div>
-      )}
-
       {error && (
         <div className="mt-2 text-xs text-red-300 leading-relaxed">{error}</div>
       )}

@@ -2,6 +2,28 @@ import React, { useState, useEffect } from "react";
 import { TabContentSkeleton } from "./SkeletonLoader";
 import ErrorDisplay from "./ErrorDisplay";
 
+const TierCard = ({ label, emoji, desc, correct = 0, total = 0, accuracy = 0, highlight }) => (
+  <div
+    className={`rounded-lg p-4 border ${
+      highlight
+        ? "bg-emerald-500/15 border-emerald-400/40"
+        : "bg-white/10 border-white/20"
+    }`}
+  >
+    <div className="flex items-center gap-2 mb-2">
+      <span className="text-2xl">{emoji}</span>
+      <h4 className="text-lg font-semibold text-white">{label}</h4>
+    </div>
+    <p className="text-gray-400 text-xs mb-3">{desc}</p>
+    <div className="text-3xl font-bold text-green-400">
+      {total > 0 ? accuracy.toFixed(1) : "—"}%
+    </div>
+    <div className="text-gray-300 text-sm mt-1">
+      {correct} correct / {total} bets
+    </div>
+  </div>
+);
+
 const PredictionAccuracyTab = () => {
   const [tierAccuracy, setTierAccuracy] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +53,7 @@ const PredictionAccuracyTab = () => {
     return (
       <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         <h3 className="text-lg font-bold text-white mb-4">
-          System Recommendation Accuracy
+          Accuracy Scoreboard
         </h3>
         <TabContentSkeleton lines={3} />
       </div>
@@ -42,7 +64,7 @@ const PredictionAccuracyTab = () => {
     return (
       <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         <h3 className="text-lg font-bold text-white mb-4">
-          System Recommendation Accuracy
+          Accuracy Scoreboard
         </h3>
         <ErrorDisplay
           message={error}
@@ -54,84 +76,117 @@ const PredictionAccuracyTab = () => {
     );
   }
 
-  const { primary, secondary, tertiary, totalBets } = tierAccuracy || {};
-  const tiers = [
-    { label: "Primary", emoji: "🥇", ...primary, desc: "System's top recommendation" },
-    { label: "Secondary", emoji: "🥈", ...secondary, desc: "System's second choice" },
-    { label: "Tertiary", emoji: "🥉", ...tertiary, desc: "System's third choice" },
+  const {
+    primary,
+    secondary,
+    tertiary,
+    bestBet,
+    ai,
+    totalBets,
+  } = tierAccuracy || {};
+
+  const scoreboard = [
+    {
+      label: "Primary",
+      emoji: "🥇",
+      desc: "System top tier (saved on every betslip)",
+      ...primary,
+    },
+    {
+      label: "Best Bet",
+      emoji: "⭐",
+      desc: "Hero pick after ranking + loss rules (new saves only)",
+      highlight: true,
+      ...bestBet,
+    },
+    {
+      label: "AI pick",
+      emoji: "🤖",
+      desc: "Gemini second opinion when you ran AI after saving",
+      highlight: true,
+      ...ai,
+    },
   ];
+
+  const classicTiers = [
+    {
+      label: "Secondary",
+      emoji: "🥈",
+      desc: "System's second choice",
+      ...secondary,
+    },
+    {
+      label: "Tertiary",
+      emoji: "🥉",
+      desc: "System's third choice",
+      ...tertiary,
+    },
+  ];
+
+  const hasAny =
+    (totalBets || 0) > 0 ||
+    (bestBet?.total || 0) > 0 ||
+    (ai?.total || 0) > 0;
 
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-      <h3 className="text-lg font-bold text-white mb-4">
-        System Recommendation Accuracy
-      </h3>
-      <div className="text-gray-300 mb-6">
+      <h3 className="text-lg font-bold text-white mb-4">Accuracy Scoreboard</h3>
+      <div className="text-gray-300 mb-6 space-y-2">
         <p>
-          How accurate is each tier of the system's recommendations? Each tier
-          is evaluated against the actual match outcome (scores). For example:
-          if Primary was "OVER 1.5" and the result was 1-1, Primary is correct.
-          If Tertiary was "Man Utd" and the result was draw, Tertiary is incorrect.
+          Compares each pick type against the actual match outcome (scores from
+          Sheet1 after Compare). Use this to see whether Best Bet or AI beats
+          Primary over time.
         </p>
-        <p className="text-amber-200/80 text-sm mt-2">
-          Requirement: Add HOME_SCORE and AWAY_SCORE to Sheet1 and run Compare for accuracy to work.
+        <p className="text-amber-200/80 text-sm">
+          Best Bet and AI columns only fill for games saved after this update
+          (and AI only after you fetch an AI opinion). Older rows still score
+          Primary / Secondary / Tertiary.
         </p>
       </div>
 
-      {totalBets === 0 ? (
+      {!hasAny ? (
         <div className="text-center py-8">
           <div className="text-4xl mb-4">📊</div>
-          <h4 className="text-lg font-semibold text-white mb-2">
-            No Data Yet
-          </h4>
+          <h4 className="text-lg font-semibold text-white mb-2">No Data Yet</h4>
           <p className="text-gray-300 mb-4">
-            Upload betslips from Bet Analysis, run Compare from Recommendation
-            Analysis to add results from Sheet1, then return here to see the
-            system's tier accuracy.
+            Upload betslips from Bet Analysis, save recommendations, run Compare
+            from Recommendation Analysis when results land, then refresh here.
           </p>
-          {tierAccuracy?.debug && (
-            <div className="mt-4 p-4 bg-black/20 rounded-lg text-left text-sm text-gray-400 max-w-xl mx-auto">
-              <p>Debug: {tierAccuracy.debug.rowsWithResult} rows have results. {tierAccuracy.debug.unmatchedRows?.length ?? 0} didn't match any tier.</p>
-              {tierAccuracy.debug.unmatchedRows?.length > 0 && (
-                <pre className="mt-2 text-xs overflow-auto">
-                  {JSON.stringify(tierAccuracy.debug.unmatchedRows, null, 2)}
-                </pre>
-              )}
-            </div>
-          )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {tierAccuracy?.gamesWithoutScores?.length > 0 && (
             <div className="p-3 bg-amber-500/10 rounded-lg text-amber-200 text-sm">
-              {tierAccuracy.gamesWithoutScores.length} game(s) skipped (no HOME_SCORE/AWAY_SCORE in Sheet1): {tierAccuracy.gamesWithoutScores.join(", ")}
+              {tierAccuracy.gamesWithoutScores.length} game(s) skipped (no
+              HOME_SCORE/AWAY_SCORE):{" "}
+              {tierAccuracy.gamesWithoutScores.join(", ")}
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {tiers.map((tier) => (
-              <div
-                key={tier.label}
-                className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">{tier.emoji}</span>
-                  <h4 className="text-lg font-semibold text-white">
-                    {tier.label}
-                  </h4>
-                </div>
-                <p className="text-gray-400 text-xs mb-3">{tier.desc}</p>
-                <div className="text-3xl font-bold text-green-400">
-                  {tier.total > 0 ? tier.accuracy.toFixed(1) : "—"}%
-                </div>
-                <div className="text-gray-300 text-sm mt-1">
-                  {tier.correct} correct / {tier.total} bets
-                </div>
-              </div>
-            ))}
+
+          <div>
+            <h4 className="text-sm font-semibold text-white/90 mb-3 uppercase tracking-wide">
+              Head-to-head (what to trust)
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {scoreboard.map((tier) => (
+                <TierCard key={tier.label} {...tier} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold text-white/90 mb-3 uppercase tracking-wide">
+              Classic tiers
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {classicTiers.map((tier) => (
+                <TierCard key={tier.label} {...tier} />
+              ))}
+            </div>
           </div>
 
           <div className="flex justify-between items-center text-sm text-gray-400">
-            <span>Total bets tracked: {totalBets}</span>
+            <span>Primary/Secondary/Tertiary bets tracked: {totalBets}</span>
             <button
               onClick={fetchTierAccuracy}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"

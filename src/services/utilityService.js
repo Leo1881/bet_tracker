@@ -3,6 +3,8 @@
  * Handles helper functions and utility operations
  */
 
+import { isTeamNameBlacklisted } from "../utils/teamNameUtils";
+
 /**
  * Get status color class based on status
  * @param {string} status - Status string
@@ -53,13 +55,8 @@ export const calculateWinPercentage = (betList = []) => {
  * @param {Array} blacklistedTeams - Array of blacklisted teams
  * @returns {boolean} True if team is blacklisted
  */
-export const isTeamBlacklisted = (teamName, blacklistedTeams) => {
-  if (!teamName || !blacklistedTeams.length) return false;
-  const normalizedTeamName = teamName.toLowerCase().trim();
-  return blacklistedTeams.some(
-    (team) => team.toLowerCase().trim() === normalizedTeamName
-  );
-};
+export const isTeamBlacklisted = (teamName, blacklistedTeams) =>
+  isTeamNameBlacklisted(teamName, blacklistedTeams);
 
 /**
  * Get bets for specific odds range

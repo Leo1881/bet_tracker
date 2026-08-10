@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { getTeamBetWinStats, TEAM_RECORD_COLUMNS } from "../services/teamBetWinStatsService";
-import { getAiSecondOpinion } from "../services/aiService";
-import AiSecondOpinion from "./AiSecondOpinion";
+import { getAiSecondOpinion, saveAiOpinionToDb } from "../services/aiService";
+import RecommendationGameCard from "./RecommendationGameCard";
+import {
+  buildBestTicket,
+  bestTicketGameKey,
+  BEST_TICKET_MIN,
+  BEST_TICKET_MAX,
+} from "../services/bestTicketService";
 
 /** Stable key for a game so its AI opinion survives re-sorts/re-filters. */
 const aiGameKey = (rec) =>
@@ -214,6 +220,8 @@ const RecommendationsTab = ({
   const [filterRisk, setFilterRisk] = useState("all"); // all, high, medium, low
   const [filterHasAvoid, setFilterHasAvoid] = useState("all"); // all, yes, no
   const [filterTicketReady, setFilterTicketReady] = useState(false);
+  /** both = Best ticket on top + All games; ticket / all = one list */
+  const [listFocus, setListFocus] = useState("both");
   const [subTab, setSubTab] = useState("recommendations"); // "recommendations" | "list" | "goals" | "scoring" | "top22Confidence" | "top22Scoring"
   const [goalsSortKey, setGoalsSortKey] = useState("combined");
   const [goalsSortOrder, setGoalsSortOrder] = useState("desc");
@@ -234,6 +242,8 @@ const RecommendationsTab = ({
   const [aiLoadingKeys, setAiLoadingKeys] = useState({}); // key -> true
   const [aiBulkLoading, setAiBulkLoading] = useState(false);
   const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
+  /** Which recommendation cards show secondary/tertiary + extra detail. */
+  const [expandedRecKeys, setExpandedRecKeys] = useState({});
 
   const fetchAiForRec = useCallback(async (rec) => {
     const key = aiGameKey(rec);
@@ -241,6 +251,8 @@ const RecommendationsTab = ({
     try {
       const data = await getAiSecondOpinion(rec);
       setAiOpinions((prev) => ({ ...prev, [key]: { data } }));
+      // Best-effort persist for scoreboard (needs prior "Save betslip" so rows exist)
+      saveAiOpinionToDb(rec, data).catch(() => {});
     } catch (e) {
       setAiOpinions((prev) => ({ ...prev, [key]: { error: e.message || "Failed to get AI opinion" } }));
     } finally {
@@ -602,7 +614,7 @@ const RecommendationsTab = ({
     return list;
   }, [goalsData, goalsSortKey, goalsSortOrder]);
 
-  // All games by Best Bet confidence (sorted desc); top 22 highlighted
+  // All games by stake-pick confidence (sorted desc); top 22 highlighted
   const allByConfidence = useMemo(() => {
     if (!betRecommendations || betRecommendations.length === 0) return [];
     const conf = (r) => (r.bestBet || r.primary)?.recommendation?.confidence ?? r.confidence ?? 0;
@@ -806,6 +818,19 @@ const RecommendationsTab = ({
 
     return filtered;
   }, [betRecommendations, sortBy, sortOrder, filterConfidence, filterRisk, filterHasAvoid, filterTicketReady]);
+
+  const bestTicket = useMemo(
+    () =>
+      buildBestTicket(betRecommendations, {
+        minSize: BEST_TICKET_MIN,
+        maxSize: BEST_TICKET_MAX,
+      }),
+    [betRecommendations]
+  );
+  const bestTicketKeySet = useMemo(
+    () => new Set(bestTicket.map((r) => bestTicketGameKey(r))),
+    [bestTicket]
+  );
 
   // Sorted list for List tab (clickable column headers)
   const sortedListRecommendations = useMemo(() => {
@@ -1046,7 +1071,7 @@ const RecommendationsTab = ({
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-4">
             <p className="text-gray-400 text-sm">
-              All games sorted by <strong className="text-white">Best Bet confidence</strong>. Top 22 are <span className="bg-green-500/20 text-green-300 px-1 rounded">highlighted</span>.
+              All games sorted by <strong className="text-white">stake-pick confidence</strong>. Top 22 are <span className="bg-green-500/20 text-green-300 px-1 rounded">highlighted</span>.
             </p>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -1087,7 +1112,7 @@ const RecommendationsTab = ({
                       onClick={() => handleTop22ConfidenceSort("topPick")}
                     >
                       <span className="flex items-center gap-1">
-                        Best Bet
+                        Stake pick
                         {top22ConfidenceSortKey === "topPick" && (top22ConfidenceSortOrder === "asc" ? " ↑" : " ↓")}
                       </span>
                     </th>
@@ -1192,7 +1217,7 @@ const RecommendationsTab = ({
                       onClick={() => handleTop22ScoringSort("topPick")}
                     >
                       <span className="flex items-center gap-1">
-                        Best Bet
+                        Stake pick
                         {top22ScoringSortKey === "topPick" && (top22ScoringSortOrder === "asc" ? " ↑" : " ↓")}
                       </span>
                     </th>
@@ -1769,12 +1794,43 @@ const RecommendationsTab = ({
               />
               <span className="text-xs text-gray-400">Ticket-ready only</span>
             </label>
+            <div className="flex items-center gap-1 ml-2 border border-white/15 rounded-md p-0.5">
+              {[
+                { id: "both", label: "Both" },
+                { id: "ticket", label: "Best ticket" },
+                { id: "all", label: "All games" },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setListFocus(opt.id)}
+                  className={`text-[11px] px-2 py-1 rounded ${
+                    listFocus === opt.id
+                      ? "bg-emerald-500/40 text-emerald-100"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
-              onClick={() => fetchAllAi(filteredAndSortedRecommendations)}
-              disabled={aiBulkLoading || filteredAndSortedRecommendations.length === 0}
+              onClick={() =>
+                fetchAllAi(
+                  listFocus === "ticket"
+                    ? bestTicket
+                    : filteredAndSortedRecommendations
+                )
+              }
+              disabled={
+                aiBulkLoading ||
+                (listFocus === "ticket"
+                  ? bestTicket.length === 0
+                  : filteredAndSortedRecommendations.length === 0)
+              }
               className="ml-auto text-xs px-3 py-1.5 rounded-md bg-indigo-500/30 hover:bg-indigo-500/50 text-indigo-100 border border-indigo-400/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Get an AI second opinion for every game shown"
+              title="Get an AI second opinion for games in the current view (uses API quota)"
             >
               {aiBulkLoading
                 ? aiProgress.waiting
@@ -1783,217 +1839,113 @@ const RecommendationsTab = ({
                 : "🤖 Get AI picks (all)"}
             </button>
             <span className="text-xs text-gray-500">
-              {filteredAndSortedRecommendations.length} of {betRecommendations.length}
+              Ticket {bestTicket.length} · Showing{" "}
+              {listFocus === "ticket"
+                ? bestTicket.length
+                : filteredAndSortedRecommendations.length}{" "}
+              of {betRecommendations.length}
             </span>
           </div>
         </div>
       )}
 
       {betRecommendations.length > 0 ? (
-        <div className="space-y-4">
-          {filteredAndSortedRecommendations.map((rec, index) => (
-            <div
-              key={index}
-              className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 overflow-hidden"
-            >
-              {/* Match header: one clear strip */}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-white/5 border-b border-white/10">
-                <div>
-                  <h4 className="text-lg font-bold text-white">{rec.match}</h4>
-                  <p className="text-gray-400 text-sm mt-0.5">{rec.country} · {rec.league}</p>
-                  {rec.performanceNote && (
-                    <div
-                      className={`mt-1.5 px-2 py-1 rounded text-xs ${
-                        rec.performanceNote.tier === "caution"
-                          ? "bg-red-500/20 border border-red-500/30 text-red-300"
-                          : rec.performanceNote.tier === "risky"
-                            ? "bg-amber-500/20 border border-amber-500/30 text-amber-300"
-                            : rec.performanceNote.tier === "strong"
-                              ? "bg-green-500/20 border border-green-500/30 text-green-300"
-                              : "bg-white/10 border border-white/20 text-gray-300"
-                      }`}
-                    >
-                      {rec.performanceNote.tier === "caution" && "⚠️ Caution: "}
-                      {rec.performanceNote.tier === "risky" && "⚠️ "}
-                      {rec.performanceNote.tier === "strong" && "✓ Strong area: "}
-                      Your record in {rec.performanceNote.label}: {(rec.performanceNote.winRate * 100).toFixed(0)}% ({rec.performanceNote.wins}W-{rec.performanceNote.totalBets - rec.performanceNote.wins}L)
-                      {rec.performanceNote.tier === "risky" && " — your bets here have been risky."}
-                    </div>
-                  )}
-                  {rec.lossWarning?.isRisky && (
-                    <div className="mt-1.5 px-2 py-1 rounded bg-red-500/20 border border-red-500/30 text-red-300 text-xs">
-                      🛑 {rec.lossWarning.message}
-                    </div>
-                  )}
-                  {rec.oddsTrapOnBestBet && rec.bestBet?.oddsTrapWarning?.message && (
-                    <div className="mt-1.5 px-2 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs">
-                      ⚠️ {rec.bestBet.oddsTrapWarning.message}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-4 text-sm">
-                  <span className="text-blue-400 font-medium">{rec.confidence.toFixed(1)}%</span>
-                  <span className="text-gray-500">Odds {rec.odds}</span>
-                </div>
+        <div className="space-y-8">
+          {(listFocus === "both" || listFocus === "ticket") && (
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className="text-sm font-semibold text-emerald-200 uppercase tracking-wide">
+                  Best ticket
+                </h4>
+                <p className="text-xs text-gray-500">
+                  {bestTicket.length} games (target {BEST_TICKET_MIN}–
+                  {BEST_TICKET_MAX}) · stronger stake picks, league mix, fewer
+                  traps
+                </p>
               </div>
-
-              <div className="p-4 space-y-3">
-                {/* Your pick: agree / disagree - compact */}
-                {rec.proposedBetVerdict != null && (
-                  <div className={`rounded-lg px-3 py-2 border ${rec.proposedBetVerdict.agrees ? "bg-green-500/10 border-green-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
-                    <div className="text-sm">
-                      <span className="text-gray-400">Your pick: </span>
-                      <span className="text-white font-medium">{rec.proposedBetLabel || "—"}</span>
-                      <span className="text-gray-400"> · </span>
-                      {rec.proposedBetVerdict.agrees ? (
-                        <span className="text-green-400 font-medium">We agree ✓</span>
-                      ) : (
-                        <>
-                          <span className="text-amber-400 font-medium">We disagree</span>
-                          {rec.proposedBetVerdict.reason && (
-                            <p className="mt-1.5 text-gray-300 text-xs leading-relaxed">
-                              {rec.proposedBetVerdict.reason}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Recent form: single compact row on desktop */}
-                {rec.recentFormData && (
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs bg-white/5 rounded-lg px-3 py-2 border border-white/10">
-                    <span className="text-gray-400 font-medium">Form (last 5)</span>
-                    {rec.recentFormData.formSource === "previous_season" && (
-                      <span
-                        className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300"
-                        title="Current-season form was empty; using previous-season match results from Sheet1"
-                      >
-                        Prev season
-                        {rec.recentFormData.formSeasonLabel
-                          ? ` ${rec.recentFormData.formSeasonLabel}`
-                          : ""}
-                      </span>
-                    )}
-                    <span className="text-gray-300">
-                      <span className="text-green-400">{rec.recentFormData.homeWins}W</span>
-                      <span className="text-yellow-400 mx-0.5">{rec.recentFormData.homeDraws}D</span>
-                      <span className="text-red-400">{rec.recentFormData.homeLosses}L</span>
-                      {rec.recentFormData.homeSequence?.length > 0 && (
-                        <span className="ml-1.5 text-gray-500 font-mono">
-                          ({rec.recentFormData.homeSequence.join(" ")})
-                        </span>
-                      )}
-                      <span className="text-gray-500 ml-1">Home</span>
-                    </span>
-                    <span className="text-gray-500">·</span>
-                    <span className="text-gray-300">
-                      <span className="text-green-400">{rec.recentFormData.awayWins}W</span>
-                      <span className="text-yellow-400 mx-0.5">{rec.recentFormData.awayDraws}D</span>
-                      <span className="text-red-400">{rec.recentFormData.awayLosses}L</span>
-                      {rec.recentFormData.awaySequence?.length > 0 && (
-                        <span className="ml-1.5 text-gray-500 font-mono">
-                          ({rec.recentFormData.awaySequence.join(" ")})
-                        </span>
-                      )}
-                      <span className="text-gray-500 ml-1">Away</span>
-                    </span>
-                  </div>
-                )}
-
-                {/* Recommendation cards - clear section */}
-                <div className="pt-1">
-                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 ${filterTicketReady ? "lg:grid-cols-2" : (rec.bestBet ? "lg:grid-cols-4" : "lg:grid-cols-3")}`}>
-                {/* Best Bet Card */}
-                {rec.bestBet && (!filterTicketReady || isCardTicketReady(rec.bestBet)) && (
-                  <div className="rounded-lg border border-white/10 border-l-2 border-l-purple-400/70 bg-white/[0.03] p-2.5">
-                    <div className="text-purple-300 font-semibold text-[10px] uppercase tracking-wide mb-1">⭐ Best bet</div>
-                    <div className="text-white font-medium text-sm">{rec.bestBet.type}</div>
-                    <div className={`text-sm font-semibold ${rec.bestBet.recommendation.bet === "AVOID" ? "text-red-400" : "text-purple-300"}`}>
-                      {rec.bestBet.recommendation.bet === "AVOID"
-                        ? `AVOID (${rec.bestBet.recommendation.confidence.toFixed(1)}%)`
-                        : `${rec.bestBet.recommendation.bet} (${rec.bestBet.recommendation.confidence.toFixed(1)}%)`}
-                    </div>
-                    {rec.bestBet.recommendation.bet === "AVOID" && (
-                      <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.bestBet.recommendation.reasoning}</div>
-                    )}
-                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.bestBet.riskLevel}</div>
-                    {rec.bestBet.oddsPerformance && (
-                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.bestBet.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.bestBet.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
-                        {rec.bestBet.oddsPerformance.message}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Primary Recommendation */}
-                {rec.primary && (!filterTicketReady || isCardTicketReady(rec.primary)) && (
-                  <div className="rounded-lg border border-white/10 border-l-2 border-l-yellow-400/70 bg-white/[0.03] p-2.5">
-                    <div className="text-yellow-300 font-semibold text-[10px] uppercase tracking-wide mb-1">🥇 Primary</div>
-                    <div className="text-white font-medium text-sm">{rec.primary.type}</div>
-                    <div className={`text-sm ${rec.primary.recommendation.bet === "AVOID" ? "text-red-400" : "text-green-400"}`}>
-                      {rec.primary.recommendation.bet === "AVOID" ? `AVOID (${rec.primary.recommendation.confidence.toFixed(1)}%)` : `${rec.primary.recommendation.bet} (${rec.primary.recommendation.confidence.toFixed(1)}%)`}
-                    </div>
-                    {renderCalibratedLine("primary", rec.primary)}
-                    {rec.primary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.primary.recommendation.reasoning}</div>}
-                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.primary.riskLevel}</div>
-                    {rec.primary.oddsPerformance && (
-                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.primary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.primary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
-                        {rec.primary.oddsPerformance.message}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Secondary Recommendation */}
-                {rec.secondary && (!filterTicketReady || isCardTicketReady(rec.secondary)) && (
-                  <div className="rounded-lg border border-white/10 border-l-2 border-l-slate-400/70 bg-white/[0.03] p-2.5">
-                    <div className="text-slate-300 font-semibold text-[10px] uppercase tracking-wide mb-1">🥈 Secondary</div>
-                    <div className="text-white font-medium text-sm">{rec.secondary.type}</div>
-                    <div className={`text-sm ${rec.secondary.recommendation.bet === "AVOID" ? "text-red-400" : "text-blue-400"}`}>
-                      {rec.secondary.recommendation.bet === "AVOID" ? `AVOID (${rec.secondary.recommendation.confidence.toFixed(1)}%)` : `${rec.secondary.recommendation.bet} (${rec.secondary.recommendation.confidence.toFixed(1)}%)`}
-                    </div>
-                    {renderCalibratedLine("secondary", rec.secondary)}
-                    {rec.secondary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.secondary.recommendation.reasoning}</div>}
-                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.secondary.riskLevel}</div>
-                    {rec.secondary.oddsPerformance && (
-                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.secondary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.secondary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
-                        {rec.secondary.oddsPerformance.message}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Tertiary Recommendation */}
-                {rec.tertiary && (!filterTicketReady || isCardTicketReady(rec.tertiary)) && (
-                  <div className="rounded-lg border border-white/10 border-l-2 border-l-orange-400/70 bg-white/[0.03] p-2.5">
-                    <div className="text-orange-300 font-semibold text-[10px] uppercase tracking-wide mb-1">🥉 Tertiary</div>
-                    <div className="text-white font-medium text-sm">{rec.tertiary.type}</div>
-                    <div className={`text-sm ${rec.tertiary.recommendation.bet === "AVOID" ? "text-red-400" : "text-orange-400"}`}>
-                      {rec.tertiary.recommendation.bet === "AVOID" ? `AVOID (${rec.tertiary.recommendation.confidence.toFixed(1)}%)` : `${rec.tertiary.recommendation.bet} (${rec.tertiary.recommendation.confidence.toFixed(1)}%)`}
-                    </div>
-                    {renderCalibratedLine("tertiary", rec.tertiary)}
-                    {rec.tertiary.recommendation.bet === "AVOID" && <div className="text-red-300 text-xs mt-1 leading-relaxed">{rec.tertiary.recommendation.reasoning}</div>}
-                    <div className="text-gray-500 text-[11px] mt-1">Risk: {rec.tertiary.riskLevel}</div>
-                    {rec.tertiary.oddsPerformance && (
-                      <div className={`text-[11px] mt-1.5 px-2 py-0.5 rounded ${rec.tertiary.oddsPerformance.type === "warning" ? "bg-red-500/20 text-red-300" : rec.tertiary.oddsPerformance.type === "no_data" ? "bg-gray-500/20 text-gray-400" : "bg-blue-500/20 text-blue-300"}`}>
-                        {rec.tertiary.oddsPerformance.message}
-                      </div>
-                    )}
-                  </div>
-                )}
-                  </div>
+              {bestTicket.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4">
+                  No strong ticket legs yet. Loosen filters or re-run Analyze.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {bestTicket.map((rec, index) => {
+                    const recKey = aiGameKey(rec) || `ticket-${index}`;
+                    return (
+                      <RecommendationGameCard
+                        key={`ticket-${recKey}`}
+                        rec={rec}
+                        recKey={recKey}
+                        expanded={!!expandedRecKeys[recKey]}
+                        onToggleExpanded={(key) =>
+                          setExpandedRecKeys((prev) => ({
+                            ...prev,
+                            [key]: !prev[key],
+                          }))
+                        }
+                        filterTicketReady={false}
+                        aiResult={aiOpinions[recKey]?.data}
+                        aiError={aiOpinions[recKey]?.error}
+                        aiLoading={!!aiLoadingKeys[recKey]}
+                        onFetchAi={fetchAiForRec}
+                        renderCalibratedLine={renderCalibratedLine}
+                        onTicket
+                        borderClass="border-emerald-400/30"
+                      />
+                    );
+                  })}
                 </div>
-                <AiSecondOpinion
-                  result={aiOpinions[aiGameKey(rec)]?.data}
-                  error={aiOpinions[aiGameKey(rec)]?.error}
-                  loading={!!aiLoadingKeys[aiGameKey(rec)]}
-                  onFetch={() => fetchAiForRec(rec)}
-                />
+              )}
+            </section>
+          )}
+
+          {(listFocus === "both" || listFocus === "all") && (
+            <section className="space-y-3">
+              {listFocus === "both" && (
+                <div className="flex flex-wrap items-baseline justify-between gap-2 pt-2 border-t border-white/10">
+                  <h4 className="text-sm font-semibold text-white/90 uppercase tracking-wide">
+                    All games
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    Full analyzed list · ticket legs marked{" "}
+                    <span className="text-emerald-300">On ticket</span>
+                  </p>
+                </div>
+              )}
+              <div className="space-y-4">
+                {filteredAndSortedRecommendations.map((rec, index) => {
+                  const recKey = aiGameKey(rec) || String(index);
+                  const onTicket = bestTicketKeySet.has(bestTicketGameKey(rec));
+                  return (
+                    <RecommendationGameCard
+                      key={`all-${recKey}`}
+                      rec={rec}
+                      recKey={recKey}
+                      expanded={!!expandedRecKeys[recKey]}
+                      onToggleExpanded={(key) =>
+                        setExpandedRecKeys((prev) => ({
+                          ...prev,
+                          [key]: !prev[key],
+                        }))
+                      }
+                      filterTicketReady={filterTicketReady}
+                      aiResult={aiOpinions[recKey]?.data}
+                      aiError={aiOpinions[recKey]?.error}
+                      aiLoading={!!aiLoadingKeys[recKey]}
+                      onFetchAi={fetchAiForRec}
+                      renderCalibratedLine={renderCalibratedLine}
+                      ticketBadge={listFocus === "both" && onTicket}
+                      borderClass={
+                        onTicket && listFocus === "both"
+                          ? "border-emerald-400/20"
+                          : "border-white/10"
+                      }
+                    />
+                  );
+                })}
               </div>
-            </div>
-          ))}
+            </section>
+          )}
         </div>
       ) : (
         <div className="text-center py-8">

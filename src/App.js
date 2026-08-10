@@ -26,6 +26,20 @@ import {
 } from "./utils/oddsTrapUtils";
 import { getLossWarning } from "./services/lossPatternService";
 import { enrichAnalysisWithPreviousSeasonForm } from "./services/previousSeasonFormService";
+import {
+  applyLossPatternScoreAdjustments,
+  applyOddsBandScoreAdjustments,
+  enforceOddsBandStakePick,
+} from "./services/recommendationLossRulesService";
+import {
+  getEarlySeasonInfo,
+  applyEarlySeasonScoreAdjustments,
+  capEarlySeasonConfidence,
+} from "./services/earlySeasonService";
+import {
+  teamsMatch as teamsMatchNames,
+  isTeamNameBlacklisted,
+} from "./utils/teamNameUtils";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -483,26 +497,8 @@ function App() {
     return { filteredBets, wins, losses, pending, winRate };
   };
 
-  // eslint-disable-next-line no-unused-vars
-  const isTeamBlacklisted = (teamName) => {
-    if (!teamName || !blacklistedTeams.length) return false;
-    const normalizedTeamName = teamName.toLowerCase().trim();
-    return blacklistedTeams.some((blacklistedTeam) => {
-      // Handle both string and object formats
-      const teamToCheck =
-        typeof blacklistedTeam === "string"
-          ? blacklistedTeam
-          : blacklistedTeam.TEAM_NAME;
-
-      if (!teamToCheck) return false;
-
-      const normalizedBlacklistedTeam = teamToCheck.toLowerCase().trim();
-      return (
-        normalizedTeamName.includes(normalizedBlacklistedTeam) ||
-        normalizedBlacklistedTeam.includes(normalizedTeamName)
-      );
-    });
-  };
+  const isTeamBlacklisted = (teamName) =>
+    isTeamNameBlacklisted(teamName, blacklistedTeams);
 
   const getUniqueValues = (field, context = {}) => {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis;
@@ -1696,15 +1692,8 @@ function App() {
    * @param {string} awayTeam - Away team name
    * @returns {{ agrees: boolean, reason?: string } | null} - null if no proposed bet to compare
    */
-  // Helper: teams match if equal (case-insensitive) or one contains the other (for "Man Utd" vs "Manchester United")
-  const teamsMatch = (a, b) => {
-    if (!a || !b) return false;
-    const x = a.toLowerCase().trim();
-    const y = b.toLowerCase().trim();
-    if (x === y) return true;
-    if (x.includes(y) || y.includes(x)) return true;
-    return false;
-  };
+  // Helper: teams match with aliases (e.g. "Man Utd" vs "Manchester United")
+  const teamsMatch = (a, b) => teamsMatchNames(a, b);
 
   const getProposedBetVerdict = (bet, bestBet, homeTeam, awayTeam) => {
     const h = (homeTeam || "").trim();
@@ -2040,6 +2029,7 @@ function App() {
       );
 
       // Use new columns if available, otherwise use old aggregate columns
+      const earlySeasonInfo = getEarlySeasonInfo(bet);
       const recentFormData = {
         homeWins:
           homeFormFromResults.sequence.length > 0
@@ -2069,6 +2059,9 @@ function App() {
         awaySequence: awayFormFromResults.sequence, // Store sequence for sequence-based analysis
         formSource: bet.formSource || "current",
         formSeasonLabel: bet.formSeasonLabel || null,
+        homeGamesPlayed: earlySeasonInfo.homeGamesPlayed,
+        awayGamesPlayed: earlySeasonInfo.awayGamesPlayed,
+        isEarlySeason: earlySeasonInfo.isEarlySeason,
       };
 
       // Analyze straight win recommendation
@@ -2280,8 +2273,55 @@ function App() {
           adjustedScore = adjustedScore * dayMultiplier;
         }
 
-        // Straight Win preference: form-based override + confidence gap rule (affects Primary ranking)
+        // Personal loss-pattern rules first (odds ceiling, trap leagues, away SW, blacklist).
+        // SW preference boosts only apply when loss rules did not cut the market — otherwise
+        // form/gap boosts fight the loss rules and resurrect Straight Wins we meant to demote.
+        const teamBlacklisted = teamForBet
+          ? isTeamBlacklisted(teamForBet)
+          : isTeamBlacklisted(homeTeam) || isTeamBlacklisted(awayTeam);
+        const lossAdj = applyLossPatternScoreAdjustments({
+          type: betOption.type,
+          recommendation: betOption.recommendation,
+          adjustedScore,
+          teamForBet,
+          bet,
+          homeTeam,
+          awayTeam,
+          country,
+          league,
+          isBlacklistedTeam: teamBlacklisted,
+        });
+        const oddsBandAdj = applyOddsBandScoreAdjustments({
+          type: betOption.type,
+          recommendation: betOption.recommendation,
+          adjustedScore: lossAdj.adjustedScore,
+          teamForBet,
+          bet,
+          homeTeam,
+          awayTeam,
+          // Early season: do not treat prev-season form as "overwhelming"
+          recentFormData: earlySeasonInfo.isEarlySeason
+            ? { ...recentFormData, homeWins: 0, awayWins: 0 }
+            : recentFormData,
+        });
+        const earlyAdj = applyEarlySeasonScoreAdjustments({
+          type: betOption.type,
+          recommendation: betOption.recommendation,
+          adjustedScore: oddsBandAdj.adjustedScore,
+          earlySeasonInfo,
+        });
+        let scoreAfterRules = earlyAdj.adjustedScore;
+        const ruleNotes = [
+          ...lossAdj.notes,
+          ...oddsBandAdj.notes,
+          ...earlyAdj.notes,
+        ];
+
+        // SW form/gap boost only when neither loss rules nor odds-band cut the market
+        // (and not early season — form sample is too thin)
         if (
+          !earlySeasonInfo.isEarlySeason &&
+          ruleNotes.length === 0 &&
           betOption.type === "Straight Win" &&
           betOption.recommendation.bet !== "AVOID" &&
           betOption.recommendation.bet !== "No clear winner" &&
@@ -2299,7 +2339,6 @@ function App() {
             doubleChanceRec?.recommendation?.wilsonWinRate ??
             0;
 
-          // Form-based override: favored team 3+ wins in last 5, opponent 0-2 wins
           const favoredWins =
             teamForBet === homeTeam
               ? recentFormData.homeWins || 0
@@ -2309,21 +2348,21 @@ function App() {
               ? recentFormData.awayWins || 0
               : recentFormData.homeWins || 0;
           if (favoredWins >= 3 && opponentWins <= 2) {
-            adjustedScore *= 1.25; // 25% boost so Straight Win can become Primary
+            scoreAfterRules *= 1.25;
           }
 
-          // Confidence gap rule: Straight Win within 20% of Double Chance (prefer Straight Win for value)
           const gap = doubleChanceConf - straightWinConf;
           if (straightWinConf >= 60 && gap >= 0 && gap <= 20) {
-            const gapBoost = 1.1 + (20 - gap) * 0.01; // 10-30% boost
-            adjustedScore *= gapBoost;
+            const gapBoost = 1.1 + (20 - gap) * 0.01;
+            scoreAfterRules *= gapBoost;
           }
         }
 
         return {
           ...betOption,
-          adjustedScore: adjustedScore,
-          teamForBet: teamForBet, // Store for later use in Best Bet selection
+          adjustedScore: scoreAfterRules,
+          teamForBet: teamForBet, // Store for later use in Best Bet / stake pick
+          lossRuleNotes: ruleNotes,
         };
       });
 
@@ -2431,45 +2470,8 @@ function App() {
         bestBetScore =
           bestBetScore * Math.max(0.9, Math.min(1.1, opponentStrengthImpact));
 
-        // Straight Win preference rules: favor Straight Win when form/confidence support it
-        if (
-          betOption.type === "Straight Win" &&
-          betOption.recommendation.bet !== "AVOID" &&
-          betOption.recommendation.bet !== "No clear winner" &&
-          teamForBet
-        ) {
-          const straightWinConf =
-            betOption.recommendation.confidence ??
-            betOption.recommendation.wilsonWinRate ??
-            0;
-          const doubleChanceRec = rankedBets.find(
-            (r) => r.type === "Double Chance",
-          );
-          const doubleChanceConf =
-            doubleChanceRec?.recommendation?.confidence ??
-            doubleChanceRec?.recommendation?.wilsonWinRate ??
-            0;
-
-          // Form-based override: favored team 3+ wins, opponent 0-2 wins
-          const favoredWins =
-            teamForBet === homeTeam
-              ? recentFormData.homeWins || 0
-              : recentFormData.awayWins || 0;
-          const opponentWins =
-            teamForBet === homeTeam
-              ? recentFormData.awayWins || 0
-              : recentFormData.homeWins || 0;
-          if (favoredWins >= 3 && opponentWins <= 2) {
-            bestBetScore *= 1.2; // 20% boost for Best Bet selection
-          }
-
-          // Confidence gap rule: Straight Win within 20% of Double Chance
-          const gap = doubleChanceConf - straightWinConf;
-          if (straightWinConf >= 60 && gap >= 0 && gap <= 20) {
-            const gapBoost = 1.08 + (20 - gap) * 0.008; // 8-24% boost
-            bestBetScore *= gapBoost;
-          }
-        }
+        // No second Straight Win preference here — adjustedScore already applied
+        // loss rules (+ gated SW boost). Re-boosting SW would undo those cuts.
 
         return {
           ...betOption,
@@ -2478,10 +2480,10 @@ function App() {
         };
       });
 
-      // Sort by best bet score (with stable tie-breaker: Straight Win > Double Chance > Double Chance 12 > Over/Under)
+      // Sort by stake-pick score (tie-break: safer markets slightly preferred)
       const typeOrder = {
-        "Straight Win": 0,
-        "Double Chance": 1,
+        "Double Chance": 0,
+        "Straight Win": 1,
         "Double Chance 12": 2,
         "Over/Under": 3,
       };
@@ -2490,7 +2492,20 @@ function App() {
         if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
         return (typeOrder[a.type] ?? 99) - (typeOrder[b.type] ?? 99);
       });
-      const bestBet = bestBetScores[0];
+      const bandPick = enforceOddsBandStakePick({
+        stakePick: bestBetScores[0],
+        rankedOptions: bestBetScores,
+        bet,
+        homeTeam,
+        awayTeam,
+        recentFormData,
+      });
+      const bestBet = bandPick.stakePick;
+      if (bandPick.notes.length > 0) {
+        bestBet.lossRuleNotes = [
+          ...new Set([...(bestBet.lossRuleNotes || []), ...bandPick.notes]),
+        ];
+      }
 
       // Add odds performance notification and odds trap display to best bet (confidence already reduced if bestBet shares ref with primary)
       addOddsTrapToCard(bestBet, false);
@@ -2572,16 +2587,59 @@ function App() {
         });
       }
 
+      const lossRuleNotes = [
+        ...new Set(
+          [bestBet, primary, secondary, tertiary]
+            .filter(Boolean)
+            .flatMap((c) => c.lossRuleNotes || [])
+        ),
+      ];
+
+      // Blacklist notice only — still show the game and stake pick
+      const blacklistedSides = [];
+      if (isTeamBlacklisted(homeTeam)) blacklistedSides.push(homeTeam);
+      if (isTeamBlacklisted(awayTeam)) blacklistedSides.push(awayTeam);
+      const blacklistWarning =
+        blacklistedSides.length > 0
+          ? {
+              teams: blacklistedSides,
+              message: `Blacklisted: ${blacklistedSides.join(" · ")}`,
+            }
+          : null;
+
+      // Stake pick = bestBet (single decision). Primary/Secondary/Tertiary are alternatives.
+      const stakeConfidence = capEarlySeasonConfidence(
+        bestBet?.recommendation?.confidence ?? confidence,
+        earlySeasonInfo,
+      );
+      if (
+        earlySeasonInfo.isEarlySeason &&
+        bestBet?.recommendation &&
+        typeof bestBet.recommendation.confidence === "number"
+      ) {
+        bestBet.recommendation = {
+          ...bestBet.recommendation,
+          confidence: capEarlySeasonConfidence(
+            bestBet.recommendation.confidence,
+            earlySeasonInfo,
+          ),
+        };
+      }
+
       return {
         rank: index + 1,
         match: `${bet.HOME_TEAM} vs ${bet.AWAY_TEAM}`,
+        date: bet.DATE,
+        home_team: bet.HOME_TEAM,
+        away_team: bet.AWAY_TEAM,
         league: bet.LEAGUE,
         country: bet.COUNTRY,
         bestBet: bestBet,
         primary: primary,
         secondary: secondary,
         tertiary: tertiary,
-        confidence: confidence,
+        confidence: stakeConfidence,
+        earlySeason: earlySeasonInfo.isEarlySeason ? earlySeasonInfo : null,
         odds: displayOdds,
         recommendationScore: recommendationScore,
         recentFormData: recentFormData,
@@ -2591,6 +2649,8 @@ function App() {
         countryPerformance: countryPerformance,
         performanceNote: performanceNote,
         lossWarning: lossWarning,
+        lossRuleNotes,
+        blacklistWarning,
         oddsTrapOnBestBet: bestBet?.oddsTrapWarning?.isTrap ?? false,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
@@ -4536,6 +4596,11 @@ function App() {
               full.tertiary?.recommendation?.reasoning ??
               full.tertiary?.recommendation?.bet ??
               null,
+            best_bet_recommendation: full.bestBet?.recommendation?.bet ?? null,
+            best_bet_confidence:
+              full.bestBet?.recommendation?.confidence ?? null,
+            best_bet_type: full.bestBet?.type ?? null,
+            loss_rules_applied: (full.lossRuleNotes || []).length > 0,
           };
         })
         .filter(Boolean);
