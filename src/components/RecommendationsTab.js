@@ -1865,6 +1865,17 @@ const RecommendationsTab = ({
                 {rec.recentFormData && (
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs bg-white/5 rounded-lg px-3 py-2 border border-white/10">
                     <span className="text-gray-400 font-medium">Form (last 5)</span>
+                    {rec.recentFormData.formSource === "previous_season" && (
+                      <span
+                        className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300"
+                        title="Current-season form was empty; using previous-season match results from Sheet1"
+                      >
+                        Prev season
+                        {rec.recentFormData.formSeasonLabel
+                          ? ` ${rec.recentFormData.formSeasonLabel}`
+                          : ""}
+                      </span>
+                    )}
                     <span className="text-gray-300">
                       <span className="text-green-400">{rec.recentFormData.homeWins}W</span>
                       <span className="text-yellow-400 mx-0.5">{rec.recentFormData.homeDraws}D</span>

@@ -25,6 +25,7 @@ import {
   ODDS_TRAP_CONFIDENCE_PENALTY,
 } from "./utils/oddsTrapUtils";
 import { getLossWarning } from "./services/lossPatternService";
+import { enrichAnalysisWithPreviousSeasonForm } from "./services/previousSeasonFormService";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
@@ -1907,13 +1908,22 @@ function App() {
     const betTypeMultipliers = calculateBetTypeMultipliers();
 
     // Include all bets (including "Avoid" ones) and sort by confidence
-    const validBets = analysisResults.sort(
+    const sortedBets = analysisResults.sort(
       (a, b) => b.confidenceScore - a.confidenceScore,
     );
 
+    // Early season: if Sheet3 has no LAST_5 form, fill from previous-season Sheet1 scores
+    const { results: enrichedBets, filledCount } =
+      enrichAnalysisWithPreviousSeasonForm(sortedBets, bets);
+    if (filledCount > 0) {
+      debugLog(
+        `Filled previous-season form for ${filledCount} game(s) missing current-season form`,
+      );
+    }
+
     // Filter out bets with no form data (both teams have 0W 0D 0L)
     // This prevents showing recommendations for games with insufficient data
-    let betsWithFormData = validBets.filter((bet) => {
+    let betsWithFormData = enrichedBets.filter((bet) => {
       // Check if we have form data from new columns
       const hasHomeSequence =
         bet.LAST_5_RESULT_HOME ||
@@ -2057,6 +2067,8 @@ function App() {
             ? awayFormFromResults.losses
             : parseInt(bet.LAST_5_LOSSES_AWAY) || 0,
         awaySequence: awayFormFromResults.sequence, // Store sequence for sequence-based analysis
+        formSource: bet.formSource || "current",
+        formSeasonLabel: bet.formSeasonLabel || null,
       };
 
       // Analyze straight win recommendation
