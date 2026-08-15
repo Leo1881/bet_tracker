@@ -393,19 +393,3 @@ export const toggleSlipExpansion = (expandedSlips, betId) => {
   }
   return newExpanded;
 };
-
-/**
- * Toggle expansion state for teams
- * @param {Set} expandedBetTypes - Current expanded bet types
- * @param {string} team - Team to toggle
- * @returns {Set} New expanded bet types set
- */
-export const toggleTeamExpansion = (expandedBetTypes, team) => {
-  const newExpanded = new Set(expandedBetTypes);
-  if (newExpanded.has(team)) {
-    newExpanded.delete(team);
-  } else {
-    newExpanded.add(team);
-  }
-  return newExpanded;
-};

@@ -12,6 +12,7 @@ const AnalyticsTab = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("");
   const [selectedLeague, setSelectedLeague] = useState("");
+  const [minBets, setMinBets] = useState(5);
 
   // Get all unique countries and leagues for filters
   const allData = getSortedAnalyticsData();
@@ -45,8 +46,13 @@ const AnalyticsTab = ({
       filtered = filtered.filter((team) => team.league === selectedLeague);
     }
 
+    // Min settled bets (Total Bets column)
+    filtered = filtered.filter(
+      (team) => Number(team.total ?? team.totalBets ?? 0) >= minBets
+    );
+
     return filtered;
-  }, [allData, searchTerm, selectedCountry, selectedLeague]);
+  }, [allData, searchTerm, selectedCountry, selectedLeague, minBets]);
 
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
@@ -101,13 +107,33 @@ const AnalyticsTab = ({
             </select>
           </div>
 
+          <div className="flex-1 min-w-48">
+            <select
+              value={minBets}
+              onChange={(e) => setMinBets(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title="Only show teams with at least this many settled bets"
+            >
+              <option value={5} className="bg-gray-800">
+                At least 5 bets
+              </option>
+              <option value={10} className="bg-gray-800">
+                At least 10 bets
+              </option>
+              <option value={20} className="bg-gray-800">
+                At least 20 bets
+              </option>
+            </select>
+          </div>
+
           {/* Clear Filters Button */}
-          {(searchTerm || selectedCountry || selectedLeague) && (
+          {(searchTerm || selectedCountry || selectedLeague || minBets !== 5) && (
             <button
               onClick={() => {
                 setSearchTerm("");
                 setSelectedCountry("");
                 setSelectedLeague("");
+                setMinBets(5);
               }}
               className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-red-400 transition-colors"
             >
@@ -119,6 +145,7 @@ const AnalyticsTab = ({
         {/* Results Count */}
         <div className="text-sm text-gray-400">
           Showing {filteredData.length} of {allData.length} teams
+          {minBets > 5 ? ` (≥${minBets} settled bets)` : ""}
         </div>
       </div>
       <div className="overflow-x-auto">

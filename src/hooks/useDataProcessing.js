@@ -14,7 +14,6 @@ import {
   getUniqueValues,
   toggleOddsRangeExpansion,
   toggleSlipExpansion,
-  toggleTeamExpansion,
 } from "../services/dataProcessingService";
 
 /**
@@ -58,10 +57,6 @@ export const useDataProcessing = (bets, filters) => {
     return toggleSlipExpansion(expandedSlips, betId);
   }, []);
 
-  const toggleTeam = useCallback((expandedBetTypes, team) => {
-    return toggleTeamExpansion(expandedBetTypes, team);
-  }, []);
-
   return {
     getDeduplicatedBetsData,
     getDeduplicatedFilteredBetsData,
@@ -69,7 +64,6 @@ export const useDataProcessing = (bets, filters) => {
     getUniqueValuesForField,
     toggleOddsRange,
     toggleSlip,
-    toggleTeam,
     // Direct service functions
     getSortedData,
     getSortedLeagueData,

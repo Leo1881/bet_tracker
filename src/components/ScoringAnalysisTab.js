@@ -94,6 +94,9 @@ const ScoringAnalysisTab = ({
           ).toFixed(1),
           avgConceded: stat.homeAvgGoalsConceded || stat.avgGoalsConceded,
           totalGames: stat.homeGames || stat.totalGames,
+          recentGames: stat.recentHomeGames || 0,
+          recentAvgGoals: stat.recentHomeAvgGoals || "0.00",
+          recentOver2_5Rate: stat.recentHomeOver2_5Rate || "0.0",
         };
       case "away":
         return {
@@ -108,6 +111,9 @@ const ScoringAnalysisTab = ({
           ).toFixed(1),
           avgConceded: stat.awayAvgGoalsConceded || stat.avgGoalsConceded,
           totalGames: stat.awayGames || stat.totalGames,
+          recentGames: stat.recentAwayGames || 0,
+          recentAvgGoals: stat.recentAwayAvgGoals || "0.00",
+          recentOver2_5Rate: stat.recentAwayOver2_5Rate || "0.0",
         };
       default:
         return {
@@ -120,8 +126,17 @@ const ScoringAnalysisTab = ({
           under2_5Rate: (100 - parseFloat(stat.over2_5Rate)).toFixed(1),
           avgConceded: stat.avgGoalsConceded,
           totalGames: stat.totalGames,
+          recentGames: stat.recentGames || 0,
+          recentAvgGoals: stat.recentAvgGoals || "0.00",
+          recentOver2_5Rate: stat.recentOver2_5Rate || "0.0",
         };
     }
+  };
+
+  const formatRateWithSample = (rate, games) => {
+    const n = Number(games) || 0;
+    if (!n) return `${rate ?? 0}% (0)`;
+    return `${rate}% (${n})`;
   };
 
   const getLeagueStats = (stat) => {
@@ -275,6 +290,14 @@ const ScoringAnalysisTab = ({
             aValue = parseFloat(aView.over3_5Rate) || 0;
             bValue = parseFloat(bView.over3_5Rate) || 0;
             break;
+          case "recentAvgGoals":
+            aValue = parseFloat(aView.recentAvgGoals) || 0;
+            bValue = parseFloat(bView.recentAvgGoals) || 0;
+            break;
+          case "recentOver2_5Rate":
+            aValue = parseFloat(aView.recentOver2_5Rate) || 0;
+            bValue = parseFloat(bView.recentOver2_5Rate) || 0;
+            break;
           case "leagueAvg":
             aValue = parseFloat(aLeague.leagueAvg) || 0;
             bValue = parseFloat(bLeague.leagueAvg) || 0;
@@ -322,7 +345,9 @@ const ScoringAnalysisTab = ({
               {bets
                 ? bets.filter((bet) => bet.HOME_SCORE && bet.AWAY_SCORE).length
                 : 0}{" "}
-              games with scores
+              games with scores. Over rates show sample size in brackets, e.g.
+              68% (14). Recent = last 10 games for the current view
+              (overall/home/away).
             </p>
           </div>
 
@@ -698,6 +723,34 @@ const ScoringAnalysisTab = ({
                   </th>
                   <th
                     className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("recentAvgGoals")}
+                    title="Average total goals in last 10 games (for current view)"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Recent Avg</span>
+                      {sortConfig.key === "recentAvgGoals" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
+                    onClick={() => handleSort("recentOver2_5Rate")}
+                    title="Over 2.5 rate in last 10 games (for current view)"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>Recent O2.5</span>
+                      {sortConfig.key === "recentOver2_5Rate" && (
+                        <span className="ml-2">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-2 text-left text-white font-semibold cursor-pointer hover:bg-white/10 transition-colors"
                     onClick={() => handleSort("leagueAvg")}
                   >
                     <div className="flex items-center justify-between">
@@ -785,7 +838,12 @@ const ScoringAnalysisTab = ({
                       <td className="px-4 py-3 text-green-300 font-mono">
                         <div className="flex flex-col">
                           <div className="flex items-center space-x-2">
-                            <span>{viewData.over1_5Rate}%</span>
+                            <span>
+                              {formatRateWithSample(
+                                viewData.over1_5Rate,
+                                viewData.totalGames
+                              )}
+                            </span>
                             <div className="flex-1 bg-gray-700 rounded-full h-2">
                               <div
                                 className="bg-green-400 h-2 rounded-full transition-all duration-300"
@@ -817,7 +875,12 @@ const ScoringAnalysisTab = ({
                       <td className="px-4 py-3 text-yellow-300 font-mono">
                         <div className="flex flex-col">
                           <div className="flex items-center space-x-2">
-                            <span>{viewData.over2_5Rate}%</span>
+                            <span>
+                              {formatRateWithSample(
+                                viewData.over2_5Rate,
+                                viewData.totalGames
+                              )}
+                            </span>
                             <div className="flex-1 bg-gray-700 rounded-full h-2">
                               <div
                                 className="bg-yellow-400 h-2 rounded-full transition-all duration-300"
@@ -849,7 +912,12 @@ const ScoringAnalysisTab = ({
                       <td className="px-4 py-3 text-orange-300 font-mono">
                         <div className="flex flex-col">
                           <div className="flex items-center space-x-2">
-                            <span>{viewData.over3_5Rate}%</span>
+                            <span>
+                              {formatRateWithSample(
+                                viewData.over3_5Rate,
+                                viewData.totalGames
+                              )}
+                            </span>
                             <div className="flex-1 bg-gray-700 rounded-full h-2">
                               <div
                                 className="bg-orange-400 h-2 rounded-full transition-all duration-300"
@@ -877,6 +945,20 @@ const ScoringAnalysisTab = ({
                             })()}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-cyan-300 font-mono">
+                        <div className="flex flex-col">
+                          <span>{viewData.recentAvgGoals}</span>
+                          <span className="text-xs text-gray-400">
+                            last {viewData.recentGames || 0}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-cyan-200 font-mono">
+                        {formatRateWithSample(
+                          viewData.recentOver2_5Rate,
+                          viewData.recentGames
+                        )}
                       </td>
 
                       <td className="px-4 py-3 text-purple-300 font-mono">
@@ -941,7 +1023,10 @@ const ScoringAnalysisTab = ({
                           </div>
                           <div className="text-right">
                             <div className="text-green-300 font-mono text-sm">
-                              {viewData.over2_5Rate}%
+                              {formatRateWithSample(
+                                viewData.over2_5Rate,
+                                viewData.totalGames
+                              )}
                             </div>
                             <div className="text-xs text-gray-400">
                               {viewData.avgGoals} goals
@@ -991,7 +1076,10 @@ const ScoringAnalysisTab = ({
                           </div>
                           <div className="text-right">
                             <div className="text-red-300 font-mono text-sm">
-                              {viewData.over2_5Rate}%
+                              {formatRateWithSample(
+                                viewData.over2_5Rate,
+                                viewData.totalGames
+                              )}
                             </div>
                             <div className="text-xs text-gray-400">
                               {viewData.avgGoals} goals
@@ -1048,7 +1136,11 @@ const ScoringAnalysisTab = ({
                               {viewData.avgGoals}
                             </div>
                             <div className="text-xs text-gray-400">
-                              {viewData.over2_5Rate}% O2.5
+                              {formatRateWithSample(
+                                viewData.over2_5Rate,
+                                viewData.totalGames
+                              )}{" "}
+                              O2.5
                             </div>
                           </div>
                         </div>
@@ -1216,7 +1308,9 @@ const ScoringAnalysisTab = ({
 
           {/* Mobile Card View */}
           <div className="block md:hidden space-y-4">
-            {getSortedData().map((stat, index) => (
+            {getSortedData().map((stat, index) => {
+              const viewData = getViewModeData(stat);
+              return (
               <div
                 key={index}
                 className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-colors"
@@ -1243,7 +1337,7 @@ const ScoringAnalysisTab = ({
                       Confidence
                     </span>
                     {(() => {
-                      const confidence = getConfidenceLevel(stat.totalGames);
+                      const confidence = getConfidenceLevel(viewData.totalGames);
                       return (
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium ${confidence.bg}`}
@@ -1258,7 +1352,7 @@ const ScoringAnalysisTab = ({
                       Games
                     </span>
                     <span className="text-gray-300 text-sm">
-                      {stat.totalGames}
+                      {viewData.totalGames}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1266,7 +1360,19 @@ const ScoringAnalysisTab = ({
                       Total Goals Avg
                     </span>
                     <span className="text-blue-300 font-mono text-sm">
-                      {stat.avgGoals}
+                      {viewData.avgGoals}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Recent Avg / O2.5
+                    </span>
+                    <span className="text-cyan-300 font-mono text-sm">
+                      {viewData.recentAvgGoals} ·{" "}
+                      {formatRateWithSample(
+                        viewData.recentOver2_5Rate,
+                        viewData.recentGames
+                      )}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1274,7 +1380,7 @@ const ScoringAnalysisTab = ({
                       Scored Avg
                     </span>
                     <span className="text-green-300 font-mono text-sm">
-                      {stat.avgGoalsScored}
+                      {viewData.avgGoalsScored}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1282,7 +1388,7 @@ const ScoringAnalysisTab = ({
                       Goals Conceded
                     </span>
                     <span className="text-rose-300 font-mono text-sm">
-                      {stat.avgGoalsConceded}
+                      {viewData.avgConceded}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1311,100 +1417,68 @@ const ScoringAnalysisTab = ({
                     <div className="text-center">
                       <div className="text-xs text-gray-400 mb-1">Over 1.5</div>
                       <div className="text-green-300 font-mono text-sm mb-1">
-                        {stat.over1_5Rate}%
+                        {formatRateWithSample(
+                          viewData.over1_5Rate,
+                          viewData.totalGames
+                        )}
                       </div>
                       <div className="w-full bg-gray-700 rounded-full h-1 mb-1">
                         <div
                           className="bg-green-400 h-1 rounded-full transition-all duration-300"
                           style={{
                             width: `${Math.min(
-                              parseFloat(stat.over1_5Rate),
+                              parseFloat(viewData.over1_5Rate),
                               100
                             )}%`,
                           }}
                         ></div>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Wilson:{" "}
-                        {(() => {
-                          const over1_5Games = Math.round(
-                            (parseFloat(stat.over1_5Rate) / 100) *
-                              stat.totalGames
-                          );
-                          const wilsonScore = calculateWilsonScore(
-                            over1_5Games,
-                            stat.totalGames
-                          );
-                          return `${(wilsonScore * 100).toFixed(1)}%`;
-                        })()}
-                      </div>
                     </div>
                     <div className="text-center">
                       <div className="text-xs text-gray-400 mb-1">Over 2.5</div>
                       <div className="text-yellow-300 font-mono text-sm mb-1">
-                        {stat.over2_5Rate}%
+                        {formatRateWithSample(
+                          viewData.over2_5Rate,
+                          viewData.totalGames
+                        )}
                       </div>
                       <div className="w-full bg-gray-700 rounded-full h-1 mb-1">
                         <div
                           className="bg-yellow-400 h-1 rounded-full transition-all duration-300"
                           style={{
                             width: `${Math.min(
-                              parseFloat(stat.over2_5Rate),
+                              parseFloat(viewData.over2_5Rate),
                               100
                             )}%`,
                           }}
                         ></div>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Wilson:{" "}
-                        {(() => {
-                          const over2_5Games = Math.round(
-                            (parseFloat(stat.over2_5Rate) / 100) *
-                              stat.totalGames
-                          );
-                          const wilsonScore = calculateWilsonScore(
-                            over2_5Games,
-                            stat.totalGames
-                          );
-                          return `${(wilsonScore * 100).toFixed(1)}%`;
-                        })()}
-                      </div>
                     </div>
                     <div className="text-center">
                       <div className="text-xs text-gray-400 mb-1">Over 3.5</div>
                       <div className="text-orange-300 font-mono text-sm mb-1">
-                        {stat.over3_5Rate}%
+                        {formatRateWithSample(
+                          viewData.over3_5Rate,
+                          viewData.totalGames
+                        )}
                       </div>
                       <div className="w-full bg-gray-700 rounded-full h-1 mb-1">
                         <div
                           className="bg-orange-400 h-1 rounded-full transition-all duration-300"
                           style={{
                             width: `${Math.min(
-                              parseFloat(stat.over3_5Rate),
+                              parseFloat(viewData.over3_5Rate),
                               100
                             )}%`,
                           }}
                         ></div>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Wilson:{" "}
-                        {(() => {
-                          const over3_5Games = Math.round(
-                            (parseFloat(stat.over3_5Rate) / 100) *
-                              stat.totalGames
-                          );
-                          const wilsonScore = calculateWilsonScore(
-                            over3_5Games,
-                            stat.totalGames
-                          );
-                          return `${(wilsonScore * 100).toFixed(1)}%`;
-                        })()}
-                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (

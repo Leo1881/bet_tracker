@@ -97,7 +97,6 @@ export const useAppState = () => {
   );
   const [expandedOddsRanges, setExpandedOddsRanges] = useState(new Set());
   const [expandedSlips, setExpandedSlips] = useState(new Set());
-  const [expandedBetTypes, setExpandedBetTypes] = useState(new Set());
 
   // Analysis state
   const [scoringAnalysis, setScoringAnalysis] = useState(null);
@@ -296,8 +295,6 @@ export const useAppState = () => {
     setExpandedOddsRanges,
     expandedSlips,
     setExpandedSlips,
-    expandedBetTypes,
-    setExpandedBetTypes,
 
     // Analysis state
     scoringAnalysis,

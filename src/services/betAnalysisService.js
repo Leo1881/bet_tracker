@@ -464,6 +464,83 @@ export const analyzeScoringPatterns = async (
       "bets"
     );
 
+    const RECENT_WINDOW = 10;
+
+    const createEmptyTeamStats = (team, country, league) => ({
+      team,
+      country,
+      league,
+      totalGames: 0,
+      totalGoals: 0,
+      avgGoals: 0,
+      totalGoalsScored: 0,
+      avgGoalsScored: 0,
+      totalGoalsConceded: 0,
+      avgGoalsConceded: 0,
+      over1_5Count: 0,
+      over2_5Count: 0,
+      over3_5Count: 0,
+      over4_5Count: 0,
+      over5_5Count: 0,
+      over1_5Rate: 0,
+      over2_5Rate: 0,
+      over3_5Rate: 0,
+      over4_5Rate: 0,
+      over5_5Rate: 0,
+      homeGames: 0,
+      awayGames: 0,
+      homeGoalsScored: 0,
+      awayGoalsScored: 0,
+      homeGoalsConceded: 0,
+      awayGoalsConceded: 0,
+      homeOver1_5Count: 0,
+      homeOver2_5Count: 0,
+      homeOver3_5Count: 0,
+      homeOver4_5Count: 0,
+      homeOver5_5Count: 0,
+      awayOver1_5Count: 0,
+      awayOver2_5Count: 0,
+      awayOver3_5Count: 0,
+      awayOver4_5Count: 0,
+      awayOver5_5Count: 0,
+      games: [],
+    });
+
+    const computeRecentBlock = (games, venueFilter = null) => {
+      let list = Array.isArray(games) ? [...games] : [];
+      if (venueFilter) {
+        list = list.filter((g) => g.venue === venueFilter);
+      }
+      list.sort((a, b) => (b.sortKey || 0) - (a.sortKey || 0));
+      const recent = list.slice(0, RECENT_WINDOW);
+      const n = recent.length;
+      if (n === 0) {
+        return {
+          recentGames: 0,
+          recentAvgGoals: "0.00",
+          recentOver1_5Rate: "0.0",
+          recentOver2_5Rate: "0.0",
+          recentOver3_5Rate: "0.0",
+        };
+      }
+      const totalGoals = recent.reduce((sum, g) => sum + g.totalGoals, 0);
+      const o15 = recent.filter((g) => g.over1_5).length;
+      const o25 = recent.filter((g) => g.over2_5).length;
+      const o35 = recent.filter((g) => g.over3_5).length;
+      return {
+        recentGames: n,
+        recentAvgGoals: (totalGoals / n).toFixed(2),
+        recentOver1_5Rate: ((o15 / n) * 100).toFixed(1),
+        recentOver2_5Rate: ((o25 / n) * 100).toFixed(1),
+        recentOver3_5Rate: ((o35 / n) * 100).toFixed(1),
+      };
+    };
+
+    const parseGameSortKey = (dateStr) => {
+      const t = Date.parse(dateStr);
+      return Number.isFinite(t) ? t : 0;
+    };
+
     // Analyze by team and league using unique games only
     const teamLeagueMap = new Map();
 
@@ -475,56 +552,21 @@ export const analyzeScoringPatterns = async (
       const homeScore = game.homeScore;
       const awayScore = game.awayScore;
 
-      // No need to validate again - already validated when creating unique games
-
       const totalGoals = homeScore + awayScore;
       const hasOver1_5 = totalGoals > 1;
       const hasOver2_5 = totalGoals > 2;
       const hasOver3_5 = totalGoals > 3;
       const hasOver4_5 = totalGoals > 4;
       const hasOver5_5 = totalGoals > 5;
+      const sortKey = parseGameSortKey(game.date);
 
       // Analyze home team
       const homeKey = `${homeTeam}-${country}-${league}`;
       if (!teamLeagueMap.has(homeKey)) {
-        teamLeagueMap.set(homeKey, {
-          team: homeTeam,
-          country: country,
-          league: league,
-          totalGames: 0,
-          totalGoals: 0,
-          avgGoals: 0,
-          totalGoalsScored: 0,
-          avgGoalsScored: 0,
-          totalGoalsConceded: 0,
-          avgGoalsConceded: 0,
-          over1_5Count: 0,
-          over2_5Count: 0,
-          over3_5Count: 0,
-          over4_5Count: 0,
-          over5_5Count: 0,
-          over1_5Rate: 0,
-          over2_5Rate: 0,
-          over3_5Rate: 0,
-          over4_5Rate: 0,
-          over5_5Rate: 0,
-          homeGames: 0,
-          awayGames: 0,
-          homeGoalsScored: 0,
-          awayGoalsScored: 0,
-          homeGoalsConceded: 0,
-          awayGoalsConceded: 0,
-          homeOver1_5Count: 0,
-          homeOver2_5Count: 0,
-          homeOver3_5Count: 0,
-          homeOver4_5Count: 0,
-          homeOver5_5Count: 0,
-          awayOver1_5Count: 0,
-          awayOver2_5Count: 0,
-          awayOver3_5Count: 0,
-          awayOver4_5Count: 0,
-          awayOver5_5Count: 0,
-        });
+        teamLeagueMap.set(
+          homeKey,
+          createEmptyTeamStats(homeTeam, country, league)
+        );
       }
       const homeStats = teamLeagueMap.get(homeKey);
       homeStats.totalGames++;
@@ -544,48 +586,23 @@ export const analyzeScoringPatterns = async (
       homeStats.homeOver4_5Count += hasOver4_5 ? 1 : 0;
       homeStats.homeOver5_5Count += hasOver5_5 ? 1 : 0;
       homeStats.homeGames++;
+      homeStats.games.push({
+        date: game.date,
+        sortKey,
+        venue: "home",
+        totalGoals,
+        over1_5: hasOver1_5,
+        over2_5: hasOver2_5,
+        over3_5: hasOver3_5,
+      });
 
       // Analyze away team
       const awayKey = `${awayTeam}-${country}-${league}`;
       if (!teamLeagueMap.has(awayKey)) {
-        teamLeagueMap.set(awayKey, {
-          team: awayTeam,
-          country: country,
-          league: league,
-          totalGames: 0,
-          totalGoals: 0,
-          avgGoals: 0,
-          totalGoalsScored: 0,
-          avgGoalsScored: 0,
-          totalGoalsConceded: 0,
-          avgGoalsConceded: 0,
-          over1_5Count: 0,
-          over2_5Count: 0,
-          over3_5Count: 0,
-          over4_5Count: 0,
-          over5_5Count: 0,
-          over1_5Rate: 0,
-          over2_5Rate: 0,
-          over3_5Rate: 0,
-          over4_5Rate: 0,
-          over5_5Rate: 0,
-          homeGames: 0,
-          awayGames: 0,
-          homeGoalsScored: 0,
-          awayGoalsScored: 0,
-          homeGoalsConceded: 0,
-          awayGoalsConceded: 0,
-          homeOver1_5Count: 0,
-          homeOver2_5Count: 0,
-          homeOver3_5Count: 0,
-          homeOver4_5Count: 0,
-          homeOver5_5Count: 0,
-          awayOver1_5Count: 0,
-          awayOver2_5Count: 0,
-          awayOver3_5Count: 0,
-          awayOver4_5Count: 0,
-          awayOver5_5Count: 0,
-        });
+        teamLeagueMap.set(
+          awayKey,
+          createEmptyTeamStats(awayTeam, country, league)
+        );
       }
       const awayStats = teamLeagueMap.get(awayKey);
       awayStats.totalGames++;
@@ -605,101 +622,134 @@ export const analyzeScoringPatterns = async (
       awayStats.awayOver4_5Count += hasOver4_5 ? 1 : 0;
       awayStats.awayOver5_5Count += hasOver5_5 ? 1 : 0;
       awayStats.awayGames++;
+      awayStats.games.push({
+        date: game.date,
+        sortKey,
+        venue: "away",
+        totalGoals,
+        over1_5: hasOver1_5,
+        over2_5: hasOver2_5,
+        over3_5: hasOver3_5,
+      });
     });
 
     // Calculate averages and rates
     const analysisResults = Array.from(teamLeagueMap.values())
-      .map((stats) => ({
-        ...stats,
-        avgGoals:
-          stats.totalGames > 0
-            ? (stats.totalGoals / stats.totalGames).toFixed(2)
-            : 0,
-        avgGoalsScored:
-          stats.totalGames > 0
-            ? (stats.totalGoalsScored / stats.totalGames).toFixed(2)
-            : 0,
-        homeAvgGoalsScored:
-          stats.homeGames > 0
-            ? (stats.homeGoalsScored / stats.homeGames).toFixed(2)
-            : 0,
-        awayAvgGoalsScored:
-          stats.awayGames > 0
-            ? (stats.awayGoalsScored / stats.awayGames).toFixed(2)
-            : 0,
-        avgGoalsConceded:
-          stats.totalGames > 0
-            ? (stats.totalGoalsConceded / stats.totalGames).toFixed(2)
-            : 0,
-        homeAvgGoalsConceded:
-          stats.homeGames > 0
-            ? (stats.homeGoalsConceded / stats.homeGames).toFixed(2)
-            : 0,
-        awayAvgGoalsConceded:
-          stats.awayGames > 0
-            ? (stats.awayGoalsConceded / stats.awayGames).toFixed(2)
-            : 0,
-        over1_5Rate:
-          stats.totalGames > 0
-            ? ((stats.over1_5Count / stats.totalGames) * 100).toFixed(1)
-            : 0,
-        over2_5Rate:
-          stats.totalGames > 0
-            ? ((stats.over2_5Count / stats.totalGames) * 100).toFixed(1)
-            : 0,
-        over3_5Rate:
-          stats.totalGames > 0
-            ? ((stats.over3_5Count / stats.totalGames) * 100).toFixed(1)
-            : 0,
-        over4_5Rate:
-          stats.totalGames > 0
-            ? ((stats.over4_5Count / stats.totalGames) * 100).toFixed(1)
-            : 0,
-        over5_5Rate:
-          stats.totalGames > 0
-            ? ((stats.over5_5Count / stats.totalGames) * 100).toFixed(1)
-            : 0,
-        homeOver1_5Rate:
-          stats.homeGames > 0
-            ? ((stats.homeOver1_5Count / stats.homeGames) * 100).toFixed(1)
-            : 0,
-        homeOver2_5Rate:
-          stats.homeGames > 0
-            ? ((stats.homeOver2_5Count / stats.homeGames) * 100).toFixed(1)
-            : 0,
-        homeOver3_5Rate:
-          stats.homeGames > 0
-            ? ((stats.homeOver3_5Count / stats.homeGames) * 100).toFixed(1)
-            : 0,
-        homeOver4_5Rate:
-          stats.homeGames > 0
-            ? ((stats.homeOver4_5Count / stats.homeGames) * 100).toFixed(1)
-            : 0,
-        homeOver5_5Rate:
-          stats.homeGames > 0
-            ? ((stats.homeOver5_5Count / stats.homeGames) * 100).toFixed(1)
-            : 0,
-        awayOver1_5Rate:
-          stats.awayGames > 0
-            ? ((stats.awayOver1_5Count / stats.awayGames) * 100).toFixed(1)
-            : 0,
-        awayOver2_5Rate:
-          stats.awayGames > 0
-            ? ((stats.awayOver2_5Count / stats.awayGames) * 100).toFixed(1)
-            : 0,
-        awayOver3_5Rate:
-          stats.awayGames > 0
-            ? ((stats.awayOver3_5Count / stats.awayGames) * 100).toFixed(1)
-            : 0,
-        awayOver4_5Rate:
-          stats.awayGames > 0
-            ? ((stats.awayOver4_5Count / stats.awayGames) * 100).toFixed(1)
-            : 0,
-        awayOver5_5Rate:
-          stats.awayGames > 0
-            ? ((stats.awayOver5_5Count / stats.awayGames) * 100).toFixed(1)
-            : 0,
-      }))
+      .map((stats) => {
+        const recentAll = computeRecentBlock(stats.games);
+        const recentHome = computeRecentBlock(stats.games, "home");
+        const recentAway = computeRecentBlock(stats.games, "away");
+        // Drop raw game list from stored analysis (keeps state lighter)
+        const { games: _games, ...statsWithoutGames } = stats;
+
+        return {
+          ...statsWithoutGames,
+          avgGoals:
+            stats.totalGames > 0
+              ? (stats.totalGoals / stats.totalGames).toFixed(2)
+              : 0,
+          avgGoalsScored:
+            stats.totalGames > 0
+              ? (stats.totalGoalsScored / stats.totalGames).toFixed(2)
+              : 0,
+          homeAvgGoalsScored:
+            stats.homeGames > 0
+              ? (stats.homeGoalsScored / stats.homeGames).toFixed(2)
+              : 0,
+          awayAvgGoalsScored:
+            stats.awayGames > 0
+              ? (stats.awayGoalsScored / stats.awayGames).toFixed(2)
+              : 0,
+          avgGoalsConceded:
+            stats.totalGames > 0
+              ? (stats.totalGoalsConceded / stats.totalGames).toFixed(2)
+              : 0,
+          homeAvgGoalsConceded:
+            stats.homeGames > 0
+              ? (stats.homeGoalsConceded / stats.homeGames).toFixed(2)
+              : 0,
+          awayAvgGoalsConceded:
+            stats.awayGames > 0
+              ? (stats.awayGoalsConceded / stats.awayGames).toFixed(2)
+              : 0,
+          over1_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over1_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+          over2_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over2_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+          over3_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over3_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+          over4_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over4_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+          over5_5Rate:
+            stats.totalGames > 0
+              ? ((stats.over5_5Count / stats.totalGames) * 100).toFixed(1)
+              : 0,
+          homeOver1_5Rate:
+            stats.homeGames > 0
+              ? ((stats.homeOver1_5Count / stats.homeGames) * 100).toFixed(1)
+              : 0,
+          homeOver2_5Rate:
+            stats.homeGames > 0
+              ? ((stats.homeOver2_5Count / stats.homeGames) * 100).toFixed(1)
+              : 0,
+          homeOver3_5Rate:
+            stats.homeGames > 0
+              ? ((stats.homeOver3_5Count / stats.homeGames) * 100).toFixed(1)
+              : 0,
+          homeOver4_5Rate:
+            stats.homeGames > 0
+              ? ((stats.homeOver4_5Count / stats.homeGames) * 100).toFixed(1)
+              : 0,
+          homeOver5_5Rate:
+            stats.homeGames > 0
+              ? ((stats.homeOver5_5Count / stats.homeGames) * 100).toFixed(1)
+              : 0,
+          awayOver1_5Rate:
+            stats.awayGames > 0
+              ? ((stats.awayOver1_5Count / stats.awayGames) * 100).toFixed(1)
+              : 0,
+          awayOver2_5Rate:
+            stats.awayGames > 0
+              ? ((stats.awayOver2_5Count / stats.awayGames) * 100).toFixed(1)
+              : 0,
+          awayOver3_5Rate:
+            stats.awayGames > 0
+              ? ((stats.awayOver3_5Count / stats.awayGames) * 100).toFixed(1)
+              : 0,
+          awayOver4_5Rate:
+            stats.awayGames > 0
+              ? ((stats.awayOver4_5Count / stats.awayGames) * 100).toFixed(1)
+              : 0,
+          awayOver5_5Rate:
+            stats.awayGames > 0
+              ? ((stats.awayOver5_5Count / stats.awayGames) * 100).toFixed(1)
+              : 0,
+          // Recent (last 10) — overall / home / away
+          recentGames: recentAll.recentGames,
+          recentAvgGoals: recentAll.recentAvgGoals,
+          recentOver1_5Rate: recentAll.recentOver1_5Rate,
+          recentOver2_5Rate: recentAll.recentOver2_5Rate,
+          recentOver3_5Rate: recentAll.recentOver3_5Rate,
+          recentHomeGames: recentHome.recentGames,
+          recentHomeAvgGoals: recentHome.recentAvgGoals,
+          recentHomeOver1_5Rate: recentHome.recentOver1_5Rate,
+          recentHomeOver2_5Rate: recentHome.recentOver2_5Rate,
+          recentHomeOver3_5Rate: recentHome.recentOver3_5Rate,
+          recentAwayGames: recentAway.recentGames,
+          recentAwayAvgGoals: recentAway.recentAvgGoals,
+          recentAwayOver1_5Rate: recentAway.recentOver1_5Rate,
+          recentAwayOver2_5Rate: recentAway.recentOver2_5Rate,
+          recentAwayOver3_5Rate: recentAway.recentOver3_5Rate,
+        };
+      })
       .sort((a, b) => parseFloat(b.avgGoals) - parseFloat(a.avgGoals)); // Sort by average goals descending
 
     debugLog("Scoring analysis results:", analysisResults);

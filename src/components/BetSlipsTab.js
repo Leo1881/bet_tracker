@@ -1,5 +1,60 @@
 import React from "react";
 
+const getBetResultRank = (bet) => {
+  const result = (bet?.RESULT || "").toLowerCase();
+  if (result.includes("loss")) return 0;
+  if (result.includes("win")) return 2;
+  return 1; // pending / unknown — after losses, before wins
+};
+
+const sortBetsLossesFirst = (bets) =>
+  [...(bets || [])].sort(
+    (a, b) => getBetResultRank(a) - getBetResultRank(b)
+  );
+
+const categorizeBetMarket = (bet) => {
+  const betType = (bet?.BET_TYPE || "").toLowerCase();
+  const selection = (bet?.BET_SELECTION || "").toLowerCase();
+  const combined = `${betType} ${selection}`;
+
+  if (
+    betType.includes("double") ||
+    selection.includes("1x") ||
+    selection.includes("x2") ||
+    selection.includes("x1") ||
+    selection.includes("2x") ||
+    selection.replace(/\s+/g, "") === "12" ||
+    (selection.includes("x") &&
+      !combined.includes("over") &&
+      !combined.includes("under"))
+  ) {
+    return "DC";
+  }
+  if (combined.includes("over") || combined.includes("under")) {
+    return "O/U";
+  }
+  if (
+    betType.includes("win") ||
+    selection.includes("win") ||
+    selection.replace(/\s+/g, "") === "1" ||
+    selection.replace(/\s+/g, "") === "2"
+  ) {
+    return "SW";
+  }
+  return "Other";
+};
+
+const formatSlipComposition = (bets) => {
+  const counts = { SW: 0, DC: 0, "O/U": 0, Other: 0 };
+  for (const bet of bets || []) {
+    counts[categorizeBetMarket(bet)] += 1;
+  }
+  return ["SW", "DC", "O/U", "Other"]
+    .filter((key) => counts[key] > 0)
+    .map((key) => `${counts[key]} ${key}`)
+    .join(" · ");
+};
+
 const BetSlipsTab = ({
   showCompletedSlips,
   setShowCompletedSlips,
@@ -128,6 +183,9 @@ const BetSlipsTab = ({
                 </div>
               </th>
               <th className="px-4 py-2 text-left text-white font-semibold">
+                Mix
+              </th>
+              <th className="px-4 py-2 text-left text-white font-semibold">
                 Wins/Losses
               </th>
               <th
@@ -184,6 +242,11 @@ const BetSlipsTab = ({
                   </td>
                   <td className="px-4 py-2 text-gray-300">{slip.totalBets}</td>
                   <td className="px-4 py-2 text-gray-300">
+                    <span className="text-xs text-gray-400">
+                      {formatSlipComposition(slip.bets) || "—"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-gray-300">
                     <div className="text-sm">
                       <span className="text-green-400">{slip.wins}W</span>
                       <span className="text-gray-400"> / </span>
@@ -225,13 +288,16 @@ const BetSlipsTab = ({
                 </tr>
                 {expandedSlips.has(slip.betId) && (
                   <tr className="bg-white/5">
-                    <td colSpan="7" className="px-4 py-3">
+                    <td colSpan="8" className="px-4 py-3">
                       <div className="bg-white/10 rounded-lg p-4">
                         <h4 className="text-white font-semibold mb-3">
-                          Individual Bets:
+                          Individual Bets
+                          <span className="text-gray-400 font-normal text-sm ml-2">
+                            (losses first)
+                          </span>
                         </h4>
                         <div className="grid gap-2">
-                          {slip.bets.map((bet, betIndex) => {
+                          {sortBetsLossesFirst(slip.bets).map((bet, betIndex) => {
                             const hasAttachedPredictions =
                               attachedPredictions[slip.betId];
                             const prediction =

@@ -53,17 +53,14 @@ import RecommendationsTab from "./components/RecommendationsTab";
 import QueryTab from "./components/QueryTab";
 import BetSlipsTab from "./components/BetSlipsTab";
 import TopTeamsTab from "./components/TopTeamsTab";
-import TeamAnalyticsTab from "./components/TeamAnalyticsTab";
 import DailyGamesTab from "./components/DailyGamesTab";
 import ScoringAnalysisTab from "./components/ScoringAnalysisTab";
-import HeadToHeadTab from "./components/HeadToHeadTab";
 import PredictionAccuracyTab from "./components/PredictionAccuracyTab";
 import TeamNotesTab from "./components/TeamNotesTab";
 import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
 import BetslipAnalysisTab from "./components/BetslipAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
 import QuickLookupTab from "./components/QuickLookupTab";
-import PatternAnalysisTab from "./components/PatternAnalysisTab";
 import LossPatternsTab from "./components/LossPatternsTab";
 import { AppLoadingSkeleton } from "./components/SkeletonLoader";
 import ErrorDisplay from "./components/ErrorDisplay";
@@ -144,8 +141,6 @@ function App() {
     setExpandedOddsRanges,
     expandedSlips,
     setExpandedSlips,
-    expandedBetTypes,
-    setExpandedBetTypes,
 
     // Analysis state
     scoringAnalysis,
@@ -281,16 +276,6 @@ function App() {
       newExpanded.add(betId);
     }
     setExpandedSlips(newExpanded);
-  };
-
-  const toggleTeamExpansion = (team) => {
-    const newExpanded = new Set(expandedBetTypes);
-    if (newExpanded.has(team)) {
-      newExpanded.delete(team);
-    } else {
-      newExpanded.add(team);
-    }
-    setExpandedBetTypes(newExpanded);
   };
 
   const toggleAnalyticsTeamExpansion = useCallback(
@@ -4407,7 +4392,6 @@ function App() {
     getLeagueAnalytics: getLeagueAnalyticsService,
     getCountryAnalytics: getCountryAnalyticsService,
     getBestPerformers: getBestPerformersService,
-    getHeadToHeadData: getHeadToHeadDataService,
     getTopTeams: getTopTeamsService,
     getNewStatsCards: getNewStatsCardsService,
   } = useAnalyticsFunctions(getDeduplicatedBetsForAnalysis);
@@ -5432,11 +5416,6 @@ function App() {
     );
   };
 
-  // eslint-disable-next-line no-unused-vars
-  const getHeadToHeadData = () => {
-    return getHeadToHeadDataService();
-  };
-
   const getTopTeams = () => {
     return getTopTeamsService();
   };
@@ -5778,195 +5757,6 @@ function App() {
     return filteredGames;
   };
 
-  const getTeamBetTypeAnalytics = () => {
-    const deduplicatedBets = getDeduplicatedBetsForAnalysis;
-
-    // Group bets by team
-    const teamGroups = {};
-
-    deduplicatedBets.forEach((bet) => {
-      const teamIncluded = bet.TEAM_INCLUDED;
-      const homeTeam = bet.HOME_TEAM;
-      const awayTeam = bet.AWAY_TEAM;
-      const betType = bet.BET_TYPE || "Unknown";
-      const result = bet.RESULT?.toLowerCase() || "";
-      const isWin = result.includes("win");
-      const isLoss = result.includes("loss");
-
-      // Determine the correct odds based on which team was bet on
-      let odds = 0;
-      if (teamIncluded === homeTeam) {
-        odds = parseFloat(bet.ODDS1) || 0;
-      } else if (teamIncluded === awayTeam) {
-        odds = parseFloat(bet.ODDS2) || 0;
-      } else {
-        // Fallback to ODDS1 if we can't determine
-        odds = parseFloat(bet.ODDS1) || 0;
-      }
-
-      const league = `${bet.COUNTRY} ${bet.LEAGUE}`;
-
-      // Use TEAM_INCLUDED if available, otherwise use HOME_TEAM or AWAY_TEAM
-      const teamToAnalyze = teamIncluded || homeTeam || awayTeam;
-
-      if (!teamToAnalyze) return; // Skip bets without any team
-
-      // Exclude teams named "Over 1.5" and "Over 0.5"
-      if (teamToAnalyze === "Over 1.5" || teamToAnalyze === "Over 0.5") {
-        return;
-      }
-
-      if (!teamGroups[teamToAnalyze]) {
-        teamGroups[teamToAnalyze] = {
-          team: teamToAnalyze,
-          total: 0,
-          wins: 0,
-          losses: 0,
-          totalOdds: 0,
-          betTypes: {},
-          leagues: {},
-          recentBets: [],
-        };
-      }
-
-      const group = teamGroups[teamToAnalyze];
-      group.total++;
-      group.totalOdds += odds;
-
-      if (isWin) group.wins++;
-      if (isLoss) group.losses++;
-
-      // Track bet types
-      if (!group.betTypes[betType]) {
-        group.betTypes[betType] = {
-          wins: 0,
-          losses: 0,
-          total: 0,
-          totalOdds: 0,
-        };
-      }
-      group.betTypes[betType].total++;
-      group.betTypes[betType].totalOdds += odds;
-      if (isWin) group.betTypes[betType].wins++;
-      if (isLoss) group.betTypes[betType].losses++;
-
-      // Track leagues
-      if (league) {
-        if (!group.leagues[league]) {
-          group.leagues[league] = { wins: 0, losses: 0, total: 0 };
-        }
-        group.leagues[league].total++;
-        if (isWin) group.leagues[league].wins++;
-        if (isLoss) group.leagues[league].losses++;
-      }
-
-      // Track recent bets (last 20)
-      if (group.recentBets.length < 20) {
-        group.recentBets.push({
-          date: bet.DATE,
-          result: isWin ? "W" : isLoss ? "L" : "P",
-          betType: betType,
-          odds: odds,
-          league: league,
-        });
-      }
-    });
-
-    // Calculate win rates and process data
-    const analytics = Object.values(teamGroups)
-      .filter((team) => team.total >= 5) // Only include teams with 5+ bets
-      .map((group) => {
-        const winRate =
-          group.total > 0 ? ((group.wins / group.total) * 100).toFixed(1) : 0;
-        const avgOdds =
-          group.total > 0 ? (group.totalOdds / group.total).toFixed(2) : 0;
-
-        // Get bet type breakdown
-        const betTypeBreakdown = Object.entries(group.betTypes)
-          .map(([betType, stats]) => ({
-            betType,
-            wins: stats.wins,
-            losses: stats.losses,
-            total: stats.total,
-            winRate:
-              stats.total > 0
-                ? ((stats.wins / stats.total) * 100).toFixed(1)
-                : 0,
-            avgOdds:
-              stats.total > 0 ? (stats.totalOdds / stats.total).toFixed(2) : 0,
-          }))
-          .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
-
-        // Get league breakdown
-        const leagueBreakdown = Object.entries(group.leagues)
-          .map(([league, stats]) => ({
-            league,
-            wins: stats.wins,
-            losses: stats.losses,
-            total: stats.total,
-            winRate:
-              stats.total > 0
-                ? ((stats.wins / stats.total) * 100).toFixed(1)
-                : 0,
-          }))
-          .sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
-
-        // Calculate recent performance
-        const recentWins = group.recentBets.filter(
-          (bet) => bet.result === "W",
-        ).length;
-        const recentLosses = group.recentBets.filter(
-          (bet) => bet.result === "L",
-        ).length;
-        const recentTotal = recentWins + recentLosses;
-        const recentWinRate =
-          recentTotal > 0 ? ((recentWins / recentTotal) * 100).toFixed(1) : 0;
-
-        return {
-          ...group,
-          winRate,
-          avgOdds,
-          betTypeBreakdown,
-          leagueBreakdown,
-          recentWinRate,
-          recentWins,
-          recentLosses,
-          recentTotal,
-        };
-      });
-
-    // Calculate composite score for better ranking
-    const analyticsWithScore = analytics.map((team) => {
-      // Composite score: Win Rate (60%) + Sample Size Bonus (40%)
-      const winRateScore = parseFloat(team.winRate) * 0.6;
-
-      // Sample size bonus: More bets = higher reliability score
-      let sampleSizeScore = 0;
-      if (team.total >= 20)
-        sampleSizeScore = 40; // 20+ bets = max score
-      else if (team.total >= 15)
-        sampleSizeScore = 35; // 15-19 bets
-      else if (team.total >= 10)
-        sampleSizeScore = 30; // 10-14 bets
-      else if (team.total >= 8)
-        sampleSizeScore = 25; // 8-9 bets
-      else if (team.total >= 5) sampleSizeScore = 20; // 5-7 bets (minimum threshold)
-
-      const compositeScore = winRateScore + sampleSizeScore;
-
-      return {
-        ...team,
-        compositeScore,
-        sampleSizeScore,
-      };
-    });
-
-    // Sort by composite score descending
-    return analyticsWithScore.sort(
-      (a, b) => b.compositeScore - a.compositeScore,
-    );
-  };
-
   if (loading) {
     return <AppLoadingSkeleton />;
   }
@@ -6272,13 +6062,6 @@ function App() {
             />
           )}
 
-          {activeTab === "headToHead" && (
-            <HeadToHeadTab
-              analysisResults={analysisResults}
-              formatDate={formatDateString}
-            />
-          )}
-
           {activeTab === "topTeams" && (
             <TopTeamsTab
               getTopTeams={getTopTeams}
@@ -6314,14 +6097,6 @@ function App() {
             />
           )}
 
-          {activeTab === "betTypeAnalytics" && (
-            <TeamAnalyticsTab
-              getTeamBetTypeAnalytics={getTeamBetTypeAnalytics}
-              expandedBetTypes={expandedBetTypes}
-              toggleTeamExpansion={toggleTeamExpansion}
-            />
-          )}
-
           {activeTab === "dailyGames" && (
             <DailyGamesTab
               dailyGamesLoading={dailyGamesLoading}
@@ -6336,10 +6111,6 @@ function App() {
               scoringAnalysis={scoringAnalysis}
               bets={bets}
             />
-          )}
-
-          {activeTab === "patternAnalysis" && (
-            <PatternAnalysisTab bets={bets} />
           )}
 
           {activeTab === "lossPatterns" && <LossPatternsTab />}
