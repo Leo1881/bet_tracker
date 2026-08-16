@@ -37,6 +37,10 @@ import {
   capEarlySeasonConfidence,
 } from "./services/earlySeasonService";
 import {
+  fetchPredictionCalibration,
+  getSegmentedAccuracyAdjustment,
+} from "./services/predictionCalibrationService";
+import {
   teamsMatch as teamsMatchNames,
   isTeamNameBlacklisted,
 } from "./utils/teamNameUtils";
@@ -151,6 +155,7 @@ function App() {
   const [isSavingBetslip, setIsSavingBetslip] = useState(false);
   const [comparisonResults, setComparisonResults] = useState(null);
   const [isComparing, setIsComparing] = useState(false);
+  const [predictionCalibration, setPredictionCalibration] = useState(null);
   // eslint-disable-next-line no-unused-vars
   const [scoringSortConfig, setScoringSortConfig] = useState({
     key: "totalGames",
@@ -1870,8 +1875,10 @@ function App() {
     };
   };
 
-  const generateBetRecommendations = (analysisResults) => {
+  const generateBetRecommendations = (analysisResults, calibration = null) => {
     if (!analysisResults || analysisResults.length === 0) return [];
+
+    const calibrationData = calibration ?? predictionCalibration;
 
     // Calculate team odds analytics once for all recommendations
     // Use deduplicated bets to avoid counting duplicate bets multiple times
@@ -2188,6 +2195,15 @@ function App() {
           adjustedScore *= betTypeMultipliers.overUnder;
         }
 
+        // Soft nudge from segmented system prediction accuracy (min sample gated)
+        const calibAdj = getSegmentedAccuracyAdjustment(
+          betOption.type,
+          country,
+          league,
+          calibrationData,
+        );
+        adjustedScore *= calibAdj.multiplier;
+
         // Factor in team-specific bet type performance for ranking
         // This ensures teams that perform better on specific bet types rank higher for those bet types
         const teamForBet = getTeamForRecommendation(betOption);
@@ -2301,6 +2317,10 @@ function App() {
           ...oddsBandAdj.notes,
           ...earlyAdj.notes,
         ];
+        const displayNotes = [
+          ...ruleNotes,
+          ...(calibAdj.note ? [calibAdj.note] : []),
+        ];
 
         // SW form/gap boost only when neither loss rules nor odds-band cut the market
         // (and not early season — form sample is too thin)
@@ -2347,7 +2367,9 @@ function App() {
           ...betOption,
           adjustedScore: scoreAfterRules,
           teamForBet: teamForBet, // Store for later use in Best Bet / stake pick
-          lossRuleNotes: ruleNotes,
+          lossRuleNotes: displayNotes,
+          calibrationNote: calibAdj.note || null,
+          calibrationMultiplier: calibAdj.multiplier,
         };
       });
 
@@ -2652,7 +2674,10 @@ function App() {
   // Regenerate recommendations when sort preference changes (so user sees change immediately)
   useEffect(() => {
     if (analysisResults && analysisResults.length > 0) {
-      const recommendations = generateBetRecommendations(analysisResults);
+      const recommendations = generateBetRecommendations(
+        analysisResults,
+        predictionCalibration,
+      );
       setBetRecommendations(recommendations);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only run when preference changes
@@ -4512,8 +4537,12 @@ function App() {
 
       setAnalysisResults(results);
 
+      // Load segmented accuracy for ranking nudges (fails soft → no change)
+      const calibration = await fetchPredictionCalibration();
+      setPredictionCalibration(calibration);
+
       // Generate bet recommendations using the local function
-      const recommendations = generateBetRecommendations(results);
+      const recommendations = generateBetRecommendations(results, calibration);
       setBetRecommendations(recommendations);
     } catch (error) {
       console.error("Error analyzing new bets:", error);

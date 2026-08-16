@@ -140,7 +140,9 @@ const PredictionAccuracyTab = () => {
         <p className="text-amber-200/80 text-sm">
           Best Bet and AI columns only fill for games saved after this update
           (and AI only after you fetch an AI opinion). Older rows still score
-          Primary / Secondary / Tertiary.
+          Primary / Secondary / Tertiary. When a market has 20+ settled picks,
+          that hit rate also gently nudges ranking for new recommendations
+          (league first, then country, then overall).
         </p>
       </div>
 

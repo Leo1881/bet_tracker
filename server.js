@@ -1053,6 +1053,107 @@ app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
   }
 });
 
+// Classify a recommendation string into ranking market types
+function classifyRecommendationMarket(rec) {
+  const r = (rec == null ? "" : String(rec)).trim().toLowerCase().replace(/\s+/g, " ");
+  if (!r || r.includes("avoid") || r.includes("no clear")) return null;
+  if (r.includes("home or away")) return "Double Chance 12";
+  if (/\bor\s+draw\b/.test(r)) return "Double Chance";
+  if (/\bover\s+[\d.]+/.test(r) || /\bunder\s+[\d.]+/.test(r)) return "Over/Under";
+  return "Straight Win";
+}
+
+// Segmented hit rates for ranking nudges (market × country/league)
+app.get("/api/betslip-recommendations/calibration", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT date, country, league, home_team, away_team,
+              primary_recommendation, secondary_recommendation, tertiary_recommendation, recommendation,
+              best_bet_recommendation,
+              actual_result, actual_home_score, actual_away_score
+       FROM betslip_recommendations
+       WHERE actual_result IS NOT NULL AND TRIM(actual_result) != ''`
+    );
+    const normalize = (v) => (v == null ? "" : String(v).trim().toLowerCase());
+    const normKey = (v) => normalize(v).replace(/\s+/g, " ");
+    const gameKey = (r) =>
+      `${normKey(r.home_team)}|${normKey(r.away_team)}|${r.date}`;
+
+    const byGame = new Map();
+    for (const r of result.rows) {
+      const k = gameKey(r);
+      const prev = byGame.get(k);
+      if (!prev) {
+        byGame.set(k, r);
+        continue;
+      }
+      // Prefer row that has country/league + best bet filled
+      const richer =
+        (r.best_bet_recommendation && !prev.best_bet_recommendation) ||
+        ((r.country || r.league) && !(prev.country || prev.league));
+      if (richer) byGame.set(k, { ...prev, ...r });
+    }
+
+    const bump = (map, key, isCorrect) => {
+      if (!key) return;
+      if (!map[key]) map[key] = { correct: 0, total: 0 };
+      map[key].total += 1;
+      if (isCorrect) map[key].correct += 1;
+    };
+
+    const markets = {};
+    const marketCountry = {};
+    const marketLeague = {};
+
+    for (const row of byGame.values()) {
+      const hs = row.actual_home_score != null ? Number(row.actual_home_score) : null;
+      const as = row.actual_away_score != null ? Number(row.actual_away_score) : null;
+      const country = normKey(row.country);
+      const league = normKey(row.league);
+      const picks = [
+        row.primary_recommendation ?? row.recommendation,
+        row.secondary_recommendation,
+        row.tertiary_recommendation,
+        row.best_bet_recommendation,
+      ];
+
+      for (const pick of picks) {
+        const market = classifyRecommendationMarket(pick);
+        if (!market) continue;
+        const correct = evaluateRecommendation(
+          pick,
+          row.home_team,
+          row.away_team,
+          hs,
+          as,
+          row.actual_result
+        );
+        if (correct === null) continue;
+
+        bump(markets, market, correct);
+        if (country) bump(marketCountry, `${market}|${country}`, correct);
+        if (country && league) {
+          bump(marketLeague, `${market}|${country}|${league}`, correct);
+        }
+      }
+    }
+
+    res.json({
+      minSample: 20,
+      baseline: 0.55,
+      k: 0.4,
+      clampMin: 0.85,
+      clampMax: 1.15,
+      markets,
+      marketCountry,
+      marketLeague,
+    });
+  } catch (error) {
+    console.error("Error fetching prediction calibration:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Persist AI second opinion onto matching betslip_recommendations rows (by teams + date)
 app.post("/api/betslip-recommendations/ai-opinion", async (req, res) => {
   try {
@@ -1487,6 +1588,7 @@ async function startServer() {
     console.log(`  POST /api/betslip-recommendations - Save betslip (new flow)`);
     console.log(`  GET /api/betslip-recommendations - List games (?bet_id=)`);
     console.log(`  GET /api/betslip-recommendations/tier-accuracy - Accuracy scoreboard`);
+    console.log(`  GET /api/betslip-recommendations/calibration - Segmented accuracy for ranking`);
     console.log(`  POST /api/betslip-recommendations/ai-opinion - Persist AI pick`);
     console.log(`  GET /api/betslip-recommendations/bet-ids - List bet IDs`);
     console.log(`  POST /api/betslip-recommendations/compare - Compare with Sheet1 results`);
