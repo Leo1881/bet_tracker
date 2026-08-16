@@ -14,6 +14,18 @@ const getRowVal = (row, ...keys) => {
   return found != null ? String(row[found] ?? "").trim() : "";
 };
 
+const asBoolOrNull = (v) => {
+  if (v === true || v === "true") return true;
+  if (v === false || v === "false") return false;
+  return null;
+};
+
+const tierResultMark = (v) => {
+  if (v === true) return "✅";
+  if (v === false) return "❌";
+  return "—";
+};
+
 const RecommendationAnalysisTab = ({
   compareRecommendationsWithResults,
   isComparing,
@@ -82,12 +94,8 @@ const RecommendationAnalysisTab = ({
               } else if (rec.system_prediction_accurate === false || rec.system_prediction_accurate === "false") {
                 isCorrect = false;
               } else {
-                // Fallback when server didn't compute: "X or Draw" + Win = system wrong (not "No clear winner" – that falls back to other tiers)
-                const primary = (rec.primary_recommendation || rec.recommendation || "").toLowerCase();
-                const resultLower = String(rec.actual_result).toLowerCase();
-                const isWin = resultLower.includes("win") && !resultLower.includes("draw");
-                if (primary.match(/\s+or\s+draw$/i) && isWin) isCorrect = false;
-                // else: leave isCorrect = false (conservative when we can't evaluate)
+                // Server could not evaluate this pick — leave as not-correct without guessing
+                isCorrect = false;
               }
             }
             let failureReason = "";
@@ -109,6 +117,11 @@ const RecommendationAnalysisTab = ({
               bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
+              actual_home_score: rec.actual_home_score,
+              actual_away_score: rec.actual_away_score,
+              system_primary_correct: asBoolOrNull(rec.system_primary_correct),
+              system_secondary_correct: asBoolOrNull(rec.system_secondary_correct),
+              system_tertiary_correct: asBoolOrNull(rec.system_tertiary_correct),
               prediction_accurate: rec.system_prediction_accurate != null ? rec.system_prediction_accurate : rec.prediction_accurate,
               your_bet_won: rec.your_bet_won,
               analysis_type: rec.analysis_type,
@@ -293,11 +306,8 @@ const RecommendationAnalysisTab = ({
               isCorrect = false;
               isPending = false;
             } else if (rec.actual_result && rec.actual_result.trim() !== "") {
-              // Fallback when server didn't compute: "X or Draw" + Win = system wrong
-              const primary = (rec.primary_recommendation || rec.recommendation || "").toLowerCase();
-              const resultLower = String(rec.actual_result).toLowerCase();
-              const isWin = resultLower.includes("win") && !resultLower.includes("draw");
-              if (primary.match(/\s+or\s+draw$/i) && isWin) isCorrect = false;
+              // Server could not evaluate — do not invent correctness from Win/Loss labels
+              isCorrect = false;
               isPending = false;
             }
 
@@ -379,6 +389,11 @@ const RecommendationAnalysisTab = ({
               bet_selection: rec.bet_selection,
               confidence_score: rec.confidence_score,
               actual_result: rec.actual_result,
+              actual_home_score: rec.actual_home_score,
+              actual_away_score: rec.actual_away_score,
+              system_primary_correct: asBoolOrNull(rec.system_primary_correct),
+              system_secondary_correct: asBoolOrNull(rec.system_secondary_correct),
+              system_tertiary_correct: asBoolOrNull(rec.system_tertiary_correct),
               prediction_accurate: rec.system_prediction_accurate != null ? rec.system_prediction_accurate : rec.prediction_accurate,
               your_bet_won: rec.your_bet_won,
               analysis_type: rec.analysis_type,
@@ -683,14 +698,14 @@ const RecommendationAnalysisTab = ({
                   <th className="text-left py-3 px-2 text-white font-medium">
                     Your Bet
                   </th>
+                  <th className="text-center py-3 px-2 text-white font-medium">
+                    Score
+                  </th>
                   <th className="text-left py-3 px-2 text-white font-medium">
                     Actual Result
                   </th>
                   <th className="text-center py-3 px-2 text-white font-medium">
-                    System Result
-                  </th>
-                  <th className="text-center py-3 px-2 text-white font-medium">
-                    Analysis
+                    System Result (P / S / T)
                   </th>
                   <th className="text-center py-3 px-2 text-white font-medium">
                     Confidence
@@ -720,19 +735,32 @@ const RecommendationAnalysisTab = ({
                       <div className="space-y-1">
                         <div className="text-green-400 font-medium">
                           🥇 Primary:{" "}
-                          {match.primary_recommendation || match.recommendation}
+                          {match.primary_recommendation || match.recommendation}{" "}
+                          {tierResultMark(match.system_primary_correct)}
                         </div>
                         <div className="text-yellow-400 text-sm">
                           🥈 Secondary:{" "}
                           {match.secondary_recommendation || "N/A"}
+                          {match.secondary_recommendation
+                            ? ` ${tierResultMark(match.system_secondary_correct)}`
+                            : ""}
                         </div>
                         <div className="text-orange-400 text-sm">
                           🥉 Tertiary: {match.tertiary_recommendation || "N/A"}
+                          {match.tertiary_recommendation
+                            ? ` ${tierResultMark(match.system_tertiary_correct)}`
+                            : ""}
                         </div>
                       </div>
                     </td>
                     <td className="py-3 px-2 text-blue-300 font-medium">
                       {match.bet_selection || "N/A"}
+                    </td>
+                    <td className="py-3 px-2 text-center text-white font-semibold tabular-nums">
+                      {match.actual_home_score != null &&
+                      match.actual_away_score != null
+                        ? `${match.actual_home_score}–${match.actual_away_score}`
+                        : "—"}
                     </td>
                     <td className="py-3 px-2 text-white font-bold">
                       {match.actual_result === "Win"
@@ -742,30 +770,20 @@ const RecommendationAnalysisTab = ({
                         : match.actual_result || "⏳ PENDING"}
                     </td>
                     <td className="py-3 px-2 text-center">
-                      <span
-                        className={`text-lg ${
-                          match.prediction_accurate
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }`}
-                      >
-                        {match.prediction_accurate ? "✅" : "❌"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-2 text-center">
-                      <span
-                        className={`text-xs px-2 py-1 rounded ${
-                          match.analysis_type === "Both Correct"
-                            ? "bg-green-500/20 text-green-300"
-                            : match.analysis_type === "You Won, System Wrong"
-                            ? "bg-yellow-500/20 text-yellow-300"
-                            : match.analysis_type === "System Right, You Lost"
-                            ? "bg-orange-500/20 text-orange-300"
-                            : "bg-red-500/20 text-red-300"
-                        }`}
-                      >
-                        {match.analysis_type || "N/A"}
-                      </span>
+                      <div className="space-y-1 text-sm leading-tight">
+                        <div>
+                          <span className="text-green-400">P</span>{" "}
+                          {tierResultMark(match.system_primary_correct)}
+                        </div>
+                        <div>
+                          <span className="text-yellow-400">S</span>{" "}
+                          {tierResultMark(match.system_secondary_correct)}
+                        </div>
+                        <div>
+                          <span className="text-orange-400">T</span>{" "}
+                          {tierResultMark(match.system_tertiary_correct)}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-2 text-center text-gray-300">
                       {match.confidence_score}%

@@ -85,13 +85,28 @@ const PredictionAccuracyTab = () => {
     totalBets,
   } = tierAccuracy || {};
 
-  const scoreboard = [
+  const systemTiers = [
     {
       label: "Primary",
       emoji: "🥇",
       desc: "System top tier (saved on every betslip)",
       ...primary,
     },
+    {
+      label: "Secondary",
+      emoji: "🥈",
+      desc: "System's second choice",
+      ...secondary,
+    },
+    {
+      label: "Tertiary",
+      emoji: "🥉",
+      desc: "System's third choice",
+      ...tertiary,
+    },
+  ];
+
+  const heroTiers = [
     {
       label: "Best Bet",
       emoji: "⭐",
@@ -105,21 +120,6 @@ const PredictionAccuracyTab = () => {
       desc: "Gemini second opinion when you ran AI after saving",
       highlight: true,
       ...ai,
-    },
-  ];
-
-  const classicTiers = [
-    {
-      label: "Secondary",
-      emoji: "🥈",
-      desc: "System's second choice",
-      ...secondary,
-    },
-    {
-      label: "Tertiary",
-      emoji: "🥉",
-      desc: "System's third choice",
-      ...tertiary,
     },
   ];
 
@@ -165,10 +165,10 @@ const PredictionAccuracyTab = () => {
 
           <div>
             <h4 className="text-sm font-semibold text-white/90 mb-3 uppercase tracking-wide">
-              Head-to-head (what to trust)
+              System tiers
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {scoreboard.map((tier) => (
+              {systemTiers.map((tier) => (
                 <TierCard key={tier.label} {...tier} />
               ))}
             </div>
@@ -176,10 +176,10 @@ const PredictionAccuracyTab = () => {
 
           <div>
             <h4 className="text-sm font-semibold text-white/90 mb-3 uppercase tracking-wide">
-              Classic tiers
+              Best Bet & AI
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {classicTiers.map((tier) => (
+              {heroTiers.map((tier) => (
                 <TierCard key={tier.label} {...tier} />
               ))}
             </div>

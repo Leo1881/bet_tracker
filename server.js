@@ -852,24 +852,35 @@ app.post("/api/betslip-recommendations", async (req, res) => {
 
 // Evaluate if a recommendation was correct given actual scores (shared logic)
 // actualResult: optional string like "Home Win", "Away Win", "Draw" for when scores are missing
+// Note: Sheet1 "Win"/"Loss" is often the *bet* outcome, not match 1X2 — prefer scores when present.
 function evaluateRecommendation(rec, homeTeam, awayTeam, homeScore, awayScore, actualResult) {
   if (!rec || String(rec).trim() === "") return null;
   const recLower = String(rec).toLowerCase();
   const hasScores = homeScore != null && awayScore != null;
   const total = (homeScore ?? 0) + (awayScore ?? 0);
-  const homeWon = (homeScore ?? 0) > (awayScore ?? 0);
-  const awayWon = (awayScore ?? 0) > (homeScore ?? 0);
+  const homeWon = hasScores && homeScore > awayScore;
+  const awayWon = hasScores && awayScore > homeScore;
   const draw = hasScores && homeScore === awayScore;
   const ar = String(actualResult || "").toLowerCase();
   const isDrawFromResult = ar.includes("draw") && !ar.includes("win");
-  const isWinFromResult = ar.includes("win") && !ar.includes("draw");
 
   // "No clear winner" = system abstained from a clear prediction; not evaluable, fall back to secondary/tertiary
   if (recLower.includes("no clear")) return null;
+  if (recLower.includes("avoid")) return null;
 
   const normalize = (v) => (v == null ? "" : String(v).trim().toLowerCase());
-  const normRec = (s) => normalize(s).replace(/\s+(to\s+)?win$/, "").replace(/\s+avoid$/, "").replace(/\s+fc\.?\s*$/i, "").trim();
-  const TEAM_ALIASES = { "man utd": "manchester united", "man united": "manchester united", "hearts": "heart of midlothian", "heart of midlothian": "heart of midlothian" };
+  const normRec = (s) =>
+    normalize(s)
+      .replace(/\s+(to\s+)?win$/, "")
+      .replace(/\s+avoid$/, "")
+      .replace(/\s+fc\.?\s*$/i, "")
+      .trim();
+  const TEAM_ALIASES = {
+    "man utd": "manchester united",
+    "man united": "manchester united",
+    hearts: "heart of midlothian",
+    "heart of midlothian": "heart of midlothian",
+  };
   const normTeam = (t) => TEAM_ALIASES[normRec(t)] ?? normRec(t);
   const teamMatches = (recTeam, gameTeam) => {
     const r = normTeam(recTeam);
@@ -877,22 +888,40 @@ function evaluateRecommendation(rec, homeTeam, awayTeam, homeScore, awayScore, a
     return r === g || g.includes(r) || r.includes(g);
   };
   const r = normRec(rec);
+
   const overMatch = r.match(/over\s+([\d.]+)/);
   if (overMatch) return hasScores ? total > parseFloat(overMatch[1]) : null;
   const underMatch = r.match(/under\s+([\d.]+)/);
   if (underMatch) return hasScores ? total < parseFloat(underMatch[1]) : null;
-  // "X or Draw" (double chance) ≠ "X to win" – different risk. Only correct when result is draw.
+
+  // Double chance 12: home or away (not draw)
+  if (r === "home or away" || r.includes("home or away")) {
+    if (hasScores) return !draw;
+    if (isDrawFromResult) return false;
+    return null;
+  }
+
+  // Double chance: "Team or Draw" is correct if that team won OR the match drew
   const orDrawMatch = r.match(/^(.+?)\s+or\s+draw$/);
   if (orDrawMatch) {
     const teamPart = orDrawMatch[1].trim();
-    if (teamMatches(teamPart, homeTeam) || teamMatches(teamPart, awayTeam)) {
-      const wasDraw = hasScores ? draw : (isDrawFromResult ? true : (isWinFromResult ? false : null));
-      return wasDraw;
+    const backsHome = teamMatches(teamPart, homeTeam);
+    const backsAway = teamMatches(teamPart, awayTeam);
+    if (!backsHome && !backsAway) return null;
+    if (!hasScores) {
+      // Without scores we cannot safely use Sheet1 Win/Loss (that's often the stake result)
+      if (isDrawFromResult) return true;
+      return null;
     }
-    return null;
+    if (draw) return true;
+    if (backsHome && homeWon) return true;
+    if (backsAway && awayWon) return true;
+    return false;
   }
-  if (teamMatches(rec, homeTeam)) return homeWon;
-  if (teamMatches(rec, awayTeam)) return awayWon;
+
+  // Straight win on a team — requires scores (or we can't tell home vs away from "Win" alone)
+  if (teamMatches(rec, homeTeam)) return hasScores ? homeWon : null;
+  if (teamMatches(rec, awayTeam)) return hasScores ? awayWon : null;
   return null;
 }
 
