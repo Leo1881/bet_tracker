@@ -425,6 +425,56 @@ const calculateWilsonScore = (wins, total) => {
 };
 
 /**
+ * Slip date from BET_ID prefix: "2026/08/15 - 591" → 15 Aug 2026.
+ * Prefers BET_ID over DATE (DATE is often unreliable in Sheet1).
+ * @param {object} bet
+ * @returns {Date|null}
+ */
+export const parseSlipDateFromBetId = (bet) => {
+  const betId = String(bet?.BET_ID ?? bet?.bet_id ?? "").trim();
+  const idMatch = betId.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if (!idMatch) return null;
+  const d = new Date(
+    Number(idMatch[1]),
+    Number(idMatch[2]) - 1,
+    Number(idMatch[3]),
+    12,
+  );
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/**
+ * Recency weight for Top Teams scoring.
+ * ≤30 days = 1.0, ≤90 days = 0.5, older/unknown = 0.25
+ * @param {Date|null} betDate
+ * @param {Date} [anchor] - usually newest slip date in the dataset (not wall-clock today)
+ * @returns {number}
+ */
+export const getRecencyWeight = (betDate, anchor = new Date()) => {
+  if (!betDate || Number.isNaN(betDate.getTime())) return 0.25;
+  const days =
+    (anchor.getTime() - betDate.getTime()) / (1000 * 60 * 60 * 24);
+  if (days < 0) return 1;
+  if (days <= 30) return 1;
+  if (days <= 90) return 0.5;
+  return 0.25;
+};
+
+/**
+ * Newest parseable BET_ID slip date in a bet list (anchor for recency).
+ * @param {Array} bets
+ * @returns {Date}
+ */
+export const getNewestSlipDate = (bets) => {
+  let newest = null;
+  for (const bet of bets || []) {
+    const d = parseSlipDateFromBetId(bet);
+    if (d && (!newest || d > newest)) newest = d;
+  }
+  return newest || new Date();
+};
+
+/**
  * Get top performing teams
  * @param {Array} deduplicatedBets - Array of deduplicated bets
  * @returns {Array} Array of top performing teams
@@ -432,6 +482,8 @@ const calculateWilsonScore = (wins, total) => {
 export const getTopTeams = (deduplicatedBets) => {
   const teamStats = new Map();
   const teamBets = new Map(); // Store all bets for each team to sort by date
+  // Anchor to newest BET_ID in the data so decay works even if sheet lags calendar today
+  const anchorDate = getNewestSlipDate(deduplicatedBets);
 
   // First pass: collect all bets for each team
   // Support both uppercase (app convention) and lowercase (DB/some sheets)
@@ -479,6 +531,8 @@ export const getTopTeams = (deduplicatedBets) => {
         recentBets: 0,
         winRate: 0,
         recentWinRate: 0,
+        weightedWins: 0,
+        weightedTotal: 0,
         lastBetDate: null,
         betTypes: {}, // Add bet type tracking
         teamKey: teamKey, // Store the team key for later use
@@ -493,13 +547,19 @@ export const getTopTeams = (deduplicatedBets) => {
 
     const team = teamStats.get(teamKey);
     const result = (bet.RESULT ?? bet.result ?? "").toLowerCase();
+    const slipDate = parseSlipDateFromBetId(bet);
+    const weight = getRecencyWeight(slipDate, anchorDate);
+
     // Only count settled bets (win/loss) in totalBets so ranking and stats are accurate
     if (result.includes("win")) {
       team.totalBets++;
       team.wins++;
+      team.weightedWins += weight;
+      team.weightedTotal += weight;
     } else if (result.includes("loss")) {
       team.totalBets++;
       team.losses++;
+      team.weightedTotal += weight;
     }
 
     // Track bet types
@@ -520,11 +580,9 @@ export const getTopTeams = (deduplicatedBets) => {
       team.betTypes[betType].totalWithResult++;
     }
 
-    // Track last bet date (support DATE/date/Date - Google Sheets vs DB)
-    const dateVal = bet.DATE ?? bet.date ?? bet.Date;
-    const betDate = dateVal ? new Date(dateVal) : null;
-    if (betDate && !isNaN(betDate.getTime()) && (!team.lastBetDate || betDate > team.lastBetDate)) {
-      team.lastBetDate = betDate;
+    // Track last slip date from BET_ID
+    if (slipDate && (!team.lastBetDate || slipDate > team.lastBetDate)) {
+      team.lastBetDate = slipDate;
     }
   });
 
@@ -534,10 +592,7 @@ export const getTopTeams = (deduplicatedBets) => {
     const team = teamStats.get(teamKey);
     if (!team) return;
 
-    const getDate = (b) => {
-      const val = b.DATE ?? b.date ?? b.Date;
-      return val ? new Date(val) : new Date(0);
-    };
+    const getDate = (b) => parseSlipDateFromBetId(b) || new Date(0);
 
     // Group settled bets by game (date + home + away)
     const gamesMap = new Map();
@@ -549,14 +604,18 @@ export const getTopTeams = (deduplicatedBets) => {
       .forEach((bet) => {
         const home = bet.HOME_TEAM ?? bet.home_team ?? "";
         const away = bet.AWAY_TEAM ?? bet.away_team ?? "";
-        const gameKey = `${bet.DATE ?? bet.date ?? bet.Date ?? ""}_${home}_${away}`;
+        const slipDate = parseSlipDateFromBetId(bet);
+        const dateKey = slipDate
+          ? `${slipDate.getFullYear()}-${String(slipDate.getMonth() + 1).padStart(2, "0")}-${String(slipDate.getDate()).padStart(2, "0")}`
+          : String(bet.DATE ?? bet.date ?? bet.Date ?? "");
+        const gameKey = `${dateKey}_${home}_${away}`;
         if (!gamesMap.has(gameKey)) {
           gamesMap.set(gameKey, { date: getDate(bet), bets: [] });
         }
         gamesMap.get(gameKey).bets.push(bet);
       });
 
-    // Sort games by date (newest first), take last 10 games
+    // Sort games by slip date (newest first), take last 10 games
     const last10Games = Array.from(gamesMap.values())
       .sort((a, b) => b.date - a.date)
       .slice(0, 10);
@@ -573,7 +632,7 @@ export const getTopTeams = (deduplicatedBets) => {
     team.recentBets = last10Games.length;
     team.recentWins = recentWins;
 
-    // Calculate win rates
+    // Calculate win rates (raw + recency-weighted)
     const totalBetsWithResult = team.wins + team.losses;
     team.winRate =
       totalBetsWithResult > 0
@@ -583,16 +642,20 @@ export const getTopTeams = (deduplicatedBets) => {
       team.recentBets > 0
         ? parseFloat(((team.recentWins / team.recentBets) * 100).toFixed(1))
         : 0;
+    team.weightedWinRate =
+      team.weightedTotal > 0
+        ? parseFloat(((team.weightedWins / team.weightedTotal) * 100).toFixed(1))
+        : team.winRate;
   });
 
   // Convert to array and calculate composite score
   const teamsArray = Array.from(teamStats.values() || [])
-    .filter((team) => team && team.totalBets >= 5) // Only teams with at least 5 settled bets
+    .filter((team) => team && team.totalBets >= 10) // Only teams with at least 10 settled bets
     .map((team) => {
-      // Calculate Wilson Score for statistical accuracy
+      // Wilson on recency-weighted wins/total so old hot streaks fade
       const wilsonScore = calculateWilsonScore(
-        team.wins,
-        team.wins + team.losses
+        team.weightedWins || 0,
+        team.weightedTotal || 0
       );
       const wilsonWinRate = wilsonScore * 100; // Convert to percentage
 
@@ -658,7 +721,7 @@ export const getTopTeams = (deduplicatedBets) => {
         team: team.teamName, // Map teamName to team for compatibility
         total: team.totalBets, // Map totalBets to total for compatibility
         compositeScore,
-        wilsonWinRate, // Add Wilson Score for reference
+        wilsonWinRate, // Recency-weighted Wilson for ranking
         betTypeBreakdown, // Add the breakdown data
         individualBets: teamBets.get(team.teamKey) || [], // Add individual bet data for charts
       };

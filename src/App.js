@@ -62,7 +62,6 @@ import ScoringAnalysisTab from "./components/ScoringAnalysisTab";
 import PredictionAccuracyTab from "./components/PredictionAccuracyTab";
 import TeamNotesTab from "./components/TeamNotesTab";
 import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
-import BetslipAnalysisTab from "./components/BetslipAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
 import QuickLookupTab from "./components/QuickLookupTab";
 import LossPatternsTab from "./components/LossPatternsTab";
@@ -5568,17 +5567,19 @@ function App() {
 
   const isTeamInTop40 = (teamName) => {
     const topTeams = getTopTeams();
-    return topTeams.some(
+    const idx = topTeams.findIndex(
       (team) => team.teamName.toLowerCase() === teamName?.toLowerCase(),
     );
+    return idx >= 0 && idx < 40;
   };
 
   const getTop40Ranking = (teamName) => {
     const topTeams = getTopTeams();
-    const team = topTeams.find(
+    const idx = topTeams.findIndex(
       (team) => team.teamName.toLowerCase() === teamName?.toLowerCase(),
     );
-    return team ? topTeams.indexOf(team) + 1 : null;
+    if (idx < 0 || idx >= 40) return null;
+    return idx + 1;
   };
 
   const getPositionBadge = (position) => {
@@ -6029,8 +6030,6 @@ function App() {
               getTeamNotesForTeam={getTeamNotesForTeam}
             />
           )}
-
-          {activeTab === "betslipAnalysis" && <BetslipAnalysisTab />}
 
           {activeTab === "query" && (
             <QueryTab

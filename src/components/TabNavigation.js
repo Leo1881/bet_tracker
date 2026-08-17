@@ -5,7 +5,6 @@ const TabNavigation = ({ activeTab, setActiveTab }) => {
   
   const tabs = [
     { id: "betAnalysis", label: "Bet Analysis", icon: "📊" },
-    { id: "betslipAnalysis", label: "Betslip Analysis", icon: "📋" },
     { id: "recommendations", label: "Bet Recommendations", icon: "🎯" },
     { id: "teamUpload", label: "Team Upload", icon: "📤" },
     { id: "quickLookup", label: "Quick Lookup", icon: "🔎" },

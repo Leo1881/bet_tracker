@@ -1,24 +1,43 @@
 import React, { useState, useMemo, useCallback } from "react";
+import {
+  parseSlipDateFromBetId,
+  getRecencyWeight,
+  getNewestSlipDate,
+} from "../services/analyticsService";
 
 const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
   const [sortConfig, setSortConfig] = useState({
     key: null, // null means default composite score sort
-    direction: 'desc'
+    direction: "desc",
   });
-  const [selectedBetType, setSelectedBetType] = useState('Win');
+  const [selectedBetType, setSelectedBetType] = useState("All");
 
   // Helper function to check if a bet matches a bet type
   const matchesBetType = (bet, betType) => {
-    if (betType === 'All') return true;
-    
+    if (betType === "All") return true;
+
     const betTypeLower = betType.toLowerCase();
-    const betSelection = (bet.BET_SELECTION || bet.bet_selection || "").toLowerCase();
-    const betTypeField = (bet.BET_TYPE || bet.bet_type || bet.betType || "").toLowerCase();
+    const betSelection = (
+      bet.BET_SELECTION ||
+      bet.bet_selection ||
+      ""
+    ).toLowerCase();
+    const betTypeField = (
+      bet.BET_TYPE ||
+      bet.bet_type ||
+      bet.betType ||
+      ""
+    ).toLowerCase();
 
     if (betTypeLower === "win") {
-      return betSelection.includes("win") || betTypeField.includes("win");
+      return (
+        (betSelection.includes("win") || betTypeField.includes("win")) &&
+        !betTypeField.includes("double chance")
+      );
     } else if (betTypeLower === "double chance") {
-      return betSelection.includes("x") || betTypeField.includes("double chance");
+      return (
+        betSelection.includes("x") || betTypeField.includes("double chance")
+      );
     } else if (betTypeLower === "over") {
       return betSelection.includes("over") || betTypeField.includes("over");
     } else if (betTypeLower === "under") {
@@ -28,56 +47,63 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
   };
 
   // Calculate composite score for a bet type (same formula as overall)
-  const calculateBetTypeCompositeScore = (betTypeData, recentWinRate, recentBets) => {
-    const winRate = parseFloat(betTypeData.winRate) || 0;
-    const wins = betTypeData.wins || 0;
-    const totalBets = betTypeData.totalWithResult || 0;
-
-    // Win Rate Score (50%)
-    const winRateScore = winRate * 0.5;
-
-    // Total Wins Score (30%) - normalized to 0-30
-    const totalWinsScore = Math.min(30, (wins / 10) * 30);
-
-    // Recent Performance Score (20%)
+  const calculateBetTypeCompositeScore = (
+    winRate,
+    wins,
+    totalBets,
+    recentWinRate,
+  ) => {
+    const winRateScore = (winRate || 0) * 0.5;
+    const totalWinsScore = Math.min(30, ((wins || 0) / 10) * 30);
     const recentPerformanceScore = (recentWinRate || 0) * 0.2;
 
-    // Bet Type Specialization Bonus (max 5 points)
     let betTypeBonus = 0;
     if (totalBets >= 10) {
-      betTypeBonus = Math.min(5, (totalBets - 10) / 10); // 0.5 points per 10 bets above 10
+      betTypeBonus = Math.min(5, (totalBets - 10) / 10);
     }
 
-    // Volume Bonus (max 5 points)
     let volumeBonus = 0;
     if (totalBets >= 20) {
-      volumeBonus = Math.min(5, (totalBets - 20) / 20); // 0.25 points per 20 bets above 20
+      volumeBonus = Math.min(5, (totalBets - 20) / 20);
     }
 
-    return winRateScore + totalWinsScore + recentPerformanceScore + betTypeBonus + volumeBonus;
+    return (
+      winRateScore +
+      totalWinsScore +
+      recentPerformanceScore +
+      betTypeBonus +
+      volumeBonus
+    );
   };
 
-  // Calculate recent performance for a specific bet type (last 10 GAMES, not bets)
+  // Calculate recent performance for a specific bet type (last 10 GAMES by BET_ID date)
   const calculateRecentPerformance = useCallback((individualBets, betType) => {
-    if (!individualBets || individualBets.length === 0) return { recentWinRate: 0, recentBets: 0 };
+    if (!individualBets || individualBets.length === 0) {
+      return { recentWinRate: 0, recentBets: 0 };
+    }
 
-    const filteredByType = individualBets.filter(bet => matchesBetType(bet, betType));
-    const settledOnly = filteredByType.filter(
-      (bet) => {
-        const result = (bet.RESULT ?? bet.result ?? "").toLowerCase();
-        return result.includes("win") || result.includes("loss");
-      }
+    const filteredByType = individualBets.filter((bet) =>
+      matchesBetType(bet, betType),
     );
+    const settledOnly = filteredByType.filter((bet) => {
+      const result = (bet.RESULT ?? bet.result ?? "").toLowerCase();
+      return result.includes("win") || result.includes("loss");
+    });
 
-    // Group by game (date + home + away) - each game counts once
     const gamesMap = new Map();
     settledOnly.forEach((bet) => {
-      const dateVal = bet.DATE ?? bet.date ?? bet.Date ?? "";
+      const slipDate = parseSlipDateFromBetId(bet);
+      const dateKey = slipDate
+        ? `${slipDate.getFullYear()}-${String(slipDate.getMonth() + 1).padStart(2, "0")}-${String(slipDate.getDate()).padStart(2, "0")}`
+        : String(bet.DATE ?? bet.date ?? bet.Date ?? "");
       const home = bet.HOME_TEAM ?? bet.home_team ?? "";
       const away = bet.AWAY_TEAM ?? bet.away_team ?? "";
-      const gameKey = `${dateVal}_${home}_${away}`;
+      const gameKey = `${dateKey}_${home}_${away}`;
       if (!gamesMap.has(gameKey)) {
-        gamesMap.set(gameKey, { date: new Date(dateVal || 0), bets: [] });
+        gamesMap.set(gameKey, {
+          date: slipDate || new Date(0),
+          bets: [],
+        });
       }
       gamesMap.get(gameKey).bets.push(bet);
     });
@@ -89,41 +115,78 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
     let recentWins = 0;
     last10Games.forEach((game) => {
       const hasWin = game.bets.some((b) =>
-        (b.RESULT ?? b.result ?? "").toLowerCase().includes("win")
+        (b.RESULT ?? b.result ?? "").toLowerCase().includes("win"),
       );
       if (hasWin) recentWins++;
     });
 
     const recentBets = last10Games.length;
-    const recentWinRate = recentBets > 0 ? (recentWins / recentBets) * 100 : 0;
+    const recentWinRate =
+      recentBets > 0 ? (recentWins / recentBets) * 100 : 0;
 
     return { recentWinRate, recentBets };
   }, []);
 
+  /** Recency-weighted win rate for a set of bets (BET_ID dates). */
+  const weightedStatsForBets = (bets, anchorDate) => {
+    let wins = 0;
+    let losses = 0;
+    let weightedWins = 0;
+    let weightedTotal = 0;
+    for (const bet of bets || []) {
+      const result = (bet.RESULT ?? bet.result ?? "").toLowerCase();
+      const isWin = result.includes("win");
+      const isLoss = result.includes("loss");
+      if (!isWin && !isLoss) continue;
+      const weight = getRecencyWeight(parseSlipDateFromBetId(bet), anchorDate);
+      if (isWin) {
+        wins++;
+        weightedWins += weight;
+        weightedTotal += weight;
+      } else {
+        losses++;
+        weightedTotal += weight;
+      }
+    }
+    const rawWinRate =
+      wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+    const weightedWinRate =
+      weightedTotal > 0 ? (weightedWins / weightedTotal) * 100 : rawWinRate;
+    return {
+      wins,
+      losses,
+      totalBets: wins + losses,
+      rawWinRate,
+      weightedWinRate,
+    };
+  };
+
   const teams = useMemo(() => {
-    // Sort by column when set, else by composite; then slice to top 100
     const sortByColumn = (teamsToSort) => {
       if (!sortConfig.key) {
-        return [...teamsToSort].sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0));
+        return [...teamsToSort].sort(
+          (a, b) => (b.compositeScore || 0) - (a.compositeScore || 0),
+        );
       }
 
       return [...teamsToSort].sort((a, b) => {
-        let aValue, bValue;
+        let aValue;
+        let bValue;
 
         switch (sortConfig.key) {
-          case 'winRate':
-            aValue = a.winRate || 0;
-            bValue = b.winRate || 0;
+          case "winRate":
+            aValue = a.displayWinRate ?? a.winRate ?? 0;
+            bValue = b.displayWinRate ?? b.winRate ?? 0;
             break;
-          case 'totalBets':
+          case "totalBets":
             aValue = a.totalBets || 0;
             bValue = b.totalBets || 0;
             break;
-          case 'winsLosses':
+          case "winsLosses":
             aValue = a.wins || 0;
             bValue = b.wins || 0;
             break;
-          case 'recentPerformance':
+          case "recentPerformance":
             aValue = a.recentWinRate || 0;
             bValue = b.recentWinRate || 0;
             break;
@@ -132,10 +195,10 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
         }
 
         if (aValue < bValue) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+          return sortConfig.direction === "asc" ? -1 : 1;
         }
         if (aValue > bValue) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
+          return sortConfig.direction === "asc" ? 1 : -1;
         }
         return 0;
       });
@@ -143,88 +206,93 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
 
     const allTeams = getTopTeams();
     const teamsExcludingBlacklist = allTeams.filter(
-      (team) => !isTeamBlacklisted(team.teamName)
+      (team) => !isTeamBlacklisted(team.teamName),
+    );
+    const anchorDate = getNewestSlipDate(
+      teamsExcludingBlacklist.flatMap((t) => t.individualBets || []),
     );
 
-    if (selectedBetType === 'All') {
-      const sorted = sortByColumn(teamsExcludingBlacklist);
+    if (selectedBetType === "All") {
+      const withDisplay = teamsExcludingBlacklist.map((team) => ({
+        ...team,
+        displayWinRate: team.weightedWinRate ?? team.winRate,
+        rawWinRate: team.winRate,
+      }));
+      const sorted = sortByColumn(withDisplay);
       return sorted.slice(0, 100);
     }
 
-    // Filter teams that have the selected bet type with at least 3 bets
+    // Filter teams that have the selected bet type with at least 3 settled bets
     const filteredTeams = teamsExcludingBlacklist
-      .map(team => {
-        const betTypeData = team.betTypeBreakdown?.find(bt => {
-          const btLower = bt.betType.toLowerCase();
-          const selectedLower = selectedBetType.toLowerCase();
-          if (selectedLower === "win") {
-            return btLower.includes("win") && !btLower.includes("double chance");
-          } else if (selectedLower === "double chance") {
-            return btLower.includes("double chance") || btLower.includes("x");
-          } else if (selectedLower === "over") {
-            return btLower.includes("over");
-          } else if (selectedLower === "under") {
-            return btLower.includes("under");
-          }
-          return false;
-        });
+      .map((team) => {
+        const typedBets = (team.individualBets || []).filter((bet) =>
+          matchesBetType(bet, selectedBetType),
+        );
+        const stats = weightedStatsForBets(typedBets, anchorDate);
+        if (stats.totalBets < 3) return null;
 
-        if (!betTypeData || betTypeData.totalWithResult < 3) {
-          return null;
-        }
-
-        const recent = calculateRecentPerformance(team.individualBets || [], selectedBetType);
+        const recent = calculateRecentPerformance(
+          team.individualBets || [],
+          selectedBetType,
+        );
         const compositeScore = calculateBetTypeCompositeScore(
-          betTypeData,
+          stats.weightedWinRate,
+          stats.wins,
+          stats.totalBets,
           recent.recentWinRate,
-          recent.recentBets
         );
 
         return {
           ...team,
-          winRate: parseFloat(betTypeData.winRate) || 0,
-          totalBets: betTypeData.totalWithResult,
-          wins: betTypeData.wins,
-          losses: betTypeData.losses,
+          winRate: stats.weightedWinRate,
+          displayWinRate: stats.weightedWinRate,
+          rawWinRate: stats.rawWinRate,
+          totalBets: stats.totalBets,
+          wins: stats.wins,
+          losses: stats.losses,
           recentWinRate: recent.recentWinRate,
           recentBets: recent.recentBets,
-          compositeScore: compositeScore
+          compositeScore,
         };
       })
-      .filter(team => team !== null);
+      .filter((team) => team !== null);
 
     const sorted = sortByColumn(filteredTeams);
     return sorted.slice(0, 100);
-  }, [getTopTeams, sortConfig, selectedBetType, calculateRecentPerformance, isTeamBlacklisted]);
+  }, [
+    getTopTeams,
+    sortConfig,
+    selectedBetType,
+    calculateRecentPerformance,
+    isTeamBlacklisted,
+  ]);
 
   const handleSort = (key) => {
-    setSortConfig(prevConfig => {
-      // If clicking the same column, toggle direction
+    setSortConfig((prevConfig) => {
       if (prevConfig.key === key) {
         return {
           key,
-          direction: prevConfig.direction === 'asc' ? 'desc' : 'asc'
+          direction: prevConfig.direction === "asc" ? "desc" : "asc",
         };
       }
-      // Otherwise, set new column with descending as default
       return {
         key,
-        direction: 'desc'
+        direction: "desc",
       };
     });
   };
 
   const handleReset = () => {
-    setSortConfig({ key: null, direction: 'desc' });
+    setSortConfig({ key: null, direction: "desc" });
   };
 
   const getSortIcon = (columnKey) => {
     if (sortConfig.key !== columnKey) {
-      return <span className="text-gray-400 text-xs">↕</span>; // Neutral icon when not sorted
+      return <span className="text-gray-400 text-xs">↕</span>;
     }
     return (
-      <span className={sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-blue-400'}>
-        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+      <span className="text-blue-400">
+        {sortConfig.direction === "asc" ? "↑" : "↓"}
       </span>
     );
   };
@@ -253,22 +321,33 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
           value={selectedBetType}
           onChange={(e) => {
             setSelectedBetType(e.target.value);
-            setSortConfig({ key: null, direction: 'desc' }); // Reset sort when changing filter
+            setSortConfig({ key: null, direction: "desc" });
           }}
           className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="Win" className="bg-gray-800">Win</option>
-          <option value="Double Chance" className="bg-gray-800">Double Chance</option>
-          <option value="Over" className="bg-gray-800">Over</option>
-          <option value="Under" className="bg-gray-800">Under</option>
+          <option value="All" className="bg-gray-800">
+            All (recency-weighted)
+          </option>
+          <option value="Win" className="bg-gray-800">
+            Win
+          </option>
+          <option value="Double Chance" className="bg-gray-800">
+            Double Chance
+          </option>
+          <option value="Over" className="bg-gray-800">
+            Over
+          </option>
+          <option value="Under" className="bg-gray-800">
+            Under
+          </option>
         </select>
       </div>
 
       <div className="text-gray-300 mb-6">
         <p>
           {selectedBetType === 'All' 
-            ? 'Teams ranked by composite score: Win Rate (50%), Total Wins (30%), Recent Performance (20%) + Bet Type Specialization Bonus'
-            : `Teams ranked by ${selectedBetType} bet type performance (minimum 3 bets). Same composite score formula applied.`
+            ? 'Teams ranked by composite score: Win Rate (50%, recency-weighted from BET_ID dates vs newest slip), Total Wins (30%), Recent Performance (20%) + Bet Type Bonus. Min 10 settled bets. ≤30d full weight, ≤90d half, older light.'
+            : `Teams ranked by ${selectedBetType} bet type performance (minimum 3 bets of that type; overall list still requires 10 settled bets). Same composite score formula applied.`
           }
         </p>
         {sortConfig.key && (
@@ -297,8 +376,8 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
                 onClick={() => handleSort('winRate')}
               >
                 <div className="flex items-center gap-2">
-                  Win Rate
-                  {getSortIcon('winRate')}
+                  Win Rate (wtd)
+                  {getSortIcon("winRate")}
                 </div>
               </th>
               <th 
@@ -370,17 +449,27 @@ const TopTeamsTab = ({ getTopTeams, blacklistedTeams, isTeamBlacklisted }) => {
                     </div>
                   </td>
                   <td className="px-4 py-2 text-gray-300">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        team.winRate >= 70
-                          ? "bg-green-100 text-green-800"
-                          : team.winRate >= 50
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {team.winRate.toFixed(1)}%
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium w-fit ${
+                          (team.displayWinRate ?? team.winRate) >= 70
+                            ? "bg-green-100 text-green-800"
+                            : (team.displayWinRate ?? team.winRate) >= 50
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {(team.displayWinRate ?? team.winRate).toFixed(1)}%
+                      </span>
+                      {team.rawWinRate != null &&
+                        Math.abs(
+                          (team.displayWinRate ?? team.winRate) - team.rawWinRate,
+                        ) >= 0.5 && (
+                          <span className="text-[10px] text-gray-500">
+                            raw {team.rawWinRate.toFixed(1)}%
+                          </span>
+                        )}
+                    </div>
                   </td>
                   <td className="px-4 py-2 text-gray-300">{team.totalBets}</td>
                   <td className="px-4 py-2 text-gray-300">
