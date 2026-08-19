@@ -28,6 +28,15 @@ function oddsBucket(o) {
   return "5.00+";
 }
 
+/** Collapse Sheet1 BET_TYPE into SW / DC / O-U / Other */
+function categorizeBetType(betType) {
+  const t = low(betType);
+  if (t.includes("double chance")) return "Double Chance";
+  if (t.includes("over") || t.includes("under")) return "Over/Under";
+  if (t.includes("win") || !t) return "Straight Win";
+  return norm(betType) || "Other";
+}
+
 function normalizeBet(raw) {
   return {
     date: norm(raw.DATE ?? raw.date),
@@ -127,6 +136,22 @@ export function analyzeLossPatterns(rawBets) {
     .sort((a, b) => b.lossRate - a.lossRate || b.loss - a.loss)
     .slice(0, 20);
 
+  // Team × bet type (SW loss ≠ DC loss on the same club)
+  const byTeamByType = group(
+    decided,
+    (b) => {
+      if (!b.team) return null;
+      return `${b.team}\0${categorizeBetType(b.betType)}`;
+    },
+    5
+  )
+    .map((o) => {
+      const [team, betType] = o.key.split("\0");
+      return { ...o, team, betType, key: `${team} (${betType})` };
+    })
+    .sort((a, b) => b.lossRate - a.lossRate || b.loss - a.loss)
+    .slice(0, 30);
+
   const byTeamVol = group(decided, (b) => b.team)
     .sort((a, b) => b.loss - a.loss)
     .slice(0, 15);
@@ -185,6 +210,7 @@ export function analyzeLossPatterns(rawBets) {
     byCountryRate,
     byLeagueRate,
     byTeamRate,
+    byTeamByType,
     byTeamVol,
     lossScoreStats: {
       scored: lossScored.length,

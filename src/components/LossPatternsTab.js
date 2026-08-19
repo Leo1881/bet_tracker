@@ -292,13 +292,18 @@ const LossPatternsTab = () => {
 
           <section className="space-y-3">
             <h4 className="text-white font-semibold">
-              Worst teams by loss rate (min 8 legs)
+              Worst teams by loss rate (by bet type, min 5 legs)
             </h4>
+            <p className="text-xs text-gray-400">
+              Same club can look bad on Straight Win but fine on Double Chance —
+              these rows are split so they are not mixed.
+            </p>
             <SimpleTable
-              headers={["Team", "Legs", "Losses", "Loss rate"]}
-              columnAlign={["left", "right", "right", "right"]}
-              rows={analysis.byTeamRate.map((r) => [
-                r.key,
+              headers={["Team", "Bet type", "Legs", "Losses", "Loss rate"]}
+              columnAlign={["left", "left", "right", "right", "right"]}
+              rows={(analysis.byTeamByType || []).map((r) => [
+                r.team,
+                r.betType,
                 r.n,
                 r.loss,
                 `${r.lossRate}%`,
