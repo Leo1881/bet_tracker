@@ -956,6 +956,16 @@ app.get("/api/betslip-recommendations", async (req, res) => {
   }
 });
 
+// Classify a recommendation string into ranking market types
+function classifyRecommendationMarket(rec) {
+  const r = (rec == null ? "" : String(rec)).trim().toLowerCase().replace(/\s+/g, " ");
+  if (!r || r.includes("avoid") || r.includes("no clear")) return null;
+  if (r.includes("home or away")) return "Double Chance 12";
+  if (/\bor\s+draw\b/.test(r)) return "Double Chance";
+  if (/\bover\s+[\d.]+/.test(r) || /\bunder\s+[\d.]+/.test(r)) return "Over/Under";
+  return "Straight Win";
+}
+
 // Tier accuracy / scoreboard: evaluate system picks (P/S/T + Best Bet + AI) vs match outcome
 app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
   try {
@@ -988,14 +998,35 @@ app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
     }
     const games = [...byGame.values()];
 
-    const empty = () => ({ correct: 0, total: 0 });
+    const emptyMarket = () => ({
+      correct: 0,
+      total: 0,
+      byMarket: {
+        "Straight Win": { correct: 0, total: 0 },
+        "Double Chance": { correct: 0, total: 0 },
+        "Double Chance 12": { correct: 0, total: 0 },
+        "Over/Under": { correct: 0, total: 0 },
+      },
+    });
     const tiers = {
-      primary: empty(),
-      secondary: empty(),
-      tertiary: empty(),
-      bestBet: empty(),
-      ai: empty(),
+      primary: emptyMarket(),
+      secondary: emptyMarket(),
+      tertiary: emptyMarket(),
+      bestBet: emptyMarket(),
+      ai: emptyMarket(),
     };
+
+    const bump = (tier, rec, isCorrect) => {
+      if (isCorrect === null) return;
+      tier.total += 1;
+      if (isCorrect) tier.correct += 1;
+      const market = classifyRecommendationMarket(rec);
+      if (market && tier.byMarket[market]) {
+        tier.byMarket[market].total += 1;
+        if (isCorrect) tier.byMarket[market].correct += 1;
+      }
+    };
+
     const gamesWithoutScores = [];
     for (const row of games) {
       const hs = row.actual_home_score != null ? Number(row.actual_home_score) : null;
@@ -1013,30 +1044,27 @@ app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
       const aiPickRaw = row.ai_skip || normalize(row.ai_pick) === "skip" ? null : row.ai_pick;
       const aiCorrect = evaluateRecommendation(aiPickRaw, row.home_team, row.away_team, hs, as, row.actual_result);
 
-      if (pCorrect !== null) {
-        tiers.primary.total++;
-        if (pCorrect) tiers.primary.correct++;
-      }
-      if (sCorrect !== null) {
-        tiers.secondary.total++;
-        if (sCorrect) tiers.secondary.correct++;
-      }
-      if (tCorrect !== null) {
-        tiers.tertiary.total++;
-        if (tCorrect) tiers.tertiary.correct++;
-      }
-      if (bbCorrect !== null) {
-        tiers.bestBet.total++;
-        if (bbCorrect) tiers.bestBet.correct++;
-      }
-      if (aiCorrect !== null) {
-        tiers.ai.total++;
-        if (aiCorrect) tiers.ai.correct++;
-      }
+      bump(tiers.primary, primary, pCorrect);
+      bump(tiers.secondary, row.secondary_recommendation, sCorrect);
+      bump(tiers.tertiary, row.tertiary_recommendation, tCorrect);
+      bump(tiers.bestBet, row.best_bet_recommendation, bbCorrect);
+      bump(tiers.ai, aiPickRaw, aiCorrect);
     }
 
     const acc = (t) => (t.total > 0 ? (t.correct / t.total) * 100 : 0);
-    const pack = (t) => ({ correct: t.correct, total: t.total, accuracy: acc(t) });
+    const packLeaf = (t) => ({
+      correct: t.correct,
+      total: t.total,
+      accuracy: acc(t),
+    });
+    const pack = (t) => ({
+      ...packLeaf(t),
+      byMarket: Object.fromEntries(
+        Object.entries(t.byMarket || {})
+          .filter(([, v]) => v.total > 0)
+          .map(([k, v]) => [k, packLeaf(v)])
+      ),
+    });
     const totalBets = tiers.primary.total + tiers.secondary.total + tiers.tertiary.total;
     res.json({
       primary: pack(tiers.primary),
@@ -1052,16 +1080,6 @@ app.get("/api/betslip-recommendations/tier-accuracy", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// Classify a recommendation string into ranking market types
-function classifyRecommendationMarket(rec) {
-  const r = (rec == null ? "" : String(rec)).trim().toLowerCase().replace(/\s+/g, " ");
-  if (!r || r.includes("avoid") || r.includes("no clear")) return null;
-  if (r.includes("home or away")) return "Double Chance 12";
-  if (/\bor\s+draw\b/.test(r)) return "Double Chance";
-  if (/\bover\s+[\d.]+/.test(r) || /\bunder\s+[\d.]+/.test(r)) return "Over/Under";
-  return "Straight Win";
-}
 
 // Segmented hit rates for ranking nudges (market × country/league)
 app.get("/api/betslip-recommendations/calibration", async (req, res) => {

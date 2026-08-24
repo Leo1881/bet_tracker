@@ -2,27 +2,82 @@ import React, { useState, useEffect } from "react";
 import { TabContentSkeleton } from "./SkeletonLoader";
 import ErrorDisplay from "./ErrorDisplay";
 
-const TierCard = ({ label, emoji, desc, correct = 0, total = 0, accuracy = 0, highlight }) => (
-  <div
-    className={`rounded-lg p-4 border ${
-      highlight
-        ? "bg-emerald-500/15 border-emerald-400/40"
-        : "bg-white/10 border-white/20"
-    }`}
-  >
-    <div className="flex items-center gap-2 mb-2">
-      <span className="text-2xl">{emoji}</span>
-      <h4 className="text-lg font-semibold text-white">{label}</h4>
+const MARKET_SHORT = {
+  "Straight Win": "SW",
+  "Double Chance": "DC",
+  "Double Chance 12": "DC12",
+  "Over/Under": "O/U",
+};
+
+const MARKET_ORDER = [
+  "Straight Win",
+  "Double Chance",
+  "Double Chance 12",
+  "Over/Under",
+];
+
+const TierCard = ({
+  label,
+  emoji,
+  desc,
+  correct = 0,
+  total = 0,
+  accuracy = 0,
+  byMarket,
+  highlight,
+}) => {
+  const marketRows = MARKET_ORDER.map((name) => {
+    const m = byMarket?.[name];
+    if (!m || !m.total) return null;
+    return {
+      name,
+      short: MARKET_SHORT[name] || name,
+      correct: m.correct,
+      total: m.total,
+      accuracy: m.accuracy,
+    };
+  }).filter(Boolean);
+
+  return (
+    <div
+      className={`rounded-lg p-4 border ${
+        highlight
+          ? "bg-emerald-500/15 border-emerald-400/40"
+          : "bg-white/10 border-white/20"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-2xl">{emoji}</span>
+        <h4 className="text-lg font-semibold text-white">{label}</h4>
+      </div>
+      <p className="text-gray-400 text-xs mb-3">{desc}</p>
+      <div className="text-3xl font-bold text-green-400">
+        {total > 0 ? accuracy.toFixed(1) : "—"}%
+      </div>
+      <div className="text-gray-300 text-sm mt-1">
+        {correct} correct / {total} bets
+      </div>
+      {marketRows.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/10 space-y-1.5">
+          {marketRows.map((row) => (
+            <div
+              key={row.name}
+              className="flex items-center justify-between gap-2 text-xs"
+            >
+              <span className="text-gray-400 w-10 shrink-0">{row.short}</span>
+              <span className="text-gray-300 tabular-nums">
+                {row.correct}/{row.total}
+              </span>
+              <span className="text-green-300/90 font-medium tabular-nums w-14 text-right">
+                {row.accuracy.toFixed(0)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
-    <p className="text-gray-400 text-xs mb-3">{desc}</p>
-    <div className="text-3xl font-bold text-green-400">
-      {total > 0 ? accuracy.toFixed(1) : "—"}%
-    </div>
-    <div className="text-gray-300 text-sm mt-1">
-      {correct} correct / {total} bets
-    </div>
-  </div>
-);
+  );
+};
 
 const PredictionAccuracyTab = () => {
   const [tierAccuracy, setTierAccuracy] = useState(null);
@@ -142,7 +197,8 @@ const PredictionAccuracyTab = () => {
           (and AI only after you fetch an AI opinion). Older rows still score
           Primary / Secondary / Tertiary. When a market has 20+ settled picks,
           that hit rate also gently nudges ranking for new recommendations
-          (league first, then country, then overall).
+          (league first, then country, then overall). Each card also breaks
+          down SW / DC / DC12 / O-U.
         </p>
       </div>
 
