@@ -139,8 +139,8 @@ const TopTeamsTab = ({ getTopTeams, isTeamBlacklisted }) => {
       <div className="text-gray-300 mb-6">
         <p>
           {selectedBetType === "All"
-            ? "Each team appears once, ranked by their strongest market (Straight Win, Double Chance, or Over/Under). Score uses recency-weighted Wilson win rate (50%), win volume (30%), last-10 games (20%). Min 10 settled legs in that market. Top 60 only."
-            : `Ranked by ${selectedBetType === "Over" ? "Over/Under" : selectedBetType} only (min 10 settled legs of that type). Same score formula. Top 60.`}
+            ? "Each team appears once, ranked by their strongest market (Straight Win, Double Chance, or Over/Under). Score uses recency-weighted Wilson win rate (50%), win volume (30%), last-10 games (20%). Min 10 settled legs in that market, and at least one settled bet in the last 90 days (vs newest slip). Top 60 only."
+            : `Ranked by ${selectedBetType === "Over" ? "Over/Under" : selectedBetType} only (min 10 settled legs of that type, active within 90 days). Same score formula. Top 60.`}
         </p>
         {sortConfig.key && (
           <p className="text-sm text-yellow-400 mt-2">

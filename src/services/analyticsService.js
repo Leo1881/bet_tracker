@@ -740,25 +740,37 @@ const categorizeMarket = (betType) => {
   return "Other";
 };
 
+/** Must have a settled bet within this many days of the newest slip to stay on Top Teams. */
+export const TOP_TEAMS_ACTIVE_WITHIN_DAYS = 90;
+
 /**
  * Top teams ranked by their BEST market (SW / DC / O-U) rating — one row per team+league.
  * Avoids DC wins inflating overall hit rate. Default list for Top Teams tab.
  * @param {Array} deduplicatedBets
- * @param {{ minSettled?: number, limit?: number, forceMarket?: string|null }} [opts]
+ * @param {{ minSettled?: number, limit?: number, forceMarket?: string|null, activeWithinDays?: number }} [opts]
  *   forceMarket: if set (e.g. "Straight Win"), rank only on that market
+ *   activeWithinDays: drop teams with no settled bet in this window (default 90)
  * @returns {Array}
  */
 export const getTopTeamsByBestMarket = (
   deduplicatedBets,
-  { minSettled = 10, limit = 60, forceMarket = null } = {},
+  {
+    minSettled = 10,
+    limit = 60,
+    forceMarket = null,
+    activeWithinDays = TOP_TEAMS_ACTIVE_WITHIN_DAYS,
+  } = {},
 ) => {
   const anchorDate = getNewestSlipDate(deduplicatedBets);
   const junk = /^(over|under)\s*[\d.]+$/i;
+  const activeMs = activeWithinDays * 24 * 60 * 60 * 1000;
 
   /** @type {Map<string, object>} teamKey|market → stats */
   const marketStats = new Map();
   /** @type {Map<string, object[]>} teamKey → all settled bets */
   const teamBets = new Map();
+  /** @type {Map<string, Date>} teamKey → newest settled slip date */
+  const teamLastSlip = new Map();
 
   for (const bet of deduplicatedBets || []) {
     const result = String(bet.RESULT ?? bet.result ?? "").toLowerCase();
@@ -785,9 +797,15 @@ export const getTopTeamsByBestMarket = (
 
     const teamKey = `${team.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
     const marketKey = `${teamKey}|${market}`;
+    const slipDate = parseSlipDateFromBetId(bet);
 
     if (!teamBets.has(teamKey)) teamBets.set(teamKey, []);
     teamBets.get(teamKey).push(bet);
+
+    if (slipDate) {
+      const prev = teamLastSlip.get(teamKey);
+      if (!prev || slipDate > prev) teamLastSlip.set(teamKey, slipDate);
+    }
 
     if (!marketStats.has(marketKey)) {
       marketStats.set(marketKey, {
@@ -804,7 +822,7 @@ export const getTopTeamsByBestMarket = (
       });
     }
     const o = marketStats.get(marketKey);
-    const weight = getRecencyWeight(parseSlipDateFromBetId(bet), anchorDate);
+    const weight = getRecencyWeight(slipDate, anchorDate);
     const isWin = result.includes("win");
     if (isWin) {
       o.wins += 1;
@@ -816,7 +834,6 @@ export const getTopTeamsByBestMarket = (
 
     const home = bet.HOME_TEAM ?? bet.home_team ?? "";
     const away = bet.AWAY_TEAM ?? bet.away_team ?? "";
-    const slipDate = parseSlipDateFromBetId(bet);
     const dateKey = slipDate
       ? `${slipDate.getFullYear()}-${String(slipDate.getMonth() + 1).padStart(2, "0")}-${String(slipDate.getDate()).padStart(2, "0")}`
       : String(bet.DATE ?? bet.date ?? "");
@@ -826,6 +843,13 @@ export const getTopTeamsByBestMarket = (
     }
     if (isWin) o.games.get(gameKey).win = true;
   }
+
+  const isActive = (teamKey) => {
+    if (activeWithinDays == null || activeWithinDays <= 0) return true;
+    const last = teamLastSlip.get(teamKey);
+    if (!last) return false; // no parseable BET_ID date → treat as inactive
+    return anchorDate.getTime() - last.getTime() <= activeMs;
+  };
 
   const marketRows = [];
   for (const o of marketStats.values()) {
@@ -869,12 +893,14 @@ export const getTopTeamsByBestMarket = (
       recentBets: last10.length,
       recentWinRate: parseFloat(recentWinRate.toFixed(1)),
       compositeScore,
+      lastBetDate: teamLastSlip.get(o.teamKey) || null,
     });
   }
 
-  // One row per team+league — keep highest market rating
+  // One row per team+league — keep highest market rating; drop inactive teams
   const byTeam = new Map();
   for (const row of marketRows) {
+    if (!isActive(row.teamKey)) continue;
     const prev = byTeam.get(row.teamKey);
     if (!prev || row.compositeScore > prev.compositeScore) {
       byTeam.set(row.teamKey, row);

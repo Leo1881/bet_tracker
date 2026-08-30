@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { fetchNewBets, fetchSheetData } from "./utils/fetchSheetData";
 import { applyFilters } from "./utils/dataProcessingUtils";
 import { useAppState } from "./hooks/useAppState";
@@ -44,13 +44,17 @@ import {
   teamsMatch as teamsMatchNames,
   isTeamNameBlacklisted,
 } from "./utils/teamNameUtils";
+import {
+  buildDynamicAvoidList,
+  mergeAvoidLists,
+} from "./services/avoidListService";
 import "./App.css";
 import FilterControls from "./components/FilterControls";
 import TabNavigation from "./components/TabNavigation";
 import DataTab from "./components/DataTab";
 import AnalyticsTab from "./components/AnalyticsTab";
 import PerformanceTab from "./components/PerformanceTab";
-import BlacklistTab from "./components/BlacklistTab";
+import AvoidTeamsTab from "./components/AvoidTeamsTab";
 import OddsTab from "./components/OddsTab";
 import BetAnalysisTab from "./components/BetAnalysisTab";
 import RecommendationsTab from "./components/RecommendationsTab";
@@ -73,6 +77,7 @@ function App() {
   const {
     // Data state
     bets,
+    setBets,
     setFilteredBets,
     blacklistedTeams,
     teamNotes,
@@ -486,8 +491,17 @@ function App() {
     return { filteredBets, wins, losses, pending, winRate };
   };
 
+  const dynamicAvoidList = useMemo(
+    () => buildDynamicAvoidList(bets),
+    [bets],
+  );
+  const effectiveBlacklist = useMemo(
+    () => mergeAvoidLists(blacklistedTeams, dynamicAvoidList),
+    [blacklistedTeams, dynamicAvoidList],
+  );
+
   const isTeamBlacklisted = (teamName) =>
-    isTeamNameBlacklisted(teamName, blacklistedTeams);
+    isTeamNameBlacklisted(teamName, effectiveBlacklist);
 
   const getUniqueValues = (field, context = {}) => {
     const deduplicatedBets = getDeduplicatedBetsForAnalysis;
@@ -2609,7 +2623,7 @@ function App() {
         blacklistedSides.length > 0
           ? {
               teams: blacklistedSides,
-              message: `Blacklisted: ${blacklistedSides.join(" · ")}`,
+              message: `Avoid list: ${blacklistedSides.join(" · ")}`,
             }
           : null;
 
@@ -4354,7 +4368,7 @@ function App() {
     formatDateString,
     storePredictionsData,
     storeRecommendationsData,
-  } = useUtility(bets, blacklistedTeams, storedPredictions);
+  } = useUtility(bets, effectiveBlacklist, storedPredictions);
 
   // Use the analysis hook (side effects only)
   // eslint-disable-next-line no-empty-pattern
@@ -4373,7 +4387,7 @@ function App() {
     getDeduplicatedNewBets: getDeduplicatedNewBetsService,
   } = useBetAnalysis(
     bets,
-    blacklistedTeams,
+    effectiveBlacklist,
     getDeduplicatedBetsForAnalysis,
     calculateConfidence,
     getBreakdown,
@@ -5986,12 +6000,13 @@ function App() {
             />
           )}
 
-          {activeTab === "blacklist" && (
-            <BlacklistTab
-              handleBlacklistSort={handleBlacklistSort}
-              blacklistSortConfig={blacklistSortConfig}
-              blacklistedTeams={blacklistedTeams}
-              getSortedBlacklistData={getSortedBlacklistData}
+          {activeTab === "avoidTeams" && (
+            <AvoidTeamsTab
+              bets={bets}
+              onBetsRefresh={(sheetBets) => {
+                setBets(sheetBets);
+                setFilteredBets(sheetBets);
+              }}
             />
           )}
 

@@ -115,9 +115,10 @@ export const getSortedBlacklistData = (
   blacklistedTeams,
   blacklistSortConfig
 ) => {
-  if (!blacklistSortConfig.key) return blacklistedTeams;
+  const list = blacklistedTeams || [];
+  if (!blacklistSortConfig?.key) return list;
 
-  return [...blacklistedTeams].sort((a, b) => {
+  return [...list].sort((a, b) => {
     const aValue = a[blacklistSortConfig.key];
     const bValue = b[blacklistSortConfig.key];
 
