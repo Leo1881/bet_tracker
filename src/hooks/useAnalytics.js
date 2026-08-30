@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { getDeduplicatedBets } from "../services/dataProcessingService";
-import { getTopTeams } from "../services/analyticsService";
+import { getTopTeamsByBestMarket } from "../services/analyticsService";
 
 /**
  * Custom hook for analytics data
@@ -14,9 +14,12 @@ export const useAnalytics = (bets, analyticsSortConfig) => {
     return getDeduplicatedBets(bets);
   }, [bets]);
 
-  // Get team analytics
+  // Get team analytics (best-market Top 60)
   const teamAnalytics = useMemo(() => {
-    return getTopTeams(deduplicatedBets);
+    return getTopTeamsByBestMarket(deduplicatedBets, {
+      minSettled: 10,
+      limit: 60,
+    });
   }, [deduplicatedBets]);
 
   // Get sorted analytics data with multi-column support

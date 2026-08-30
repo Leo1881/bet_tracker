@@ -45,7 +45,7 @@ const DailyGamesTab = ({ dailyGamesLoading, getProcessedDailyGames }) => {
                     </span>
                     {game.homeTeamRank && (
                       <span className="text-yellow-400 text-sm">
-                        Top 40: #{game.homeTeamRank}
+                        Top 60: #{game.homeTeamRank}
                       </span>
                     )}
                   </div>
@@ -87,7 +87,7 @@ const DailyGamesTab = ({ dailyGamesLoading, getProcessedDailyGames }) => {
                     </span>
                     {game.awayTeamRank && (
                       <span className="text-yellow-400 text-sm">
-                        Top 40: #{game.awayTeamRank}
+                        Top 60: #{game.awayTeamRank}
                       </span>
                     )}
                   </div>

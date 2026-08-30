@@ -730,3 +730,218 @@ export const getTopTeams = (deduplicatedBets) => {
 
   return teamsArray || [];
 };
+
+/** Collapse Sheet1 BET_TYPE into SW / DC / O-U */
+const categorizeMarket = (betType) => {
+  const t = String(betType ?? "").toLowerCase();
+  if (t.includes("double chance")) return "Double Chance";
+  if (t.includes("over") || t.includes("under")) return "Over/Under";
+  if (t.includes("win") || !t) return "Straight Win";
+  return "Other";
+};
+
+/**
+ * Top teams ranked by their BEST market (SW / DC / O-U) rating — one row per team+league.
+ * Avoids DC wins inflating overall hit rate. Default list for Top Teams tab.
+ * @param {Array} deduplicatedBets
+ * @param {{ minSettled?: number, limit?: number, forceMarket?: string|null }} [opts]
+ *   forceMarket: if set (e.g. "Straight Win"), rank only on that market
+ * @returns {Array}
+ */
+export const getTopTeamsByBestMarket = (
+  deduplicatedBets,
+  { minSettled = 10, limit = 60, forceMarket = null } = {},
+) => {
+  const anchorDate = getNewestSlipDate(deduplicatedBets);
+  const junk = /^(over|under)\s*[\d.]+$/i;
+
+  /** @type {Map<string, object>} teamKey|market → stats */
+  const marketStats = new Map();
+  /** @type {Map<string, object[]>} teamKey → all settled bets */
+  const teamBets = new Map();
+
+  for (const bet of deduplicatedBets || []) {
+    const result = String(bet.RESULT ?? bet.result ?? "").toLowerCase();
+    if (!result.includes("win") && !result.includes("loss")) continue;
+
+    let team =
+      String(bet.TEAM_INCLUDED ?? bet.team_included ?? "").trim() ||
+      String(bet.HOME_TEAM ?? bet.home_team ?? "").trim() ||
+      String(bet.AWAY_TEAM ?? bet.away_team ?? "").trim();
+    if (!team || junk.test(team)) {
+      team = String(
+        bet.HOME_TEAM ?? bet.home_team ?? bet.AWAY_TEAM ?? bet.away_team ?? "",
+      ).trim();
+    }
+    if (!team || junk.test(team)) continue;
+
+    const country = String(bet.COUNTRY ?? bet.country ?? "").trim();
+    const league = String(bet.LEAGUE ?? bet.league ?? "").trim();
+    if (!country || !league) continue;
+
+    const market = categorizeMarket(bet.BET_TYPE ?? bet.bet_type);
+    if (market === "Other") continue;
+    if (forceMarket && market !== forceMarket) continue;
+
+    const teamKey = `${team.toLowerCase()}_${country.toLowerCase()}_${league.toLowerCase()}`;
+    const marketKey = `${teamKey}|${market}`;
+
+    if (!teamBets.has(teamKey)) teamBets.set(teamKey, []);
+    teamBets.get(teamKey).push(bet);
+
+    if (!marketStats.has(marketKey)) {
+      marketStats.set(marketKey, {
+        teamName: team,
+        country,
+        league,
+        teamKey,
+        market,
+        wins: 0,
+        losses: 0,
+        weightedWins: 0,
+        weightedTotal: 0,
+        games: new Map(),
+      });
+    }
+    const o = marketStats.get(marketKey);
+    const weight = getRecencyWeight(parseSlipDateFromBetId(bet), anchorDate);
+    const isWin = result.includes("win");
+    if (isWin) {
+      o.wins += 1;
+      o.weightedWins += weight;
+    } else {
+      o.losses += 1;
+    }
+    o.weightedTotal += weight;
+
+    const home = bet.HOME_TEAM ?? bet.home_team ?? "";
+    const away = bet.AWAY_TEAM ?? bet.away_team ?? "";
+    const slipDate = parseSlipDateFromBetId(bet);
+    const dateKey = slipDate
+      ? `${slipDate.getFullYear()}-${String(slipDate.getMonth() + 1).padStart(2, "0")}-${String(slipDate.getDate()).padStart(2, "0")}`
+      : String(bet.DATE ?? bet.date ?? "");
+    const gameKey = `${dateKey}_${home}_${away}`;
+    if (!o.games.has(gameKey)) {
+      o.games.set(gameKey, { date: slipDate || new Date(0), win: false });
+    }
+    if (isWin) o.games.get(gameKey).win = true;
+  }
+
+  const marketRows = [];
+  for (const o of marketStats.values()) {
+    const settled = o.wins + o.losses;
+    if (settled < minSettled) continue;
+
+    const winRate = settled > 0 ? (o.wins / settled) * 100 : 0;
+    const weightedWinRate =
+      o.weightedTotal > 0
+        ? (o.weightedWins / o.weightedTotal) * 100
+        : winRate;
+    const wilsonWinRate =
+      calculateWilsonScore(o.weightedWins, o.weightedTotal) * 100;
+
+    const last10 = [...o.games.values()]
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 10);
+    const recentWins = last10.filter((g) => g.win).length;
+    const recentWinRate =
+      last10.length > 0 ? (recentWins / last10.length) * 100 : 0;
+
+    const compositeScore =
+      wilsonWinRate * 0.5 +
+      Math.min(o.wins * 2, 100) * 0.3 +
+      recentWinRate * 0.2 +
+      Math.min(settled * 0.2, 5);
+
+    marketRows.push({
+      teamName: o.teamName,
+      country: o.country,
+      league: o.league,
+      teamKey: o.teamKey,
+      bestMarket: o.market,
+      wins: o.wins,
+      losses: o.losses,
+      totalBets: settled,
+      winRate: parseFloat(winRate.toFixed(1)),
+      weightedWinRate: parseFloat(weightedWinRate.toFixed(1)),
+      wilsonWinRate,
+      recentWins,
+      recentBets: last10.length,
+      recentWinRate: parseFloat(recentWinRate.toFixed(1)),
+      compositeScore,
+    });
+  }
+
+  // One row per team+league — keep highest market rating
+  const byTeam = new Map();
+  for (const row of marketRows) {
+    const prev = byTeam.get(row.teamKey);
+    if (!prev || row.compositeScore > prev.compositeScore) {
+      byTeam.set(row.teamKey, row);
+    }
+  }
+
+  const ranked = [...byTeam.values()]
+    .sort(
+      (a, b) =>
+        (b.compositeScore || 0) - (a.compositeScore || 0) ||
+        (b.winRate || 0) - (a.winRate || 0),
+    )
+    .slice(0, limit)
+    .map((row) => {
+      const individualBets = teamBets.get(row.teamKey) || [];
+      // Build bet-type breakdown from all markets for this team (for filters / display)
+      const typeMap = new Map();
+      for (const bet of individualBets) {
+        const market = categorizeMarket(bet.BET_TYPE ?? bet.bet_type);
+        if (market === "Other") continue;
+        if (!typeMap.has(market)) {
+          typeMap.set(market, { wins: 0, losses: 0, totalWithResult: 0 });
+        }
+        const t = typeMap.get(market);
+        const result = String(bet.RESULT ?? bet.result ?? "").toLowerCase();
+        if (result.includes("win")) {
+          t.wins += 1;
+          t.totalWithResult += 1;
+        } else if (result.includes("loss")) {
+          t.losses += 1;
+          t.totalWithResult += 1;
+        }
+      }
+      const betTypeBreakdown = [...typeMap.entries()]
+        .map(([betType, stats]) => ({
+          betType,
+          wins: stats.wins,
+          losses: stats.losses,
+          total: stats.totalWithResult,
+          totalWithResult: stats.totalWithResult,
+          winRate:
+            stats.totalWithResult > 0
+              ? ((stats.wins / stats.totalWithResult) * 100).toFixed(1)
+              : "0.0",
+          wilsonScore:
+            stats.totalWithResult > 0
+              ? calculateWilsonScore(stats.wins, stats.totalWithResult) * 100
+              : 0,
+        }))
+        .sort((a, b) => {
+          // Put bestMarket first, then by wilson
+          if (a.betType === row.bestMarket) return -1;
+          if (b.betType === row.bestMarket) return 1;
+          return b.wilsonScore - a.wilsonScore;
+        });
+
+      return {
+        ...row,
+        team: row.teamName,
+        total: row.totalBets,
+        betTypes: Object.fromEntries(
+          [...typeMap.entries()].map(([k, v]) => [k, v]),
+        ),
+        betTypeBreakdown,
+        individualBets,
+      };
+    });
+
+  return ranked;
+};

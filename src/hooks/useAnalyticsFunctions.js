@@ -4,7 +4,7 @@ import {
   getCountryAnalytics,
   getBestPerformers,
   getHeadToHeadData,
-  getTopTeams,
+  getTopTeamsByBestMarket,
   getNewStatsCards,
 } from "../services/analyticsService";
 
@@ -36,10 +36,25 @@ export const useAnalyticsFunctions = (deduplicatedBets) => {
     return getHeadToHeadData(deduplicatedBets);
   }, [deduplicatedBets]);
 
-  // Get top teams
-  const getTopTeamsData = useCallback(() => {
-    return getTopTeams(deduplicatedBets);
-  }, [deduplicatedBets]);
+  // Get top teams — best market by default, or a specific market filter
+  const getTopTeamsData = useCallback(
+    (marketFilter = "All") => {
+      const forceMarket =
+        marketFilter === "Win"
+          ? "Straight Win"
+          : marketFilter === "Double Chance"
+            ? "Double Chance"
+            : marketFilter === "Over" || marketFilter === "Under"
+              ? "Over/Under"
+              : null;
+      return getTopTeamsByBestMarket(deduplicatedBets, {
+        minSettled: 10,
+        limit: 60,
+        forceMarket,
+      });
+    },
+    [deduplicatedBets],
+  );
 
   // Get new stats cards (current form, best bet type, longest streak, leagues to avoid)
   const getNewStatsCardsData = useCallback(() => {

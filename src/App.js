@@ -5444,8 +5444,8 @@ function App() {
     );
   };
 
-  const getTopTeams = () => {
-    return getTopTeamsService();
+  const getTopTeams = (marketFilter = "All") => {
+    return getTopTeamsService(marketFilter);
   };
 
   const getBetSlips = () => {
@@ -5570,7 +5570,7 @@ function App() {
     const idx = topTeams.findIndex(
       (team) => team.teamName.toLowerCase() === teamName?.toLowerCase(),
     );
-    return idx >= 0 && idx < 40;
+    return idx >= 0 && idx < 60;
   };
 
   const getTop40Ranking = (teamName) => {
@@ -5749,7 +5749,7 @@ function App() {
           ? findPreviousMatchups(matchedHomeTeam, matchedAwayTeam, "", "")
           : [];
 
-      // Get top 40 rankings
+      // Get top 60 rankings
       const homeTeamRank = homeTeamInHistory
         ? getTop40Ranking(matchedHomeTeam)
         : null;

@@ -214,7 +214,7 @@ const BetAnalysisTab = ({
                         {result.TEAM_INCLUDED || "N/A"}
                         {isTeamInTop40(result.TEAM_INCLUDED) && (
                           <div className="text-xs text-yellow-400 mt-1">
-                            Top 40: #{getTop40Ranking(result.TEAM_INCLUDED)}
+                            Top 60: #{getTop40Ranking(result.TEAM_INCLUDED)}
                           </div>
                         )}
                         {result.isBlacklisted && (
