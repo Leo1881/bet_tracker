@@ -30,6 +30,7 @@ import {
   applyLossPatternScoreAdjustments,
   applyOddsBandScoreAdjustments,
   enforceOddsBandStakePick,
+  getBackedTeamOdds,
 } from "./services/recommendationLossRulesService";
 import {
   getEarlySeasonInfo,
@@ -1296,27 +1297,6 @@ function App() {
     };
   };
 
-  // Day-of-week performance: DATE = game date. Use conservatively (30+ bets, ±2% max)
-  // because sample sizes vary and day can be confounded with league.
-  const getDayOfWeekPerformance = () => {
-    if (!bets || bets.length === 0) return null;
-    const deduplicatedBets = getDeduplicatedBetsForAnalysis;
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const byDay = {};
-    deduplicatedBets.forEach((b) => {
-      if (!b.RESULT || (!b.RESULT.toLowerCase().includes("win") && !b.RESULT.toLowerCase().includes("loss"))) return;
-      const d = b.DATE ? new Date(b.DATE).getDay() : 0;
-      const name = dayNames[d];
-      if (!byDay[name]) byDay[name] = { wins: 0, total: 0 };
-      byDay[name].total++;
-      if (b.RESULT.toLowerCase().includes("win")) byDay[name].wins++;
-    });
-    return Object.entries(byDay).reduce((acc, [day, s]) => {
-      acc[day] = { winRate: s.total > 0 ? s.wins / s.total : 0.5, total: s.total };
-      return acc;
-    }, {});
-  };
-
   // Calculate your overall country performance (all bets in that country regardless of league)
   // Fallback when league performance has insufficient data
   const getCountryPerformance = (country) => {
@@ -2197,7 +2177,8 @@ function App() {
 
         let adjustedScore = baseScore;
 
-        // Apply data-driven multipliers based on historical performance (global across all teams)
+        // Soft personal-signal nudges (kept): global bet-type, calibration, team×market, league/country.
+        // Removed for accuracy: day-of-week, SW form/gap boost, stake-pick risk×1.03, double opponent strength.
         if (betOption.type === "Straight Win") {
           adjustedScore *= betTypeMultipliers.straightWin;
         } else if (betOption.type === "Double Chance") {
@@ -2275,21 +2256,8 @@ function App() {
           adjustedScore = adjustedScore * perfMultiplier;
         }
 
-        // Day-of-week: conservative (±2% max, require 30+ bets) – less reliable than country/league
-        const dayOfWeekPerf = getDayOfWeekPerformance();
-        const gameDay = bet.DATE
-          ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(bet.DATE).getDay()]
-          : null;
-        if (dayOfWeekPerf && gameDay && dayOfWeekPerf[gameDay]?.total >= 30) {
-          const dayWinRate = dayOfWeekPerf[gameDay].winRate;
-          const dayMultiplier =
-            dayWinRate >= 0.6 ? 1.02 : dayWinRate <= 0.4 ? 0.98 : 1.0; // ±2% max
-          adjustedScore = adjustedScore * dayMultiplier;
-        }
-
-        // Personal loss-pattern rules first (odds ceiling, trap leagues, away SW, blacklist).
-        // SW preference boosts only apply when loss rules did not cut the market — otherwise
-        // form/gap boosts fight the loss rules and resurrect Straight Wins we meant to demote.
+        // Hard rules last so soft nudges cannot resurrect a cut market:
+        // loss patterns, odds band, early season.
         const teamBlacklisted = teamForBet
           ? isTeamBlacklisted(teamForBet)
           : isTeamBlacklisted(homeTeam) || isTeamBlacklisted(awayTeam);
@@ -2324,57 +2292,13 @@ function App() {
           adjustedScore: oddsBandAdj.adjustedScore,
           earlySeasonInfo,
         });
-        let scoreAfterRules = earlyAdj.adjustedScore;
-        const ruleNotes = [
+        const scoreAfterRules = earlyAdj.adjustedScore;
+        const displayNotes = [
           ...lossAdj.notes,
           ...oddsBandAdj.notes,
           ...earlyAdj.notes,
-        ];
-        const displayNotes = [
-          ...ruleNotes,
           ...(calibAdj.note ? [calibAdj.note] : []),
         ];
-
-        // SW form/gap boost only when neither loss rules nor odds-band cut the market
-        // (and not early season — form sample is too thin)
-        if (
-          !earlySeasonInfo.isEarlySeason &&
-          ruleNotes.length === 0 &&
-          betOption.type === "Straight Win" &&
-          betOption.recommendation.bet !== "AVOID" &&
-          betOption.recommendation.bet !== "No clear winner" &&
-          teamForBet
-        ) {
-          const straightWinConf =
-            betOption.recommendation.confidence ??
-            betOption.recommendation.wilsonWinRate ??
-            0;
-          const doubleChanceRec = allBets.find(
-            (r) => r.type === "Double Chance",
-          );
-          const doubleChanceConf =
-            doubleChanceRec?.recommendation?.confidence ??
-            doubleChanceRec?.recommendation?.wilsonWinRate ??
-            0;
-
-          const favoredWins =
-            teamForBet === homeTeam
-              ? recentFormData.homeWins || 0
-              : recentFormData.awayWins || 0;
-          const opponentWins =
-            teamForBet === homeTeam
-              ? recentFormData.awayWins || 0
-              : recentFormData.homeWins || 0;
-          if (favoredWins >= 3 && opponentWins <= 2) {
-            scoreAfterRules *= 1.25;
-          }
-
-          const gap = doubleChanceConf - straightWinConf;
-          if (straightWinConf >= 60 && gap >= 0 && gap <= 20) {
-            const gapBoost = 1.1 + (20 - gap) * 0.01;
-            scoreAfterRules *= gapBoost;
-          }
-        }
 
         return {
           ...betOption,
@@ -2433,65 +2357,33 @@ function App() {
       );
       addOddsTrapToCard(tertiary);
 
-      // Calculate Best Bet - uses adjusted scores that already include team-specific bet type performance
-      // Additional factors for Best Bet selection: odds value, risk level, and opponent strength
+      // Stake-pick score: adjustedScore + light value check on backed-team odds.
+      // Opponent strength stays in market confidence only (no second pass here).
       const bestBetScores = rankedBets.map((betOption) => {
         const teamForBet = betOption.teamForBet; // Already calculated during ranking
         let bestBetScore = betOption.adjustedScore; // Start with adjusted score (already includes team-specific performance)
 
-        // Factor in odds value (expected value)
-        const recommendationOdds = odds; // Use the main odds for now
+        // Factor in odds value using the backed team's price (ODDS1 home / ODDS2 away),
+        // not always ODDS1 — away favorites were getting a fake EV boost from the dog's price.
+        const backedOdds = getBackedTeamOdds(
+          bet,
+          teamForBet,
+          homeTeam,
+          awayTeam,
+        );
+        const recommendationOdds =
+          backedOdds != null && backedOdds > 1 ? backedOdds : odds;
         const impliedProbability = 1 / recommendationOdds;
         const confidenceProbability = betOption.recommendation.confidence / 100;
 
-        // If confidence suggests higher probability than odds imply, that's value
+        // Light value nudge (capped) — confidence vs backed price
         const valueMultiplier =
           confidenceProbability > impliedProbability
-            ? 1.0 + (confidenceProbability - impliedProbability) * 0.3 // Up to 30% boost for value
-            : 1.0 - (impliedProbability - confidenceProbability) * 0.2; // Up to 20% penalty for poor value
+            ? 1.0 + (confidenceProbability - impliedProbability) * 0.2
+            : 1.0 - (impliedProbability - confidenceProbability) * 0.15;
 
         bestBetScore =
-          bestBetScore * Math.max(0.8, Math.min(1.3, valueMultiplier));
-
-        // Factor in risk level (lower risk = slightly higher score for best bet)
-        if (betOption.riskLevel === "Low" || betOption.riskLevel === "Medium") {
-          bestBetScore *= 1.03; // 3% boost for lower risk
-        }
-
-        // Factor in opponent strength for Best Bet selection
-        // Get opponent position and form
-        const opponentPosition =
-          teamForBet === homeTeam
-            ? bet.AWAY_TEAM_POSITION_NUMBER || bet.AWAY_TEAM_POSITION
-            : bet.HOME_TEAM_POSITION_NUMBER || bet.HOME_TEAM_POSITION;
-        const opponentForm =
-          teamForBet === homeTeam
-            ? recentFormData
-              ? {
-                  wins: recentFormData.awayWins || 0,
-                  draws: recentFormData.awayDraws || 0,
-                  losses: recentFormData.awayLosses || 0,
-                }
-              : null
-            : recentFormData
-              ? {
-                  wins: recentFormData.homeWins || 0,
-                  draws: recentFormData.homeDraws || 0,
-                  losses: recentFormData.homeLosses || 0,
-                }
-              : null;
-
-        const opponentStrengthImpact = calculateOpponentStrengthImpact(
-          opponentPosition,
-          opponentForm,
-        );
-        // For Best Bet, favor bets against weaker opponents
-        // Strong opponent (low multiplier) = reduce score, Weak opponent (high multiplier) = boost score
-        bestBetScore =
-          bestBetScore * Math.max(0.9, Math.min(1.1, opponentStrengthImpact));
-
-        // No second Straight Win preference here — adjustedScore already applied
-        // loss rules (+ gated SW boost). Re-boosting SW would undo those cuts.
+          bestBetScore * Math.max(0.9, Math.min(1.15, valueMultiplier));
 
         return {
           ...betOption,
@@ -3486,152 +3378,203 @@ function App() {
         : 0;
     const awayDoubleChanceWilsonRate = awayDoubleChanceWilsonScore * 100;
 
-    // Determine which team to recommend
+    // Determine which team to recommend for Double Chance.
+    // Clear Straight Win → inherit that side.
+    // Muddy Straight Win → pick DC side independently (unbeaten form / table / price / DC history).
+    const SW_CLEAR_MIN_CONF = 65;
+    const SW_CLEAR_MIN_WILSON = 55;
+    const swBet = straightWinAnalysis.bet;
+    const swPicksHome = swBet === homeTeam;
+    const swPicksAway = swBet === awayTeam;
+    const swConfidence = Number(straightWinAnalysis.confidence) || 0;
+    const swWilson = Number(straightWinAnalysis.wilsonWinRate) || 0;
+    const straightWinClear =
+      (swPicksHome || swPicksAway) &&
+      swConfidence >= SW_CLEAR_MIN_CONF &&
+      swWilson >= SW_CLEAR_MIN_WILSON;
+
+    const homeFormWins = recentFormData?.homeWins || 0;
+    const homeFormDraws = recentFormData?.homeDraws || 0;
+    const homeFormLosses = recentFormData?.homeLosses || 0;
+    const awayFormWins = recentFormData?.awayWins || 0;
+    const awayFormDraws = recentFormData?.awayDraws || 0;
+    const awayFormLosses = recentFormData?.awayLosses || 0;
+    const homeFormGames = homeFormWins + homeFormDraws + homeFormLosses;
+    const awayFormGames = awayFormWins + awayFormDraws + awayFormLosses;
+    const homeUnbeatenRate =
+      homeFormGames > 0 ? (homeFormWins + homeFormDraws) / homeFormGames : 0;
+    const awayUnbeatenRate =
+      awayFormGames > 0 ? (awayFormWins + awayFormDraws) / awayFormGames : 0;
+
+    const homePosNum =
+      parseInt(
+        betData.HOME_TEAM_POSITION_NUMBER || betData.HOME_TEAM_POSITION,
+        10,
+      ) || 99;
+    const awayPosNum =
+      parseInt(
+        betData.AWAY_TEAM_POSITION_NUMBER || betData.AWAY_TEAM_POSITION,
+        10,
+      ) || 99;
+    const homeOddsNum = parseFloat(betData.ODDS1) || 99;
+    const awayOddsNum = parseFloat(betData.ODDS2) || 99;
+
+    const getTeamWinStats = (team) => {
+      const teamWinBets = (bets || []).filter(
+        (b) =>
+          b.TEAM_INCLUDED === team &&
+          b.COUNTRY === country &&
+          b.LEAGUE === league &&
+          (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
+          b.RESULT &&
+          b.RESULT.trim() !== "",
+      );
+      const wins = teamWinBets.filter((b) =>
+        b.RESULT.toLowerCase().includes("win"),
+      ).length;
+      const total = teamWinBets.length;
+      const winRate = total > 0 ? (wins / total) * 100 : 0;
+      const wilsonRate =
+        total > 0 ? calculateWilsonScore(wins, total) * 100 : 0;
+      return { winRate, wilsonRate, total };
+    };
+
+    const applySideStats = (team) => {
+      const isHome = team === homeTeam;
+      const winStats =
+        straightWinClear && straightWinAnalysis.bet === team
+          ? {
+              winRate: straightWinAnalysis.winRate || 0,
+              wilsonRate: straightWinAnalysis.wilsonWinRate || 0,
+            }
+          : getTeamWinStats(team);
+      return {
+        recommendedTeam: team,
+        teamWinRate: winStats.winRate,
+        teamWilsonRate: winStats.wilsonRate,
+        teamDoubleChanceWinRate: isHome
+          ? homeDoubleChanceWinRate
+          : awayDoubleChanceWinRate,
+        teamDoubleChanceWilsonRate: isHome
+          ? homeDoubleChanceWilsonRate
+          : awayDoubleChanceWilsonRate,
+        teamDoubleChanceTotal: isHome
+          ? homeDoubleChanceTotal
+          : awayDoubleChanceTotal,
+      };
+    };
+
+    const pickDcSideIndependently = () => {
+      // Prefer real DC history when both sides have enough settled DC legs
+      if (homeDoubleChanceTotal >= 3 && awayDoubleChanceTotal >= 3) {
+        const dcGap = Math.abs(
+          homeDoubleChanceWilsonRate - awayDoubleChanceWilsonRate,
+        );
+        if (dcGap >= 3) {
+          return homeDoubleChanceWilsonRate >= awayDoubleChanceWilsonRate
+            ? homeTeam
+            : awayTeam;
+        }
+      }
+
+      // Score: recent unbeaten (W+D) primary; table + shorter price as tie-breaks
+      let homeScore = homeUnbeatenRate * 100;
+      let awayScore = awayUnbeatenRate * 100;
+      if (homePosNum < awayPosNum) homeScore += 5;
+      else if (awayPosNum < homePosNum) awayScore += 5;
+      if (homeOddsNum < awayOddsNum) homeScore += 3;
+      else if (awayOddsNum < homeOddsNum) awayScore += 3;
+
+      // If DC history exists but was close, nudge with it
+      if (homeDoubleChanceTotal >= 3 && awayDoubleChanceTotal >= 3) {
+        if (homeDoubleChanceWilsonRate > awayDoubleChanceWilsonRate) {
+          homeScore += 2;
+        } else if (awayDoubleChanceWilsonRate > homeDoubleChanceWilsonRate) {
+          awayScore += 2;
+        }
+      }
+
+      return homeScore >= awayScore ? homeTeam : awayTeam;
+    };
+
     let recommendedTeam;
     let teamWinRate;
     let teamWilsonRate;
     let teamDoubleChanceWinRate;
     let teamDoubleChanceWilsonRate;
     let teamDoubleChanceTotal;
+    let dcSideNote = "";
 
-    // Use Straight Win analysis to determine the stronger team
-    if (straightWinAnalysis.bet === homeTeam) {
-      recommendedTeam = homeTeam;
-      teamWinRate = straightWinAnalysis.winRate || 0;
-      teamWilsonRate = straightWinAnalysis.wilsonWinRate || 0;
-      teamDoubleChanceWinRate = homeDoubleChanceWinRate;
-      teamDoubleChanceWilsonRate = homeDoubleChanceWilsonRate;
-      teamDoubleChanceTotal = homeDoubleChanceTotal;
-    } else if (straightWinAnalysis.bet === awayTeam) {
-      recommendedTeam = awayTeam;
-      teamWinRate = straightWinAnalysis.winRate || 0;
-      teamWilsonRate = straightWinAnalysis.wilsonWinRate || 0;
-      teamDoubleChanceWinRate = awayDoubleChanceWinRate;
-      teamDoubleChanceWilsonRate = awayDoubleChanceWilsonRate;
-      teamDoubleChanceTotal = awayDoubleChanceTotal;
+    if (straightWinClear) {
+      const side = applySideStats(swPicksHome ? homeTeam : awayTeam);
+      recommendedTeam = side.recommendedTeam;
+      teamWinRate = side.teamWinRate;
+      teamWilsonRate = side.teamWilsonRate;
+      teamDoubleChanceWinRate = side.teamDoubleChanceWinRate;
+      teamDoubleChanceWilsonRate = side.teamDoubleChanceWilsonRate;
+      teamDoubleChanceTotal = side.teamDoubleChanceTotal;
     } else {
-      // No clear winner - calculate individual team stats to compare
-      // Get home team win bets
-      const homeTeamWinBets = (bets || []).filter(
-        (b) =>
-          b.TEAM_INCLUDED === homeTeam &&
-          b.COUNTRY === country &&
-          b.LEAGUE === league &&
-          (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
-          b.RESULT &&
-          b.RESULT.trim() !== "",
-      );
-      const homeTeamWins = homeTeamWinBets.filter((b) =>
-        b.RESULT.toLowerCase().includes("win"),
-      ).length;
-      const homeTeamTotal = homeTeamWinBets.length;
-      const homeTeamWinRate =
-        homeTeamTotal > 0 ? (homeTeamWins / homeTeamTotal) * 100 : 0;
-      const homeTeamWilsonScore =
-        homeTeamTotal > 0
-          ? calculateWilsonScore(homeTeamWins, homeTeamTotal)
-          : 0;
-      const homeTeamWilsonRate = homeTeamWilsonScore * 100;
-
-      // Get away team win bets
-      const awayTeamWinBets = (bets || []).filter(
-        (b) =>
-          b.TEAM_INCLUDED === awayTeam &&
-          b.COUNTRY === country &&
-          b.LEAGUE === league &&
-          (b.BET_TYPE === "Win" || !b.BET_TYPE || b.BET_TYPE === "") &&
-          b.RESULT &&
-          b.RESULT.trim() !== "",
-      );
-      const awayTeamWins = awayTeamWinBets.filter((b) =>
-        b.RESULT.toLowerCase().includes("win"),
-      ).length;
-      const awayTeamTotal = awayTeamWinBets.length;
-      const awayTeamWinRate =
-        awayTeamTotal > 0 ? (awayTeamWins / awayTeamTotal) * 100 : 0;
-      const awayTeamWilsonScore =
-        awayTeamTotal > 0
-          ? calculateWilsonScore(awayTeamWins, awayTeamTotal)
-          : 0;
-      const awayTeamWilsonRate = awayTeamWilsonScore * 100;
-
-      // If we have actual Double Chance data, prefer that
-      if (homeDoubleChanceTotal >= 3 && awayDoubleChanceTotal >= 3) {
-        if (homeDoubleChanceWilsonRate >= awayDoubleChanceWilsonRate) {
-          recommendedTeam = homeTeam;
-          teamWinRate = homeTeamWinRate;
-          teamWilsonRate = homeDoubleChanceWilsonRate;
-          teamDoubleChanceWinRate = homeDoubleChanceWinRate;
-          teamDoubleChanceWilsonRate = homeDoubleChanceWilsonRate;
-          teamDoubleChanceTotal = homeDoubleChanceTotal;
-        } else {
-          recommendedTeam = awayTeam;
-          teamWinRate = awayTeamWinRate;
-          teamWilsonRate = awayDoubleChanceWilsonRate;
-          teamDoubleChanceWinRate = awayDoubleChanceWinRate;
-          teamDoubleChanceWilsonRate = awayDoubleChanceWilsonRate;
-          teamDoubleChanceTotal = awayDoubleChanceTotal;
-        }
-      } else if (homeTeamWilsonRate >= awayTeamWilsonRate) {
-        recommendedTeam = homeTeam;
-        teamWinRate = homeTeamWinRate;
-        teamWilsonRate = homeTeamWilsonRate;
-        teamDoubleChanceWinRate = homeDoubleChanceWinRate;
-        teamDoubleChanceWilsonRate = homeDoubleChanceWilsonRate;
-        teamDoubleChanceTotal = homeDoubleChanceTotal;
-      } else {
-        recommendedTeam = awayTeam;
-        teamWinRate = awayTeamWinRate;
-        teamWilsonRate = awayTeamWilsonRate;
-        teamDoubleChanceWinRate = awayDoubleChanceWinRate;
-        teamDoubleChanceWilsonRate = awayDoubleChanceWilsonRate;
-        teamDoubleChanceTotal = awayDoubleChanceTotal;
-      }
+      const independentTeam = pickDcSideIndependently();
+      const side = applySideStats(independentTeam);
+      recommendedTeam = side.recommendedTeam;
+      teamWinRate = side.teamWinRate;
+      teamWilsonRate = side.teamWilsonRate;
+      teamDoubleChanceWinRate = side.teamDoubleChanceWinRate;
+      teamDoubleChanceWilsonRate = side.teamDoubleChanceWilsonRate;
+      teamDoubleChanceTotal = side.teamDoubleChanceTotal;
+      dcSideNote =
+        swPicksHome || swPicksAway
+          ? ` DC side from form/table (Straight Win unclear at ${swConfidence.toFixed(0)}% conf).`
+          : ` DC side from form/table (no clear Straight Win).`;
     }
 
-    // Calculate Double Chance confidence
-    // Priority: Use actual Double Chance bet history if available (most accurate)
-    // Fallback: Calculate from Straight Win + Draw Rate (less accurate but still useful)
-    // Thresholds:
-    // - >= 5 bets: Full confidence (standardized minimum for reliable statistics)
-    // - 3-4 bets: Reduced confidence (0.9x multiplier) due to small sample
-    // - < 3 bets: Use fallback formula (Straight Win + Draw Rate)
+    // Calculate Double Chance confidence.
+    // Prefer real DC bet history; win+draw is a discounted estimate only.
+    // Tiers:
+    // - >= 8 DC bets: full DC Wilson
+    // - 5–7: DC Wilson (slight sample caution)
+    // - 3–4: DC Wilson × 0.85
+    // - < 3: estimated from win Wilson + partial draw rate, capped & discounted
     let doubleChanceConfidence;
     let reasoning;
+    let dcConfidenceSource = "estimate";
 
-    if (teamDoubleChanceTotal >= 5) {
-      // Use actual Double Chance Wilson Rate (already in percentage form 0-100%)
+    if (teamDoubleChanceTotal >= 8) {
       doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate, 100);
+      dcConfidenceSource = "dc_history";
       reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} actual Double Chance bets.`;
+    } else if (teamDoubleChanceTotal >= 5) {
+      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate * 0.97, 100);
+      dcConfidenceSource = "dc_history";
+      reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} Double Chance bets.`;
     } else if (teamDoubleChanceTotal >= 3) {
-      // Use actual Double Chance data but with lower confidence due to small sample (0.9x multiplier)
-      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate * 0.9, 100);
+      doubleChanceConfidence = Math.min(teamDoubleChanceWilsonRate * 0.85, 100);
+      dcConfidenceSource = "dc_history_small";
       reasoning = `${recommendedTeam} has ${teamDoubleChanceWinRate.toFixed(1)}% Double Chance win rate (${teamDoubleChanceWilsonRate.toFixed(1)}% Wilson) based on ${teamDoubleChanceTotal} Double Chance bets (small sample).`;
     } else {
-      // Calculate from Straight Win + Draw Rate
-      // Double Chance = Win OR Draw, so we add draw rate to win rate
-      // This is mathematically correct: P(Win) + P(Draw) = P(Win OR Draw)
-      // Note: This can exceed 100% if team has high win rate + high draw rate, but cap at 100%
-      const doubleChanceRate = Math.min(
-        teamWilsonRate + effectiveDrawRate,
-        100,
-      );
-      doubleChanceConfidence = Math.min(doubleChanceRate, 100);
-
+      // Estimate only: win Wilson + half draw rate (samples overlap; full add overstates).
+      // Hard-cap and discount so this cannot outrank solid real DC history elsewhere.
       const drawRateSource =
         totalGames >= minSampleSize
           ? `team-specific (${drawRate.toFixed(1)}% from ${totalGames} games)`
           : `league-wide (${leagueDrawRate.toFixed(1)}% from ${uniqueLeagueGames.length} league games)`;
-
-      reasoning = `${recommendedTeam} has ${teamWinRate.toFixed(1)}% win rate (${teamWilsonRate.toFixed(1)}% Wilson) + ${effectiveDrawRate.toFixed(1)}% draw rate (${drawRateSource}). Total: ${doubleChanceRate.toFixed(1)}%`;
+      const rawEstimate = teamWilsonRate + effectiveDrawRate * 0.5;
+      const doubleChanceRate = Math.min(rawEstimate, 85) * 0.9;
+      doubleChanceConfidence = Math.min(doubleChanceRate, 85);
+      dcConfidenceSource = "estimate";
+      reasoning = `${recommendedTeam} estimated Double Chance from ${teamWinRate.toFixed(1)}% win rate (${teamWilsonRate.toFixed(1)}% Wilson) + half of ${effectiveDrawRate.toFixed(1)}% draw rate (${drawRateSource}). Estimate: ${doubleChanceConfidence.toFixed(1)}% (no DC history).`;
     }
 
-    // Ensure Double Chance confidence is at least as high as Straight Win (logical validation)
-    // Double Chance should always be safer than Straight Win
-    doubleChanceConfidence = Math.max(
-      doubleChanceConfidence,
-      straightWinAnalysis.confidence,
-    );
+    // Floor to SW only when we lack solid DC history — real DC record should speak for itself.
+    if (
+      straightWinAnalysis.bet === recommendedTeam &&
+      dcConfidenceSource !== "dc_history"
+    ) {
+      doubleChanceConfidence = Math.max(
+        doubleChanceConfidence,
+        straightWinAnalysis.confidence,
+      );
+    }
 
     // Apply recent form impact
     const isHomeTeam = recommendedTeam === homeTeam;
@@ -3685,18 +3628,25 @@ function App() {
     if (opponentNote) {
       reasoning += opponentNote;
     }
+    if (dcSideNote) {
+      reasoning += dcSideNote;
+    }
 
     return {
       bet: `${recommendedTeam} or Draw`,
       confidence: Math.min(doubleChanceConfidence, 100),
       successRate: doubleChanceConfidence,
-      totalBets: totalGames || teamDoubleChanceTotal || 0,
+      totalBets:
+        teamDoubleChanceTotal >= 3
+          ? teamDoubleChanceTotal
+          : totalGames || teamDoubleChanceTotal || 0,
       reasoning: reasoning,
-      // Add Wilson rate for ranking when confidence is capped
+      dcConfidenceSource,
+      // Ranking: prefer real DC Wilson when available; else the discounted estimate
       wilsonWinRate:
         teamDoubleChanceTotal >= 3
           ? teamDoubleChanceWilsonRate
-          : teamWilsonRate, // Use Straight Win Wilson rate for fallback case
+          : doubleChanceConfidence,
     };
   };
 
