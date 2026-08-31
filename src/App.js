@@ -62,6 +62,7 @@ import RecommendationsTab from "./components/RecommendationsTab";
 import QueryTab from "./components/QueryTab";
 import BetSlipsTab from "./components/BetSlipsTab";
 import TopTeamsTab from "./components/TopTeamsTab";
+import SwOuComboTab from "./components/SwOuComboTab";
 import DailyGamesTab from "./components/DailyGamesTab";
 import ScoringAnalysisTab from "./components/ScoringAnalysisTab";
 import PredictionAccuracyTab from "./components/PredictionAccuracyTab";
@@ -6060,6 +6061,17 @@ function App() {
               getTopTeams={getTopTeams}
               blacklistedTeams={blacklistedTeams}
               isTeamBlacklisted={isTeamBlacklisted}
+            />
+          )}
+
+          {activeTab === "swOuCombo" && (
+            <SwOuComboTab
+              bets={bets}
+              isTeamBlacklisted={isTeamBlacklisted}
+              onBetsRefresh={(sheetBets) => {
+                setBets(sheetBets);
+                setFilteredBets(sheetBets);
+              }}
             />
           )}
 
