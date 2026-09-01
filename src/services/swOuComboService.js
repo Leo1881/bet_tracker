@@ -1,9 +1,8 @@
 /**
- * Teams where both Straight Win and Over/Under historically work well —
- * candidates for same-game SW + O/U combo ideas (separate legs in Sheet1).
+ * Teams strong on a primary market (SW or DC) AND Over/Under —
+ * combo candidates from Sheet1 unique-match history.
  *
- * Counts are unique matches (same fixture on many slips = once).
- * A match counts as a win if any settled leg on that match/market won.
+ * Same fixture on many slips = once. Match wins if any settled leg won.
  */
 
 const DEFAULT_LIMIT = 35;
@@ -32,9 +31,10 @@ const isJunkTeam = (t) => {
   );
 };
 
+/** @returns {"SW"|"DC"|"OU"|null} */
 const marketOf = (betType) => {
   const t = String(betType || "").toLowerCase();
-  if (t.includes("double chance")) return null;
+  if (t.includes("double chance")) return "DC";
   if (t.includes("over") || t.includes("under")) return "OU";
   if (t.includes("win") || !t) return "SW";
   return null;
@@ -49,15 +49,24 @@ const ouSide = (bet) => {
 };
 
 const matchKeyOf = (bet) => {
-  const date = String(bet.DATE || "").trim().toLowerCase();
-  const home = String(bet.HOME_TEAM || "").trim().toLowerCase();
-  const away = String(bet.AWAY_TEAM || "").trim().toLowerCase();
-  const country = String(bet.COUNTRY || "").trim().toLowerCase();
-  const league = String(bet.LEAGUE || "").trim().toLowerCase();
+  const date = String(bet.DATE || "")
+    .trim()
+    .toLowerCase();
+  const home = String(bet.HOME_TEAM || "")
+    .trim()
+    .toLowerCase();
+  const away = String(bet.AWAY_TEAM || "")
+    .trim()
+    .toLowerCase();
+  const country = String(bet.COUNTRY || "")
+    .trim()
+    .toLowerCase();
+  const league = String(bet.LEAGUE || "")
+    .trim()
+    .toLowerCase();
   return `${date}|${home}|${away}|${country}|${league}`;
 };
 
-/** Record a unique match: win if any settled leg on that match won. */
 const recordMatch = (map, matchKey, won) => {
   if (!map.has(matchKey)) {
     map.set(matchKey, won);
@@ -76,26 +85,65 @@ const tallyMatches = (map) => {
   return { wins, total };
 };
 
+const pickBestOu = (ou, over, under) => {
+  let bestOuLabel = "Over/Under";
+  let bestOuWins = ou.wins;
+  let bestOuTotal = ou.total;
+  let bestOuWilson = calculateWilsonScore(ou.wins, ou.total);
+
+  if (over.total >= 5 && under.total >= 5) {
+    const overW = calculateWilsonScore(over.wins, over.total);
+    const underW = calculateWilsonScore(under.wins, under.total);
+    if (overW >= underW) {
+      bestOuLabel = "Over";
+      bestOuWins = over.wins;
+      bestOuTotal = over.total;
+      bestOuWilson = overW;
+    } else {
+      bestOuLabel = "Under";
+      bestOuWins = under.wins;
+      bestOuTotal = under.total;
+      bestOuWilson = underW;
+    }
+  } else if (over.total >= 5) {
+    bestOuLabel = "Over";
+    bestOuWins = over.wins;
+    bestOuTotal = over.total;
+    bestOuWilson = calculateWilsonScore(over.wins, over.total);
+  } else if (under.total >= 5) {
+    bestOuLabel = "Under";
+    bestOuWins = under.wins;
+    bestOuTotal = under.total;
+    bestOuWilson = calculateWilsonScore(under.wins, under.total);
+  }
+
+  return { bestOuLabel, bestOuWins, bestOuTotal, bestOuWilson };
+};
+
 /**
- * @param {Array} bets - Sheet1 rows
+ * @param {Array} bets
+ * @param {"SW"|"DC"} primaryMarket
  * @param {{
- *   minSw?: number,
+ *   minPrimary?: number,
  *   minOu?: number,
  *   minRate?: number,
  *   limit?: number,
  * }} [opts]
- * @returns {Array}
  */
-export function buildSwOuComboList(
+export function buildMarketOuComboList(
   bets,
+  primaryMarket,
   {
-    // Unique-match bars: slightly looser than leg-based so ~35 teams can qualify
-    minSw = 6,
+    minPrimary = 6,
     minOu = 6,
     minRate = 0.65,
     limit = DEFAULT_LIMIT,
   } = {},
 ) {
+  if (primaryMarket !== "SW" && primaryMarket !== "DC") {
+    return [];
+  }
+
   /** @type {Map<string, object>} */
   const stats = new Map();
 
@@ -105,6 +153,7 @@ export function buildSwOuComboList(
     const won = result.includes("win");
     const market = marketOf(bet.BET_TYPE);
     if (!market) continue;
+    if (market !== primaryMarket && market !== "OU") continue;
 
     const team = String(bet.TEAM_INCLUDED || "").trim();
     if (isJunkTeam(team)) continue;
@@ -119,7 +168,7 @@ export function buildSwOuComboList(
         teamName: team,
         country,
         league,
-        swMatches: new Map(),
+        primaryMatches: new Map(),
         ouMatches: new Map(),
         overMatches: new Map(),
         underMatches: new Map(),
@@ -128,8 +177,8 @@ export function buildSwOuComboList(
     const s = stats.get(teamKey);
     const matchKey = matchKeyOf(bet);
 
-    if (market === "SW") {
-      recordMatch(s.swMatches, matchKey, won);
+    if (market === primaryMarket) {
+      recordMatch(s.primaryMatches, matchKey, won);
     } else {
       recordMatch(s.ouMatches, matchKey, won);
       const side = ouSide(bet);
@@ -140,64 +189,47 @@ export function buildSwOuComboList(
 
   const rows = [];
   for (const s of stats.values()) {
-    const sw = tallyMatches(s.swMatches);
+    const primary = tallyMatches(s.primaryMatches);
     const ou = tallyMatches(s.ouMatches);
-    if (sw.total < minSw || ou.total < minOu) continue;
+    if (primary.total < minPrimary || ou.total < minOu) continue;
 
-    const swRate = sw.total > 0 ? sw.wins / sw.total : 0;
+    const primaryRate = primary.total > 0 ? primary.wins / primary.total : 0;
     const ouRate = ou.total > 0 ? ou.wins / ou.total : 0;
-    if (swRate < minRate || ouRate < minRate) continue;
+    if (primaryRate < minRate || ouRate < minRate) continue;
 
-    const swWilson = calculateWilsonScore(sw.wins, sw.total);
+    const primaryWilson = calculateWilsonScore(primary.wins, primary.total);
     const over = tallyMatches(s.overMatches);
     const under = tallyMatches(s.underMatches);
-
-    let bestOuLabel = "Over/Under";
-    let bestOuWins = ou.wins;
-    let bestOuTotal = ou.total;
-    let bestOuWilson = calculateWilsonScore(ou.wins, ou.total);
-
-    if (over.total >= 5 && under.total >= 5) {
-      const overW = calculateWilsonScore(over.wins, over.total);
-      const underW = calculateWilsonScore(under.wins, under.total);
-      if (overW >= underW) {
-        bestOuLabel = "Over";
-        bestOuWins = over.wins;
-        bestOuTotal = over.total;
-        bestOuWilson = overW;
-      } else {
-        bestOuLabel = "Under";
-        bestOuWins = under.wins;
-        bestOuTotal = under.total;
-        bestOuWilson = underW;
-      }
-    } else if (over.total >= 5) {
-      bestOuLabel = "Over";
-      bestOuWins = over.wins;
-      bestOuTotal = over.total;
-      bestOuWilson = calculateWilsonScore(over.wins, over.total);
-    } else if (under.total >= 5) {
-      bestOuLabel = "Under";
-      bestOuWins = under.wins;
-      bestOuTotal = under.total;
-      bestOuWilson = calculateWilsonScore(under.wins, under.total);
-    }
+    const {
+      bestOuLabel,
+      bestOuWins,
+      bestOuTotal,
+      bestOuWilson,
+    } = pickBestOu(ou, over, under);
 
     const harmonic =
-      swWilson + bestOuWilson > 0
-        ? (2 * swWilson * bestOuWilson) / (swWilson + bestOuWilson)
+      primaryWilson + bestOuWilson > 0
+        ? (2 * primaryWilson * bestOuWilson) / (primaryWilson + bestOuWilson)
         : 0;
-    const score = harmonic * 100 + Math.log10(sw.total + ou.total) * 3;
+    const score =
+      harmonic * 100 + Math.log10(primary.total + ou.total) * 3;
 
     rows.push({
       teamName: s.teamName,
       country: s.country,
       league: s.league,
-      swWins: sw.wins,
-      swLosses: sw.total - sw.wins,
-      swTotal: sw.total,
-      swRate: swRate * 100,
-      swWilson: swWilson * 100,
+      primaryMarket,
+      primaryWins: primary.wins,
+      primaryLosses: primary.total - primary.wins,
+      primaryTotal: primary.total,
+      primaryRate: primaryRate * 100,
+      primaryWilson: primaryWilson * 100,
+      // Back-compat aliases used by SW tab
+      swWins: primary.wins,
+      swLosses: primary.total - primary.wins,
+      swTotal: primary.total,
+      swRate: primaryRate * 100,
+      swWilson: primaryWilson * 100,
       ouWins: ou.wins,
       ouLosses: ou.total - ou.wins,
       ouTotal: ou.total,
@@ -214,4 +246,23 @@ export function buildSwOuComboList(
 
   rows.sort((a, b) => b.comboScore - a.comboScore);
   return limit > 0 ? rows.slice(0, limit) : rows;
+}
+
+/** @deprecated Prefer buildMarketOuComboList(bets, "SW", opts) */
+export function buildSwOuComboList(bets, opts = {}) {
+  return buildMarketOuComboList(bets, "SW", {
+    minPrimary: opts.minSw ?? opts.minPrimary,
+    minOu: opts.minOu,
+    minRate: opts.minRate,
+    limit: opts.limit,
+  });
+}
+
+export function buildDcOuComboList(bets, opts = {}) {
+  return buildMarketOuComboList(bets, "DC", {
+    minPrimary: opts.minDc ?? opts.minPrimary,
+    minOu: opts.minOu,
+    minRate: opts.minRate,
+    limit: opts.limit,
+  });
 }
