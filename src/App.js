@@ -40,6 +40,9 @@ import {
 import {
   fetchPredictionCalibration,
   getSegmentedAccuracyAdjustment,
+  applyLearningScoreAdjustments,
+  enforceLearningStakePick,
+  applyConfidenceCalibrationToCard,
 } from "./services/predictionCalibrationService";
 import {
   teamsMatch as teamsMatchNames,
@@ -2293,11 +2296,19 @@ function App() {
           adjustedScore: oddsBandAdj.adjustedScore,
           earlySeasonInfo,
         });
-        const scoreAfterRules = earlyAdj.adjustedScore;
+        const learningAdj = applyLearningScoreAdjustments({
+          type: betOption.type,
+          adjustedScore: earlyAdj.adjustedScore,
+          country,
+          league,
+          calibration: calibrationData,
+        });
+        const scoreAfterRules = learningAdj.adjustedScore;
         const displayNotes = [
           ...lossAdj.notes,
           ...oddsBandAdj.notes,
           ...earlyAdj.notes,
+          ...learningAdj.notes,
           ...(calibAdj.note ? [calibAdj.note] : []),
         ];
 
@@ -2308,6 +2319,7 @@ function App() {
           lossRuleNotes: displayNotes,
           calibrationNote: calibAdj.note || null,
           calibrationMultiplier: calibAdj.multiplier,
+          learningAction: learningAdj.action,
         };
       });
 
@@ -2413,10 +2425,24 @@ function App() {
         awayTeam,
         recentFormData,
       });
-      const bestBet = bandPick.stakePick;
+      let bestBet = bandPick.stakePick;
       if (bandPick.notes.length > 0) {
         bestBet.lossRuleNotes = [
           ...new Set([...(bestBet.lossRuleNotes || []), ...bandPick.notes]),
+        ];
+      }
+
+      const learningPick = enforceLearningStakePick({
+        stakePick: bestBet,
+        rankedOptions: bestBetScores,
+        country,
+        league,
+        calibration: calibrationData,
+      });
+      bestBet = learningPick.stakePick;
+      if (learningPick.notes.length > 0) {
+        bestBet.lossRuleNotes = [
+          ...new Set([...(bestBet.lossRuleNotes || []), ...learningPick.notes]),
         ];
       }
 
@@ -2500,14 +2526,6 @@ function App() {
         });
       }
 
-      const lossRuleNotes = [
-        ...new Set(
-          [bestBet, primary, secondary, tertiary]
-            .filter(Boolean)
-            .flatMap((c) => c.lossRuleNotes || [])
-        ),
-      ];
-
       // Blacklist notice only — still show the game and stake pick
       const blacklistedSides = [];
       if (isTeamBlacklisted(homeTeam)) blacklistedSides.push(homeTeam);
@@ -2521,23 +2539,65 @@ function App() {
           : null;
 
       // Stake pick = bestBet (single decision). Primary/Secondary/Tertiary are alternatives.
+      // Learn from prediction accuracy: blend confidence toward empirical hit rates.
+      let calibratedBest = applyConfidenceCalibrationToCard(
+        bestBet,
+        country,
+        league,
+        calibrationData,
+      );
+      let calibratedPrimary = applyConfidenceCalibrationToCard(
+        primary,
+        country,
+        league,
+        calibrationData,
+      );
+      let calibratedSecondary = applyConfidenceCalibrationToCard(
+        secondary,
+        country,
+        league,
+        calibrationData,
+      );
+      let calibratedTertiary = applyConfidenceCalibrationToCard(
+        tertiary,
+        country,
+        league,
+        calibrationData,
+      );
+
       const stakeConfidence = capEarlySeasonConfidence(
-        bestBet?.recommendation?.confidence ?? confidence,
+        calibratedBest?.recommendation?.confidence ?? confidence,
         earlySeasonInfo,
       );
       if (
         earlySeasonInfo.isEarlySeason &&
-        bestBet?.recommendation &&
-        typeof bestBet.recommendation.confidence === "number"
+        calibratedBest?.recommendation &&
+        typeof calibratedBest.recommendation.confidence === "number"
       ) {
-        bestBet.recommendation = {
-          ...bestBet.recommendation,
-          confidence: capEarlySeasonConfidence(
-            bestBet.recommendation.confidence,
-            earlySeasonInfo,
-          ),
+        calibratedBest = {
+          ...calibratedBest,
+          recommendation: {
+            ...calibratedBest.recommendation,
+            confidence: capEarlySeasonConfidence(
+              calibratedBest.recommendation.confidence,
+              earlySeasonInfo,
+            ),
+          },
         };
       }
+
+      const lossRuleNotesCalibrated = [
+        ...new Set(
+          [
+            calibratedBest,
+            calibratedPrimary,
+            calibratedSecondary,
+            calibratedTertiary,
+          ]
+            .filter(Boolean)
+            .flatMap((c) => c.lossRuleNotes || []),
+        ),
+      ];
 
       return {
         rank: index + 1,
@@ -2547,10 +2607,10 @@ function App() {
         away_team: bet.AWAY_TEAM,
         league: bet.LEAGUE,
         country: bet.COUNTRY,
-        bestBet: bestBet,
-        primary: primary,
-        secondary: secondary,
-        tertiary: tertiary,
+        bestBet: calibratedBest,
+        primary: calibratedPrimary,
+        secondary: calibratedSecondary,
+        tertiary: calibratedTertiary,
         confidence: stakeConfidence,
         earlySeason: earlySeasonInfo.isEarlySeason ? earlySeasonInfo : null,
         odds: displayOdds,
@@ -2562,9 +2622,9 @@ function App() {
         countryPerformance: countryPerformance,
         performanceNote: performanceNote,
         lossWarning: lossWarning,
-        lossRuleNotes,
+        lossRuleNotes: lossRuleNotesCalibrated,
         blacklistWarning,
-        oddsTrapOnBestBet: bestBet?.oddsTrapWarning?.isTrap ?? false,
+        oddsTrapOnBestBet: calibratedBest?.oddsTrapWarning?.isTrap ?? false,
         // Keep original recommendations for backward compatibility
         straightWin: straightWinRecommendation,
         doubleChance: doubleChanceRecommendation,

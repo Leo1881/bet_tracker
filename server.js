@@ -1122,6 +1122,9 @@ app.get("/api/betslip-recommendations/calibration", async (req, res) => {
     const markets = {};
     const marketCountry = {};
     const marketLeague = {};
+    const stakeMarkets = {};
+    const stakeMarketCountry = {};
+    const stakeMarketLeague = {};
 
     for (const row of byGame.values()) {
       const hs = row.actual_home_score != null ? Number(row.actual_home_score) : null;
@@ -1154,6 +1157,36 @@ app.get("/api/betslip-recommendations/calibration", async (req, res) => {
           bump(marketLeague, `${market}|${country}|${league}`, correct);
         }
       }
+
+      // Stake-pick-only history for harder learning rules
+      const stakePick =
+        row.best_bet_recommendation ||
+        row.primary_recommendation ||
+        row.recommendation;
+      const stakeMarket = classifyRecommendationMarket(stakePick);
+      if (stakeMarket) {
+        const stakeCorrect = evaluateRecommendation(
+          stakePick,
+          row.home_team,
+          row.away_team,
+          hs,
+          as,
+          row.actual_result
+        );
+        if (stakeCorrect !== null) {
+          bump(stakeMarkets, stakeMarket, stakeCorrect);
+          if (country) {
+            bump(stakeMarketCountry, `${stakeMarket}|${country}`, stakeCorrect);
+          }
+          if (country && league) {
+            bump(
+              stakeMarketLeague,
+              `${stakeMarket}|${country}|${league}`,
+              stakeCorrect
+            );
+          }
+        }
+      }
     }
 
     res.json({
@@ -1162,9 +1195,16 @@ app.get("/api/betslip-recommendations/calibration", async (req, res) => {
       k: 0.4,
       clampMin: 0.85,
       clampMax: 1.15,
+      hardMinSample: 30,
+      skipAccuracy: 0.55,
+      preferAccuracy: 0.65,
+      confCalibMaxWeight: 0.65,
       markets,
       marketCountry,
       marketLeague,
+      stakeMarkets,
+      stakeMarketCountry,
+      stakeMarketLeague,
     });
   } catch (error) {
     console.error("Error fetching prediction calibration:", error);
