@@ -9,12 +9,36 @@
  * - ≥5 matches & ≥30% loss, or
  * - ≥8 matches & ≥25% loss
  * A match counts as a win if any settled leg on that match won.
+ *
+ * PINNED_AVOID_TEAMS always appear on the Avoid Teams tab and in rec checks.
  */
 
 const norm = (s) => String(s ?? "").trim();
 const low = (s) => norm(s).toLowerCase();
 const rate = (loss, n) => (n ? +(100 * (loss / n)).toFixed(1) : 0);
 const junk = /^(over|under)\s*[\d.]+$/i;
+
+/**
+ * Manual force-avoid teams (always on Avoid Teams + recommendations).
+ * Add here when you want a team blocked regardless of dynamic thresholds.
+ */
+export const PINNED_AVOID_TEAMS = [
+  {
+    COUNTRY: "Kazakhstan",
+    LEAGUE: "Premier League",
+    TEAM_NAME: "FC Kairat Almaty",
+    lossRate: 100,
+    wins: 0,
+    losses: 0,
+    settled: 0,
+    uniqueMatches: 0,
+    uniqueLossRate: 100,
+    legWins: 0,
+    legLosses: 0,
+    source: "pinned",
+    note: "Pinned avoid",
+  },
+];
 
 /** @param {number} uniqueN @param {number} uniqueLossRate */
 export function qualifiesAvoidTeam(uniqueN, uniqueLossRate) {
@@ -39,7 +63,7 @@ export function qualifiesAvoidTeam(uniqueN, uniqueLossRate) {
  *   uniqueLossRate: number,
  *   legWins: number,
  *   legLosses: number,
- *   source: 'dynamic'
+ *   source: 'dynamic'|'pinned'
  * }>}
  */
 export function buildDynamicAvoidList(rawBets) {
@@ -135,14 +159,16 @@ export function buildDynamicAvoidList(rawBets) {
       b.losses - a.losses ||
       a.TEAM_NAME.localeCompare(b.TEAM_NAME),
   );
-  return rows;
+
+  // Pinned teams first, then dynamic (deduped by name)
+  return mergeAvoidLists(PINNED_AVOID_TEAMS, rows);
 }
 
 /**
- * Merge manual Sheet2 blacklist with dynamic avoid list for recommendation checks.
+ * Merge manual / pinned entries with dynamic avoid list for recommendation checks.
  * Dynamic entries use TEAM_NAME (and aliases via isTeamNameBlacklisted).
- * @param {Array} manualBlacklist - Sheet2 rows
- * @param {Array} dynamicAvoid - from buildDynamicAvoidList
+ * @param {Array} manualBlacklist - pinned or Sheet2 rows
+ * @param {Array} dynamicAvoid - from buildDynamicAvoidList (may already include pinned)
  */
 export function mergeAvoidLists(manualBlacklist, dynamicAvoid) {
   const out = [];

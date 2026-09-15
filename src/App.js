@@ -74,6 +74,7 @@ import RecommendationAnalysisTab from "./components/RecommendationAnalysisTab";
 import TeamUploadTab from "./components/TeamUploadTab";
 import QuickLookupTab from "./components/QuickLookupTab";
 import LossPatternsTab from "./components/LossPatternsTab";
+import WinPatternsTab from "./components/WinPatternsTab";
 import { AppLoadingSkeleton } from "./components/SkeletonLoader";
 import ErrorDisplay from "./components/ErrorDisplay";
 
@@ -6179,6 +6180,7 @@ function App() {
           )}
 
           {activeTab === "lossPatterns" && <LossPatternsTab />}
+          {activeTab === "winPatterns" && <WinPatternsTab />}
         </div>
       </div>
     </div>

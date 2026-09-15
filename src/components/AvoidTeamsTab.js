@@ -48,8 +48,8 @@ const AvoidTeamsTab = ({ bets = [], onBetsRefresh }) => {
             Auto-built from Sheet1 using{" "}
             <span className="text-gray-300">unique matches</span> (same game on
             many slips counts once). Criteria: ≥3 matches &amp; ≥40% loss, or ≥5
-            &amp; ≥30%, or ≥8 &amp; ≥25%. Used in recommendations. Refresh pulls
-            the latest Sheet1.
+            &amp; ≥30%, or ≥8 &amp; ≥25%. Pinned teams always stay on this list.
+            Used in recommendations. Refresh pulls the latest Sheet1.
           </p>
         </div>
         <button
@@ -114,24 +114,43 @@ const AvoidTeamsTab = ({ bets = [], onBetsRefresh }) => {
                   <td className="px-3 py-2 text-gray-200">{row.LEAGUE}</td>
                   <td className="px-3 py-2 text-white font-medium">
                     {row.TEAM_NAME}
+                    {row.source === "pinned" && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-300/90">
+                        pinned
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right text-gray-400 tabular-nums">
-                    {row.uniqueMatches ?? row.settled}
+                    {row.source === "pinned"
+                      ? "—"
+                      : (row.uniqueMatches ?? row.settled)}
                   </td>
                   <td className="px-3 py-2 text-right text-gray-300 tabular-nums">
-                    {row.wins}-{row.losses}
-                    {(row.legWins != null || row.legLosses != null) &&
-                      row.legWins + row.legLosses !==
-                        (row.uniqueMatches ?? row.settled) && (
-                        <div className="text-[10px] text-gray-500">
-                          {row.legWins}-{row.legLosses} legs
-                        </div>
-                      )}
+                    {row.source === "pinned" ? (
+                      "—"
+                    ) : (
+                      <>
+                        {row.wins}-{row.losses}
+                        {(row.legWins != null || row.legLosses != null) &&
+                          row.legWins + row.legLosses !==
+                            (row.uniqueMatches ?? row.settled) && (
+                            <div className="text-[10px] text-gray-500">
+                              {row.legWins}-{row.legLosses} legs
+                            </div>
+                          )}
+                      </>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      {row.lossRate}%
-                    </span>
+                    {row.source === "pinned" ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-900">
+                        forced
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        {row.lossRate}%
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
